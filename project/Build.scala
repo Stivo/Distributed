@@ -1,6 +1,6 @@
 import sbt._
 import Keys._
-//import com.typesafe.sbtscalariform.ScalariformPlugin
+import com.typesafe.sbtscalariform.ScalariformPlugin
 
 object HelloBuild extends Build {
 
@@ -16,10 +16,10 @@ object HelloBuild extends Build {
 
    lazy val spark = Project(id = "spark",
                             base = file("spark"),
-                            settings = Project.defaultSettings) // ++ formatSourceSettings) 
+                            settings = Project.defaultSettings ++ formatSourceSettings) 
 				//.dependsOn(ProjectRef(uri("git://github.com/mesos/spark.git#master"),"core"))
 
-   //lazy val formatSourceSettings = seq(ScalariformPlugin.scalariformSettings: _*)
+   lazy val formatSourceSettings = seq(ScalariformPlugin.scalariformSettings: _*)
 
 
 

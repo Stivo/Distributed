@@ -10,8 +10,8 @@ import java.io.PrintWriter
 import scala.virtualization.lms.util.OverloadHack
 
 trait StringAndNumberOps extends PrimitiveOps with StringOps with OverloadHack {
-  //  def infix_toLong(s1: Rep[String])(implicit ctx: SourceContext) = string_toLong(s1)
-  //  def infix_toInt(s1: Rep[String])(implicit ctx: SourceContext) = obj_integer_parse_int(s1)
+  //def infix_toLong(s1: Rep[String])(implicit ctx: SourceContext) = string_toLong(s1)
+  def infix_toInt(s1: Rep[String])(implicit ctx: SourceContext) = obj_integer_parse_int(s1)
   //  def infix_%( l : Rep[Long], mod : Rep[Long])(implicit o: Overloaded2, ctx: SourceContext) = long_modulo(l, mod)
   //  
   //  def string_toLong(s : Rep[String])(implicit ctx: SourceContext) : Rep[Long]

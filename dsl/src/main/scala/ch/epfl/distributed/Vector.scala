@@ -118,7 +118,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   }
 
   case class NewVector[A: Manifest](file: Exp[String]) extends Def[Vector[String]]
-    with ComputationNodeTyped[Nothing, Vector[A]] {
+      with ComputationNodeTyped[Nothing, Vector[A]] {
     val mA = manifest[A]
     def getTypes = (manifest[Nothing], manifest[Vector[A]])
   }
@@ -126,7 +126,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   def makeVectorManifest[B: Manifest] = manifest[Vector[B]]
 
   case class VectorMap[A: Manifest, B: Manifest](in: Exp[Vector[A]], func: Exp[A] => Exp[B])
-    extends Def[Vector[B]] with ComputationNodeTyped[Vector[A], Vector[B]] with ClosureNode[A, B] {
+      extends Def[Vector[B]] with ComputationNodeTyped[Vector[A], Vector[B]] with ClosureNode[A, B] {
     val mA = manifest[A]
     val mB = manifest[B]
     def getClosureTypes = (mA, mB)
@@ -134,14 +134,14 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   }
 
   case class VectorFilter[A: Manifest](in: Exp[Vector[A]], func: Exp[A] => Exp[Boolean])
-    extends Def[Vector[A]] with PreservingTypeComputation[Vector[A]] with ClosureNode[A, Boolean] {
+      extends Def[Vector[A]] with PreservingTypeComputation[Vector[A]] with ClosureNode[A, Boolean] {
     val mA = manifest[A]
     def getClosureTypes = (mA, Manifest.Boolean)
     def getType = manifest[Vector[A]]
   }
 
   case class VectorFlatMap[A: Manifest, B: Manifest](in: Exp[Vector[A]], func: Exp[A] => Exp[Iterable[B]])
-    extends Def[Vector[B]] with ComputationNodeTyped[Vector[A], Vector[B]] with ClosureNode[A, Iterable[B]] {
+      extends Def[Vector[B]] with ComputationNodeTyped[Vector[A], Vector[B]] with ClosureNode[A, Iterable[B]] {
     val mA = manifest[A]
     val mB = manifest[B]
     def getTypes = (manifest[Vector[A]], manifest[Vector[B]])
@@ -149,7 +149,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   }
 
   case class VectorFlatten[A: Manifest](vectors: List[Exp[Vector[A]]]) extends Def[Vector[A]]
-    with PreservingTypeComputation[Vector[A]] {
+      with PreservingTypeComputation[Vector[A]] {
     val mA = manifest[A]
     def getType = manifest[Vector[A]]
   }
@@ -161,7 +161,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   }
 
   case class VectorReduce[K: Manifest, V: Manifest](in: Exp[Vector[(K, Iterable[V])]], func: (Exp[V], Exp[V]) => Exp[V])
-    extends Def[Vector[(K, V)]] {
+      extends Def[Vector[(K, V)]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     lazy val closure = doLambda2(func)(getClosureTypes._2, getClosureTypes._2, getClosureTypes._2)
@@ -169,7 +169,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   }
 
   case class VectorSave[A: Manifest](vectors: Exp[Vector[A]], path: Exp[String]) extends Def[Unit]
-    with ComputationNodeTyped[Vector[A], Nothing] {
+      with ComputationNodeTyped[Vector[A], Nothing] {
     val mA = manifest[A]
     def getTypes = (manifest[Vector[A]], manifest[Nothing])
   }
