@@ -8,4 +8,4 @@ libraryDependencies += "org.scalatest" % "scalatest_2.10.0-virtualized-SNAPSHOT"
 
 resolvers += "Dropbox" at "http://dl.dropbox.com/u/12870350/scala-virtualized"
 
-seq(scalariformSettings: _*)
+seq(defaultScalariformSettings: _*)

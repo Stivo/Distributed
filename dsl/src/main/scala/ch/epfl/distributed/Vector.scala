@@ -84,12 +84,16 @@ object FakeSourceContext {
   def apply() = SourceContext("unknown", Nil)
 }
 
+case class FieldRead(val path: String) {
+
+}
+
 trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   def toAtom2[T: Manifest](d: Def[T])(implicit ctx: SourceContext): Exp[T] = super.toAtom(d)
 
   trait VectorNode {
-    val directFieldReads = mutable.HashSet[String]()
-    val successorFieldReads = mutable.HashSet[String]()
+    val directFieldReads = mutable.HashSet[FieldRead]()
+    val successorFieldReads = mutable.HashSet[FieldRead]()
     def allFieldReads = directFieldReads ++ successorFieldReads
   }
 

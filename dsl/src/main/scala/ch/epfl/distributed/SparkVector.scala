@@ -117,6 +117,16 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       out
     }
 
+  object SomeDef {
+    def unapply(x: Any): Option[Def[_]] = x match {
+      case TTPDef(x) => Some(x)
+      case x: Def[_] => Some(x)
+      case Def(x) => Some(x)
+      //	          case x => Some(x)
+      case x => None //{ println("did not match " + x); None }
+    }
+  }
+
   object TTPDef {
     def unapply(ttp: TTP) = ttp match {
       case TTP(_, ThinDef(x)) => Some(x)
@@ -135,6 +145,15 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     def unapply(any: Any) = any match {
       case TTPDef(cn: ClosureNode[_, _]) => Some(cn)
       case cn: ClosureNode[_, _] => Some(cn)
+      case _ => None
+    }
+  }
+
+  object SomeAccess {
+    def unapply(ttp: Any) = ttp match {
+      case SomeDef(IR.Tuple2Access1(d)) => Some((d, "._1"))
+      case SomeDef(IR.Tuple2Access2(d)) => Some((d, "._2"))
+      case SomeDef(IR.Field(struct, name, _)) => Some((struct, "." + name))
       case _ => None
     }
   }
@@ -194,6 +213,61 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       case _ => Nil
     }
 
+    def pathToInput(node: Any, input: Sym[_], prefix: String = ""): Option[FieldRead] = {
+      node match {
+        case SomeAccess(nextNode, pathSegment) => pathToInput(nextNode, input, pathSegment + prefix)
+        case x: Sym[_] if input == x => return Some(FieldRead("input" + prefix))
+        case _ => return None
+      }
+    }
+
+    def analyzeFunction(v: VectorNode) = {
+      val nodes = getNodesInClosure(v).flatMap(IR.findDefinition(_)).map(_.rhs)
+      val fields = nodes.filter { SomeAccess.unapply(_).isDefined }
+      fields.flatMap(n => pathToInput(n, getNodesInClosure(v).head)).toSet
+    }
+
+    def computeFieldReads(node: VectorNode): Set[FieldRead] = {
+      node match {
+        case v @ VectorFilter(in, func) => analyzeFunction(v) ++ node.successorFieldReads
+        case v @ VectorMap(in, func) if {
+          val s1 = v.getTypes._2.toString
+          s1.contains("Tuple") || s1.contains("Struct")
+        } => {
+          // backup TTPs, or create new transformer?
+          val transformer = new Transformer(state)
+          // create narrowing transformation for this map
+          val narrowMapTransformation = new MapNarrowTransformation(v, node.successorFieldReads.toList)
+          transformer.transformations = List(narrowMapTransformation)
+          // run transformer
+          if (!transformer.doOneTransformation) {
+            println("Transformation failed for " + node)
+          }
+          // analyze field reads of the new function
+          val a2 = new Analyzer(transformer.currentState)
+          a2.analyzeFunction(narrowMapTransformation.lastOut)
+        }
+        case v @ VectorMap(in, func) => analyzeFunction(v)
+        case _ => Set()
+      }
+    }
+
+    def makeFieldAnalysis {
+      nodes.foreach {
+        node =>
+          node.directFieldReads.clear
+          node.successorFieldReads.clear
+      }
+
+      ordered.foreach {
+        node =>
+          val reads = computeFieldReads(node)
+          node.directFieldReads ++= reads
+          getInputs(node).foreach { _.successorFieldReads ++= reads }
+          println("Computed field reads for " + node + " got " + reads)
+      }
+    }
+
   }
 
   override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
@@ -206,7 +280,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       val pullDeps = new PullSparkDependenciesTransformation()
 
       // perform spark optimizations
-      transformer.doTransformation(new MapMergeTransformation, 500)
+      // transformer.doTransformation(new MapMergeTransformation, 500)
       //      transformer.doTransformation(new ReduceByKeyTransformation, 500)
       transformer.doTransformation(pullDeps, 500)
 
@@ -217,86 +291,15 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       println(analyzer.lambdas)
       println(analyzer.lambda2s)
       analyzer.ordered.foreach(x => println(x + " " + analyzer.getNodesInClosure(x)))
+      analyzer.makeFieldAnalysis
       println("############# HERE END #####################")
-      transformer.currentState.ttps.foreach(println)
+      //      transformer.currentState.ttps.foreach(println)
       // insert vectormaps and replace creation of structs with narrower types
 
-      ////    buildGraph(transformer)
-      //      transformer.doTransformation(new PullDependenciesTransformation(), 20)
-
-      //    buildGraph(transformer)
-      //    transformer.doOneStep
-      //buildGraph(transformer)
       state = transformer.currentState
       val currentScope0 = state.ttps
       result0 = state.results
 
-      /*
-      def getValidOptions[A](l: Iterable[Option[A]]) = l.filter(_.isDefined).map(_.get)
-
-      val closureNodes = getValidOptions[ClosureNode[_, _]](currentScope0.map(ClosureNode.unapply))
-      def vectorNodes = getValidOptions[VectorNode](currentScope0.map { x => x match { case TTPDef(vn: VectorNode) => Some(vn); case _ => None } })
-      def findClosureNodeWithLambda(l: Lambda[_, _]) = {
-        //        val closureNodes = getValidOptions[ClosureNode[_,_]](currentScope0.map{_ match { case TTP(_,ThinDef(cn : ClosureNode[_,_])) => Some(cn); case _ => None}})
-        val sym = IR.findDefinition(l).get.sym
-        closureNodes.find(IR.syms(_).contains(sym))
-      }
-
-      def findLambdaForSym(x: Sym[_]) = {
-        currentScope0.map { x: TTP => x match { case TTP(_, ThinDef(l: IR.Lambda[_, _])) => Some(l); case _ => None } }
-          .filter(_.isDefined).map(_.get).find(_.x == x)
-      }
-
-      object SomeDef {
-        def unapply(x: Any): Option[Def[_]] = x match {
-          case TTPDef(x) => Some(x)
-          case x: Def[_] => Some(x)
-          case Def(x) => Some(x)
-          //	          case x => Some(x)
-          case x => { println("did not match " + x); None }
-        }
-      }
-
-      def findClosureNode(node: Any, scope: List[TTP], prefix: String = ""): List[(ClosureNode[_, _], String)] = {
-        node match {
-          case SomeDef(IR.Tuple2Access1(d)) => findClosureNode(d, scope, "._1" + prefix)
-          case SomeDef(IR.Tuple2Access2(d)) => findClosureNode(d, scope, "._2" + prefix)
-          case SomeDef(IR.Field(struct, name, _)) => findClosureNode(struct, scope, "." + name + prefix)
-          case x: Sym[_] => {
-            for (lambdaOpt <- findLambdaForSym(x); cn <- findClosureNodeWithLambda(lambdaOpt))
-              yield cn
-          }.toList.map(x => (x, prefix))
-        }
-      }
-
-      def findClosureNodeOld(node: Def[_], scope: List[TTP]) = {
-        for (
-          reading <- IR.syms(node);
-          lambdaOpt <- findLambdaForSym(reading);
-          cn <- findClosureNodeWithLambda(lambdaOpt)
-        ) yield cn
-      }.toList
-
-      println("New current scope with result " + result0)
-      //      currentScope0.foreach(println)
-      val accesses = currentScope0.flatMap { FieldAccess.unapply(_) }
-      val tuples = accesses.map(x => (x, findClosureNode(x, currentScope0)))
-      tuples.foreach { case (read, (closurenode, path) :: Nil) => closurenode.directFieldReads += path; case _ => }
-      println("Direct reads of closure nodes ")
-      closureNodes.foreach(x => println(x + " " + x.directFieldReads))
-
-      def addFieldReadsToPredecessors(in: VectorNode) {
-        val inputSyms = IR.syms(in)
-        val nodes = inputSyms.flatMap { IR.findDefinition(_) }.map(_.rhs).map { x => println("GUGUS " + x); x }.flatMap { _ match { case vn: VectorNode => Some(vn); case _ => None } }
-        nodes.foreach { y => y.successorFieldReads ++= in.directFieldReads; addFieldReadsToPredecessors(y) }
-      }
-
-      println(vectorNodes)
-      vectorNodes.foreach { addFieldReadsToPredecessors }
-      println("All reads of vector nodes ")
-      vectorNodes.foreach { x => println(x + " " + x.allFieldReads) }
-      println
-      */
       super.focusExactScopeFat(currentScope0)(result0.map(IR.Block(_)))(body)
     } else {
       super.focusExactScopeFat(currentScope0In)(result0B)(body)

@@ -144,7 +144,6 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
         new VectorFlatten(mappers)
       }
       case _ => null
-      // match error is ok, should not happen
     }
 
   }
@@ -273,12 +272,16 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
     }
   }
 
-  class MapNarrowTransformation extends SimpleTransformation {
+  class MapNarrowTransformation(target: IR.VectorNode, fields: List[FieldRead]) extends SimpleTransformation {
+    var lastOut: VectorMap[_, _] = null
     def doTransformationPure(inExp: Exp[_]) = inExp match {
-      case Def(vm @ VectorMap(in, f)) => {
-        val narrower = narrow(List("im"))(vm.mB)
+      case Def(vm @ VectorMap(in, f)) if vm == target => {
+        //      case Def(vm @ VectorMap(in, f)) => {
+        val narrower = narrow(fields.map(_.path))(vm.mB)
         //	    	 val lifted = IR.toAtom2(narrower)
-        VectorMap(in, f.andThen(narrower))(vm.mA, vm.mB)
+        val out = VectorMap(in, f.andThen(narrower))(vm.mA, vm.mB)
+        lastOut = out
+        out
       }
       case _ => null
     }
