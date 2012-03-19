@@ -3,6 +3,7 @@ package ch.epfl.distributed
 import scala.virtualization.lms.common.ScalaGenBase
 import java.io.PrintWriter
 import scala.reflect.SourceContext
+import scala.virtualization.lms.util.GraphUtil
 
 trait SparkProgram extends VectorOpsExp with VectorImplOps with SparkVectorOpsExp {
 
@@ -10,29 +11,23 @@ trait SparkProgram extends VectorOpsExp with VectorImplOps with SparkVectorOpsEx
 
 trait SparkVectorOpsExp extends VectorOpsExp {
   case class VectorReduceByKey[K: Manifest, V: Manifest](in: Exp[Vector[(K, V)]], func: (Exp[V], Exp[V]) => Exp[V])
-      extends Def[Vector[(K, V)]] {
+      extends Def[Vector[(K, V)]]
+      with PreservingTypeComputation[Vector[(K, V)]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     lazy val closure = doLambda2(func)(getClosureTypes._2, getClosureTypes._2, getClosureTypes._2)
     def getClosureTypes = (manifest[(V, V)], manifest[V])
 
-    //      def getTypes = (mKey, mValue)
+    def getType = manifest[Vector[(K, V)]]
   }
 
   override def syms(e: Any): List[Sym[Any]] = e match {
-    case s: ClosureNode[_, _] => syms(s.in, s.closure) // ++ super.syms(e) // super call: add case class syms (iff flag is set)
-    //    case s: ClosureNode[_,_] => syms(s.in)// ++ super.syms(e) // super call: add case class syms (iff flag is set)
     case red: VectorReduceByKey[_, _] => syms(red.in, red.closure)
-    case s: VectorReduce[_, _] => syms(s.in, s.closure) ++ super.syms(e) // super call: add case class syms (iff flag is set)
     case _ => super.syms(e)
   }
 
   override def symsFreq(e: Any): List[(Sym[Any], Double)] = e match {
-    case s: ClosureNode[_, _] => freqNormal(s.in) ++ freqHot(s.closure)
     case red: VectorReduceByKey[_, _] => freqHot(red.closure) ++ freqNormal(red.in)
-    //    case s: ClosureNode[_,_] => freqNormal(s.in) 
-    //    case s: ClosureNode[_,_]  => freqHot(s.closure) ++ freqNormal(s.in) 
-    case s: VectorReduce[_, _] => freqHot(s.closure) ++ freqNormal(s.in)
     case _ => super.symsFreq(e)
   }
 
@@ -44,39 +39,39 @@ trait SparkVectorOpsExp extends VectorOpsExp {
   }
 }
 
-//trait SparkTransformations extends VectorTransformations {
-//    val IR: VectorOpsExp with SparkVectorOpsExp
-//  	import IR.{VectorReduceByKey, VectorReduce, VectorGroupByKey, VectorMap}
-//    import IR.{Def, Exp}
-//
-//  	class ReduceByKeyTransformation extends SimpleSingleConsumerTransformation {
-//  	  
-//	   def doTransformationPure(inExp : Exp[_]) = inExp match {
-//            case Def(red@VectorReduce(Def(gbk@VectorGroupByKey(v1)),f1)) => {
-//              new VectorReduceByKey(v1, f1)(red.mKey, red.mValue)
-//            }
-//            case _ => null
-//	   }
-//	}
-//
-//  	class PullSparkDependenciesTransformation extends PullDependenciesTransformation {
-//
-// 	   override def appliesToNodeImpl(inExp : Exp[_], t : Transformer) = {
-//		   inExp match {
-//		     case Def(VectorReduceByKey(in, func)) => true
-//		     case _ => super.appliesToNodeImpl(inExp, t)
-//		   }
-//	   }
-// 	   override def doTransformation(inExp : Exp[_]) : Def[_] = inExp match {
-//	     case Def(r@VectorReduceByKey(in, func)) => _doneNodes += inExp; r
-// 	     case _ => super.doTransformation(inExp)
-// 	   }
-//	}
-//
-//  	
-//}
+trait SparkTransformations extends VectorTransformations {
+  val IR: VectorOpsExp with SparkVectorOpsExp
+  import IR.{ VectorReduceByKey, VectorReduce, VectorGroupByKey, VectorMap }
+  import IR.{ Def, Exp }
 
-trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransformations {
+  class ReduceByKeyTransformation extends SimpleSingleConsumerTransformation {
+    // TODO: apply if all consumers of group by key are reduces,
+    // even if there is more than one
+    def doTransformationPure(inExp: Exp[_]) = inExp match {
+      case Def(red @ VectorReduce(Def(gbk @ VectorGroupByKey(v1)), f1)) => {
+        new VectorReduceByKey(v1, f1)(red.mKey, red.mValue)
+      }
+      case _ => null
+    }
+  }
+
+  class PullSparkDependenciesTransformation extends PullDependenciesTransformation {
+
+    override def appliesToNodeImpl(inExp: Exp[_], t: Transformer) = {
+      inExp match {
+        case Def(VectorReduceByKey(in, func)) => true
+        case _ => super.appliesToNodeImpl(inExp, t)
+      }
+    }
+    override def doTransformation(inExp: Exp[_]): Def[_] = inExp match {
+      case Def(r @ VectorReduceByKey(in, func)) => _doneNodes += inExp; r
+      case _ => super.doTransformation(inExp)
+    }
+  }
+
+}
+
+trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransformations with SparkTransformations {
 
   val IR: SparkVectorOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const }
@@ -146,17 +141,45 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     }
   }
 
+  class Analyzer(state: TransformationState) {
+    val nodes = state.ttps.flatMap {
+      _ match {
+        case TTPDef(x: VectorNode) => Some(x)
+        case TTPDef(Reflect(x: VectorNode, _, _)) => Some(x)
+        case _ => Nil
+      }
+    }
+    val saves = nodes.filter { case v: VectorSave[_] => true; case _ => false }
+
+    def getInputs(x: VectorNode) = {
+      val syms = IR.syms(x)
+      syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.rhs match { case x: VectorNode => Some(x) case _ => None } }
+    }
+
+    val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs)
+  }
+
   override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
-    val hasVectorNodes = !currentScope0In.flatMap { TTPDef.unapply }.isEmpty
+    val hasVectorNodes = !currentScope0In.flatMap { TTPDef.unapply }.flatMap { case x: VectorNode => Some(x) case _ => None }.isEmpty
     if (hasVectorNodes) {
+      // set up transformer
       var result0 = result0B.map(getBlockResultFull)
       var state = new TransformationState(currentScope0In, result0)
-      val pullDeps = new PullDependenciesTransformation()
       val transformer = new Transformer(state)
+      val pullDeps = new PullSparkDependenciesTransformation()
+
+      // perform spark optimizations
+      //      transformer.doTransformation(new MapMergeTransformation, 500)
+      //      transformer.doTransformation(new ReduceByKeyTransformation, 500)
+      transformer.doTransformation(pullDeps, 500)
+
+      // perform field usage analysis
+      val analyzer = new Analyzer(transformer.currentState)
+      println("################# here #####################")
+      println(analyzer.ordered)
+      // insert vectormaps and replace creation of structs with narrower types
+
       ////    buildGraph(transformer)
-      transformer.doTransformation(pullDeps, 500)
-      transformer.doTransformation(new MapNarrowTransformation, 1)
-      transformer.doTransformation(pullDeps, 500)
       //      transformer.doTransformation(new PullDependenciesTransformation(), 20)
 
       //    buildGraph(transformer)
@@ -166,6 +189,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       val currentScope0 = state.ttps
       result0 = state.results
 
+      /*
       def getValidOptions[A](l: Iterable[Option[A]]) = l.filter(_.isDefined).map(_.get)
 
       val closureNodes = getValidOptions[ClosureNode[_, _]](currentScope0.map(ClosureNode.unapply))
@@ -230,6 +254,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       println("All reads of vector nodes ")
       vectorNodes.foreach { x => println(x + " " + x.allFieldReads) }
       println
+      */
       super.focusExactScopeFat(currentScope0)(result0.map(IR.Block(_)))(body)
     } else {
       super.focusExactScopeFat(currentScope0In)(result0B)(body)

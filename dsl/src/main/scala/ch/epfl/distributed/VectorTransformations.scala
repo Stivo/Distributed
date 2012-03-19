@@ -35,7 +35,9 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
     def getTodo = toDo.toSet
   }
 
-  class Transformer(var currentState: TransformationState, var transformations: List[Transformation] = Nil) {
+  class Transformer(var currentState: TransformationState) {
+
+    var transformations: List[Transformation] = Nil
 
     def doTransformation(transformation: Transformation, limit: Int = 1) {
       transformations = List(transformation)
@@ -82,7 +84,7 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
     }
 
     def readingNodes(inExp: Def[_]) = {
-      val reading = IR.syms(inExp).removeDuplicates
+      val reading = IR.syms(inExp).distinct
       val out = reading.flatMap { x => IR.findDefinition(x) }.map(_.rhs)
       //		  println("Reading nodes of "+inExp+" are "+reading+", with Defs "+out)
       out
@@ -95,7 +97,7 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
           case _ => None
         }
       }.filter(IR.findDefinition(_).isDefined)
-        .filter { x => IR.syms(x).contains(inSym) }.removeDuplicates
+        .filter { x => IR.syms(x).contains(inSym) }.distinct
       out
     }
 
