@@ -74,7 +74,7 @@ trait SparkTransformations extends VectorTransformations {
 trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransformations with SparkTransformations {
 
   val IR: SparkVectorOpsExp
-  import IR.{ Sym, Def, Exp, Reify, Reflect, Const }
+  import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
   import IR.{
     NewVector,
     VectorSave,
@@ -85,13 +85,11 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     VectorGroupByKey,
     VectorReduce,
     ComputationNode,
-    VectorNode
+    VectorNode,
+    GetArgs
   }
   import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
-  import IR.{ findDefinition }
-  import IR.{ ClosureNode, freqHot, freqNormal, Lambda }
-
-  import IR.{ GetArgs }
+  import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2 }
   import IR.{ VectorReduceByKey }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
@@ -149,6 +147,18 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
         case _ => Nil
       }
     }
+    val lambdas = state.ttps.flatMap {
+      _ match {
+        case TTPDef(l @ Lambda(f, x, y)) => Some(l)
+        case _ => None
+      }
+    }
+    val lambda2s = state.ttps.flatMap {
+      _ match {
+        case TTPDef(l @ IR.Lambda2(f, x1, x2, y)) => Some(l)
+        case _ => None
+      }
+    }
     val saves = nodes.filter { case v: VectorSave[_] => true; case _ => false }
 
     def getInputs(x: VectorNode) = {
@@ -156,7 +166,34 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.rhs match { case x: VectorNode => Some(x) case _ => None } }
     }
 
-    val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs)
+    val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
+
+    def getNodesForSymbol(x: Sym[_]) = {
+      def getInputs(x: Sym[_]) = {
+        IR.findDefinition(x) match {
+          case Some(x) => IR.syms(x.rhs)
+          case _ => Nil
+        }
+      }
+
+      GraphUtil.stronglyConnectedComponents(List(x), getInputs).flatten.reverse
+    }
+
+    def getNodesInLambda(x: Any) = {
+      x match {
+        case Def(Lambda(_, _, IR.Block(y: Sym[_]))) => getNodesForSymbol(y)
+        case Def(Lambda2(_, _, _, IR.Block(y: Sym[_]))) => getNodesForSymbol(y)
+        case _ => Nil
+      }
+    }
+
+    def getNodesInClosure(x: VectorNode) = x match {
+      case x: ClosureNode[_, _] => getNodesInLambda(x.closure)
+      case x: VectorReduce[_, _] => getNodesForSymbol(x.closure.asInstanceOf[Sym[_]])
+      case x: VectorReduceByKey[_, _] => getNodesForSymbol(x.closure.asInstanceOf[Sym[_]])
+      case _ => Nil
+    }
+
   }
 
   override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
@@ -169,7 +206,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       val pullDeps = new PullSparkDependenciesTransformation()
 
       // perform spark optimizations
-      //      transformer.doTransformation(new MapMergeTransformation, 500)
+      transformer.doTransformation(new MapMergeTransformation, 500)
       //      transformer.doTransformation(new ReduceByKeyTransformation, 500)
       transformer.doTransformation(pullDeps, 500)
 
@@ -177,6 +214,11 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       val analyzer = new Analyzer(transformer.currentState)
       println("################# here #####################")
       println(analyzer.ordered)
+      println(analyzer.lambdas)
+      println(analyzer.lambda2s)
+      analyzer.ordered.foreach(x => println(x + " " + analyzer.getNodesInClosure(x)))
+      println("############# HERE END #####################")
+      transformer.currentState.ttps.foreach(println)
       // insert vectormaps and replace creation of structs with narrower types
 
       ////    buildGraph(transformer)

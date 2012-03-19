@@ -216,6 +216,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     case VectorFlatten(x) => syms(x) ++ super.syms(e)
     case NewVector(arg) => syms(arg)
     case VectorSave(vec, path) => syms(vec, path)
+    case v @ VectorReduce(vec, func) => syms(vec, v.closure)
     case _ => super.syms(e)
   }
 
@@ -224,6 +225,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     case VectorFlatten(x) => freqNormal(x)
     case NewVector(arg) => freqNormal(arg)
     case VectorSave(vec, path) => freqNormal(vec, path)
+    case v @ VectorReduce(vec, func) => freqHot(v.closure) ++ freqNormal(vec)
     case _ => super.symsFreq(e)
   }
 

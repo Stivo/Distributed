@@ -6,7 +6,7 @@ import org.scalatest._
 trait VectorsProg extends VectorImplOps {
   def simple(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
-    words1.map(_.toInt).map(_ + 3)
+    words1.filter(_.matches("\\d+")).map(_.toInt).map(_ + 3)
       .save(getArgs(1))
     //)(0)
     unit(())
@@ -48,9 +48,9 @@ class TestVectors extends Suite {
 
       val sw = new StringWriter()
       var pw = new PrintWriter(sw)
-      //      pw = new PrintWriter(System.out)
+      pw = new PrintWriter(System.out)
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.twoStage, "g", pw)
+      codegen.emitSource(dsl.simple, "g", pw)
 
       //      val dest = "/home/stivo/master/spark/examples/src/main/scala/spark/examples/SparkGenerated.scala"
       //      val fw = new FileWriter(dest)
