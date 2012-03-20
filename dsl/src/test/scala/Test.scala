@@ -27,12 +27,13 @@ trait VectorsProg extends VectorImplOps with ComplexBase {
   def fields(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
     words1 //.filter(_.matches("\\d+"))
-    .map(x => (unit(0), Complex(3, x.toInt)))
-    .filter(_._2.im > 3)
-    .filter(_._1 == 0)
-    //.filter(_.abs > 3)
-    //.map(x => Complex(x.im, 3))
-    .map(x => x._2.re)
+    .map(x => Complex(3, x.toInt))
+//    .filter(_._2.im > 3)
+//    .filter(_._1 == 0)
+    .filter(_.abs > 3)
+    .map(x => Complex(x.re, 3))
+    .map(_.im)
+//    .map(x => x._2.re)
     .save(getArgs(1))
     //)(0)
     unit(())
@@ -46,6 +47,16 @@ trait VectorsProg extends VectorImplOps with ComplexBase {
     unit(())
   }
 
+  def simple2(x: Rep[Unit]) = {
+    val words1 = Vector(getArgs(0))
+    words1.map{ x=> (x,unit(1))}
+    .filter(_._2 > 5)
+    .map(_._1)
+    .save(getArgs(1))
+    //)(0)
+    unit(())
+  }
+  
   def twoStage(x: Rep[Unit]) = {
     val words1 = Vector("words1")
     val words2 = Vector("words2")
@@ -82,7 +93,7 @@ class TestVectors extends Suite {
 
       val sw = new StringWriter()
       var pw = new PrintWriter(sw)
-      //      pw = new PrintWriter(System.out)
+            pw = new PrintWriter(System.out)
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
       codegen.emitSource(dsl.fields, "g", pw)
 

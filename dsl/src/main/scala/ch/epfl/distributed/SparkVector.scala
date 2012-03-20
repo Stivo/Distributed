@@ -95,6 +95,9 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) =
     {
       val out = rhs match {
+        case IR.SimpleStruct("tuple2s" :: Nil, elems) => emitValDef(sym, "(%s, %s)".format(quote(elems("_1")), quote(elems("_2"))))
+        case IR.Field(tuple, "_1", tp) => emitValDef(sym, "%s._1 // type %s".format(quote(tuple), tp))
+        case IR.Field(tuple, "_2", tp) => emitValDef(sym, "%s._2 // type %s".format(quote(tuple), tp))
         case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
         case nv @ NewVector(filename) => emitValDef(sym, "sc.textFile(%s)".format(quote(filename)))
         case vs @ VectorSave(vector, filename) => stream.println("%s.saveAsTextFile(%s)".format(quote(vector), quote(filename)))
@@ -130,7 +133,9 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       //      transformer.doTransformation(new ReduceByKeyTransformation, 500)
       transformer.doTransformation(pullDeps, 500)
 
-      // perform field usage analysis
+      transformer.doTransformation(new TupleStructTransformation, 5)
+      transformer.doTransformation(pullDeps, 500)
+      //      // perform field usage analysis
       val analyzer = new Analyzer(transformer.currentState)
       println("################# here #####################")
       println(analyzer.ordered)

@@ -15,15 +15,29 @@ import scala.collection.immutable
 
 trait Vector[+A]
 
+trait Tuple2Struct extends Base with Expressions {
+  class Tuple2S[X: Manifest, Y: Manifest]
+  //  def Tuple2SC[X : Manifest,Y : Manifest](x : Rep[X], y : Rep[Y]) : Rep[Tuple2S[X,Y]]
+  //  def infix__1[X : Manifest](c: Rep[Tuple2S[X,_]]): Rep[X]
+  //  def infix__2[X : Manifest](c: Rep[Tuple2S[_,X]]): Rep[X]
+}
+
+trait Tuple2StructExp extends Tuple2Struct with StructExp {
+  def Tuple2SC[X: Manifest, Y: Manifest](x: Rep[X], y: Rep[Y]) =
+    SimpleStruct[Tuple2[X, Y]](List("tuple2s"), Map("_1" -> x, "_2" -> y))
+  //  def infix__1[X : Manifest](c: Rep[Tuple2S[X,_]]): Rep[X] = field[X](c, "_1")
+  //  def infix__2[X : Manifest](c: Rep[Tuple2S[_,X]]): Rep[X] = field[X](c, "_2")
+}
+
 trait VectorBase extends Base with LiftAll
   with Equal with IfThenElse with Variables with While with Functions
   with ImplicitOps with NumericOps with OrderingOps with StringOps
   with BooleanOps with PrimitiveOps with MiscOps with TupleOps
   with MathOps with CastingOps with ObjectOps with ArrayOps
-  with StringAndNumberOps with ListOps
+  with StringAndNumberOps with ListOps with Tuple2Struct
 
 trait VectorBaseExp extends VectorBase
-  with DSLOpsExp
+  with DSLOpsExp with Tuple2StructExp with BlockExp
   with EqualExp with IfThenElseExp with VariablesExp with WhileExp with FunctionsExp
   with ImplicitOpsExp with NumericOpsExp with OrderingOpsExp with StringOpsExp
   with BooleanOpsExp with PrimitiveOpsExp with MiscOpsExp with TupleOpsExp
@@ -102,8 +116,12 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     val func: Exp[A] => Exp[B]
     def getClosureTypes: (Manifest[A], Manifest[B])
 
-    lazy val closure = {
-      VectorOpsExp.this.doLambda(func)(getClosureTypes._1, getClosureTypes._2)
+    val overrideClosure: Option[Exp[A => B]] = None
+
+    lazy val closure: Exp[A => B] = {
+      overrideClosure.getOrElse(
+        VectorOpsExp.this.doLambda(func)(getClosureTypes._1, getClosureTypes._2)
+      )
     }
   }
 
@@ -210,8 +228,12 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = (e match {
     case flat @ VectorFlatten(list) => toAtom(VectorFlatten(f(list))(flat.mA))
     case vm @ NewVector(vector) => toAtom(NewVector(f(vector))(vm.mA))(mtype(vm.mA))
-    case vm @ VectorMap(vector, func) => toAtom(VectorMap(f(vector), f(func))(vm.mA, vm.mB))(vm.getTypes._2)
-    case vf @ VectorFilter(vector, func) => toAtom(VectorFilter(f(vector), f(func))(vf.mA))(mtype(manifest[A]))
+    case vm @ VectorMap(vector, func) => toAtom(
+      new { override val overrideClosure = Some(f(vm.closure)) } with VectorMap(f(vector), f(func))(vm.mA, vm.mB)
+    )(vm.getTypes._2)
+    case vf @ VectorFilter(vector, func) => toAtom(
+      new { override val overrideClosure = Some(f(vf.closure)) } with VectorFilter(f(vector), f(func))(vf.mA)
+    )(mtype(manifest[A]))
     case vfm @ VectorFlatMap(vector, func) => toAtom(VectorFlatMap(f(vector), f(func))(vfm.mA, vfm.mB))(mtype(manifest[A]))
     case gbk @ VectorGroupByKey(vector) => toAtom(VectorGroupByKey(f(vector))(gbk.mKey, gbk.mValue))(mtype(manifest[A]))
     case v @ VectorReduce(vector, func) => toAtom(VectorReduce(f(vector), f(func))(v.mKey, v.mValue))(mtype(manifest[A]))

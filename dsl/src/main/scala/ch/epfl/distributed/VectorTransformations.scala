@@ -123,7 +123,8 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
       // make TTP's from defs
       val ttps = List(newDef).map(IR.findOrCreateDefinition(_)).map(fatten)
       // return ttps and substitutions
-      (ttps, List((inExp, IR.findOrCreateDefinition(out).sym)))
+      val substs = List((inExp, IR.findOrCreateDefinition(out).sym))
+      (ttps, substs)
     }
     def doTransformation(inExp: Exp[_]): Def[_]
 
@@ -283,6 +284,19 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
         lastOut = out
         out
       }
+      case _ => null
+    }
+  }
+
+  class TupleStructTransformation extends SimpleTransformation {
+
+    def doTransformationPure(inExp: Exp[_]) = inExp match {
+      case Def(t @ IR.ETuple2(x, y)) =>
+        IR.Tuple2SC(x, y)(t.m1, t.m2)
+      case Def(ta @ IR.Tuple2Access1(t)) =>
+        IR.Field(t, "_1", ta.m)
+      case Def(ta @ IR.Tuple2Access2(t)) =>
+        IR.Field(t, "_2", ta.m)
       case _ => null
     }
   }
