@@ -172,9 +172,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     val mKey = manifest[K]
     val mValue = manifest[V]
     val mOutType = manifest[(K, Iterable[V])]
-
     def getTypes = (manifest[Vector[(K, V)]], manifest[Vector[(K, Iterable[V])]])
-
   }
 
   case class VectorReduce[K: Manifest, V: Manifest](in: Exp[Vector[(K, Iterable[V])]], func: (Exp[V], Exp[V]) => Exp[V])

@@ -1,6 +1,7 @@
 package ch.epfl.distributed
 
 import scala.virtualization.lms.util.GraphUtil
+import scala.collection.mutable.Buffer
 
 trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matchers {
 
@@ -112,7 +113,12 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
           a2.analyzeFunction(narrowMapTransformation.lastOut)
         }
         case v @ VectorMap(in, func) => analyzeFunction(v)
-        case _ => Set()
+        case v @ VectorReduce(in, func) => 
+          analyzeFunction(v)
+          .map(_.path.drop(5))
+          .map(x => "input._2.iterable"+x)
+          .map(FieldRead)
+       case _ => Set()
       }
     }
 
@@ -130,6 +136,34 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
           getInputs(node).foreach { _.successorFieldReads ++= reads }
           println("Computed field reads for " + node + " got " + reads)
       }
+    }
+    
+    def getIdForNode(n : VectorNode with Def[_]) = {
+//      nodes.indexOf(n)
+      val op1 = IR.findDefinition(n.asInstanceOf[Def[_]])
+      if  (op1.isDefined) {
+        op1.get.sym.id
+      } else {
+        state.ttps.flatMap{
+          case TTP(Sym(s)::_, ThinDef(Reflect(x,_,_))) if x==n => Some(s)
+//          case TTPDef(Reflect(s@Def(x),_,_)) if x==n => Some(s)
+          case _ => None
+        }.head
+      }
+    }
+    
+    def exportToGraph = {
+      val buf = Buffer[String]()
+      buf += "digraph g {"
+      for (node <- nodes) {
+        buf += """%s [label="%s(%s)"];""" .format(getIdForNode(node),node.toString.takeWhile(_!='('), getIdForNode(node))
+      }
+      for (node <- nodes; input <- getInputs(node)) {
+        buf += """%s -> %s [label="%s"]; """.format(getIdForNode(input), getIdForNode(node),
+            node.directFieldReads.map(_.path).toList.sortBy(x => x).mkString(","))
+      }
+      buf += "}"
+      buf.mkString("\n")
     }
 
   }

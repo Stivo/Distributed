@@ -4,6 +4,7 @@ import scala.virtualization.lms.common.ScalaGenBase
 import java.io.PrintWriter
 import scala.reflect.SourceContext
 import scala.virtualization.lms.util.GraphUtil
+import java.io.FileOutputStream
 
 trait SparkProgram extends VectorOpsExp with VectorImplOps with SparkVectorOpsExp {
 
@@ -137,6 +138,9 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       println(analyzer.lambda2s)
       analyzer.ordered.foreach(x => println(x + " " + analyzer.getNodesInClosure(x)))
       analyzer.makeFieldAnalysis
+      val out = new FileOutputStream("test.dot")
+      out.write(analyzer.exportToGraph.getBytes)
+      out.close
       println("############# HERE END #####################")
       //      transformer.currentState.ttps.foreach(println)
       // insert vectormaps and replace creation of structs with narrower types
