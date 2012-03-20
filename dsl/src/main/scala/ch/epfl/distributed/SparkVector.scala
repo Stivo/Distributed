@@ -11,13 +11,11 @@ trait SparkProgram extends VectorOpsExp with VectorImplOps with SparkVectorOpsEx
 
 trait SparkVectorOpsExp extends VectorOpsExp {
   case class VectorReduceByKey[K: Manifest, V: Manifest](in: Exp[Vector[(K, V)]], func: (Exp[V], Exp[V]) => Exp[V])
-      extends Def[Vector[(K, V)]]
+      extends Def[Vector[(K, V)]] with Closure2Node[V, V, V]
       with PreservingTypeComputation[Vector[(K, V)]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
-    lazy val closure = doLambda2(func)(getClosureTypes._2, getClosureTypes._2, getClosureTypes._2)
-    def getClosureTypes = (manifest[(V, V)], manifest[V])
-
+    def getClosureTypes = ((manifest[V], manifest[V]), manifest[V])
     def getType = manifest[Vector[(K, V)]]
   }
 
@@ -71,7 +69,7 @@ trait SparkTransformations extends VectorTransformations {
 
 }
 
-trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransformations with SparkTransformations {
+trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransformations with SparkTransformations with Matchers with VectorAnalysis {
 
   val IR: SparkVectorOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -89,7 +87,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     GetArgs
   }
   import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
-  import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2 }
+  import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
   import IR.{ VectorReduceByKey }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
@@ -116,159 +114,6 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       //    println(sym+" "+rhs)
       out
     }
-
-  object SomeDef {
-    def unapply(x: Any): Option[Def[_]] = x match {
-      case TTPDef(x) => Some(x)
-      case x: Def[_] => Some(x)
-      case Def(x) => Some(x)
-      //	          case x => Some(x)
-      case x => None //{ println("did not match " + x); None }
-    }
-  }
-
-  object TTPDef {
-    def unapply(ttp: TTP) = ttp match {
-      case TTP(_, ThinDef(x)) => Some(x)
-      case _ => None
-    }
-  }
-
-  object FieldAccess {
-    def unapply(ttp: TTP) = ttp match {
-      case TTPDef(f @ Field(obj, field, typ)) => Some(f)
-      case _ => None
-    }
-  }
-
-  object ClosureNode {
-    def unapply(any: Any) = any match {
-      case TTPDef(cn: ClosureNode[_, _]) => Some(cn)
-      case cn: ClosureNode[_, _] => Some(cn)
-      case _ => None
-    }
-  }
-
-  object SomeAccess {
-    def unapply(ttp: Any) = ttp match {
-      case SomeDef(IR.Tuple2Access1(d)) => Some((d, "._1"))
-      case SomeDef(IR.Tuple2Access2(d)) => Some((d, "._2"))
-      case SomeDef(IR.Field(struct, name, _)) => Some((struct, "." + name))
-      case _ => None
-    }
-  }
-
-  class Analyzer(state: TransformationState) {
-    val nodes = state.ttps.flatMap {
-      _ match {
-        case TTPDef(x: VectorNode) => Some(x)
-        case TTPDef(Reflect(x: VectorNode, _, _)) => Some(x)
-        case _ => Nil
-      }
-    }
-    val lambdas = state.ttps.flatMap {
-      _ match {
-        case TTPDef(l @ Lambda(f, x, y)) => Some(l)
-        case _ => None
-      }
-    }
-    val lambda2s = state.ttps.flatMap {
-      _ match {
-        case TTPDef(l @ IR.Lambda2(f, x1, x2, y)) => Some(l)
-        case _ => None
-      }
-    }
-    val saves = nodes.filter { case v: VectorSave[_] => true; case _ => false }
-
-    def getInputs(x: VectorNode) = {
-      val syms = IR.syms(x)
-      syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.rhs match { case x: VectorNode => Some(x) case _ => None } }
-    }
-
-    val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
-
-    def getNodesForSymbol(x: Sym[_]) = {
-      def getInputs(x: Sym[_]) = {
-        IR.findDefinition(x) match {
-          case Some(x) => IR.syms(x.rhs)
-          case _ => Nil
-        }
-      }
-
-      GraphUtil.stronglyConnectedComponents(List(x), getInputs).flatten.reverse
-    }
-
-    def getNodesInLambda(x: Any) = {
-      x match {
-        case Def(Lambda(_, _, IR.Block(y: Sym[_]))) => getNodesForSymbol(y)
-        case Def(Lambda2(_, _, _, IR.Block(y: Sym[_]))) => getNodesForSymbol(y)
-        case _ => Nil
-      }
-    }
-
-    def getNodesInClosure(x: VectorNode) = x match {
-      case x: ClosureNode[_, _] => getNodesInLambda(x.closure)
-      case x: VectorReduce[_, _] => getNodesForSymbol(x.closure.asInstanceOf[Sym[_]])
-      case x: VectorReduceByKey[_, _] => getNodesForSymbol(x.closure.asInstanceOf[Sym[_]])
-      case _ => Nil
-    }
-
-    def pathToInput(node: Any, input: Sym[_], prefix: String = ""): Option[FieldRead] = {
-      node match {
-        case SomeAccess(nextNode, pathSegment) => pathToInput(nextNode, input, pathSegment + prefix)
-        case x: Sym[_] if input == x => return Some(FieldRead("input" + prefix))
-        case _ => return None
-      }
-    }
-
-    def analyzeFunction(v: VectorNode) = {
-      val nodes = getNodesInClosure(v).flatMap(IR.findDefinition(_)).map(_.rhs)
-      val fields = nodes.filter { SomeAccess.unapply(_).isDefined }
-      fields.flatMap(n => pathToInput(n, getNodesInClosure(v).head)).toSet
-    }
-
-    def computeFieldReads(node: VectorNode): Set[FieldRead] = {
-      node match {
-        case v @ VectorFilter(in, func) => analyzeFunction(v) ++ node.successorFieldReads
-        case v @ VectorMap(in, func) if {
-          val s1 = v.getTypes._2.toString
-          s1.contains("Tuple") || s1.contains("Struct")
-        } => {
-          // backup TTPs, or create new transformer?
-          val transformer = new Transformer(state)
-          // create narrowing transformation for this map
-          val narrowMapTransformation = new MapNarrowTransformation(v, node.successorFieldReads.toList)
-          transformer.transformations = List(narrowMapTransformation)
-          // run transformer
-          if (!transformer.doOneTransformation) {
-            println("Transformation failed for " + node)
-          }
-          // analyze field reads of the new function
-          val a2 = new Analyzer(transformer.currentState)
-          a2.analyzeFunction(narrowMapTransformation.lastOut)
-        }
-        case v @ VectorMap(in, func) => analyzeFunction(v)
-        case _ => Set()
-      }
-    }
-
-    def makeFieldAnalysis {
-      nodes.foreach {
-        node =>
-          node.directFieldReads.clear
-          node.successorFieldReads.clear
-      }
-
-      ordered.foreach {
-        node =>
-          val reads = computeFieldReads(node)
-          node.directFieldReads ++= reads
-          getInputs(node).foreach { _.successorFieldReads ++= reads }
-          println("Computed field reads for " + node + " got " + reads)
-      }
-    }
-
-  }
 
   override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
     val hasVectorNodes = !currentScope0In.flatMap { TTPDef.unapply }.flatMap { case x: VectorNode => Some(x) case _ => None }.isEmpty

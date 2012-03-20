@@ -105,7 +105,16 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     lazy val closure = {
       VectorOpsExp.this.doLambda(func)(getClosureTypes._1, getClosureTypes._2)
     }
+  }
 
+  trait Closure2Node[A, B, C] extends VectorNode {
+    val in: Exp[Vector[_]]
+    val func: (Exp[A], Exp[B]) => Exp[C]
+    def getClosureTypes: ((Manifest[A], Manifest[B]), Manifest[C])
+
+    lazy val closure = {
+      VectorOpsExp.this.doLambda2(func)(getClosureTypes._1._1, getClosureTypes._1._2, getClosureTypes._2)
+    }
   }
 
   trait ComputationNode extends VectorNode {
@@ -169,12 +178,11 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   }
 
   case class VectorReduce[K: Manifest, V: Manifest](in: Exp[Vector[(K, Iterable[V])]], func: (Exp[V], Exp[V]) => Exp[V])
-      extends Def[Vector[(K, V)]]
+      extends Def[Vector[(K, V)]] with Closure2Node[V, V, V]
       with ComputationNodeTyped[Vector[(K, Iterable[V])], Vector[(K, V)]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
-    lazy val closure = doLambda2(func)(getClosureTypes._2, getClosureTypes._2, getClosureTypes._2)
-    def getClosureTypes = (manifest[(V, V)], manifest[V])
+    def getClosureTypes = ((manifest[V], manifest[V]), manifest[V])
     def getTypes = (manifest[Vector[(K, Iterable[V])]], manifest[Vector[(K, V)]])
   }
 
@@ -216,20 +224,20 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   }).asInstanceOf[Exp[A]]
 
   override def syms(e: Any): List[Sym[Any]] = e match {
-    case s: ClosureNode[_, _] => syms(s.in, s.closure) ++ super.syms(e) // super call: add case class syms (iff flag is set)
+    case s: ClosureNode[_, _] => syms(s.in, s.closure)
+    case s: Closure2Node[_, _, _] => syms(s.in, s.closure)
     case VectorFlatten(x) => syms(x) ++ super.syms(e)
     case NewVector(arg) => syms(arg)
     case VectorSave(vec, path) => syms(vec, path)
-    case v @ VectorReduce(vec, func) => syms(vec, v.closure)
     case _ => super.syms(e)
   }
 
   override def symsFreq(e: Any): List[(Sym[Any], Double)] = e match {
     case s: ClosureNode[_, _] => freqHot(s.closure) ++ freqNormal(s.in)
+    case s: Closure2Node[_, _, _] => freqHot(s.closure) ++ freqNormal(s.in)
     case VectorFlatten(x) => freqNormal(x)
     case NewVector(arg) => freqNormal(arg)
     case VectorSave(vec, path) => freqNormal(vec, path)
-    case v @ VectorReduce(vec, func) => freqHot(v.closure) ++ freqNormal(vec)
     case _ => super.symsFreq(e)
   }
 
