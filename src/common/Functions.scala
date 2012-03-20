@@ -22,7 +22,10 @@ trait Functions extends Base {
 
 trait FunctionsExp extends Functions with EffectExp {
 
-  case class Lambda[A:Manifest,B:Manifest](f: Exp[A] => Exp[B], x: Sym[A], y: Block[B]) extends Def[A => B]
+  case class Lambda[A:Manifest,B:Manifest](f: Exp[A] => Exp[B], x: Sym[A], y: Block[B]) extends Def[A => B] {
+    val mA = manifest[A]
+    val mB = manifest[B]
+  }
   case class Lambda2[A1:Manifest,A2:Manifest,B:Manifest](f: (Exp[A1],Exp[A2]) => Exp[B], x1: Sym[A1], x2: Sym[A2], y: Block[B]) extends Def[(A1,A2) => B]
 
   case class Apply[A:Manifest,B:Manifest](f: Exp[A => B], arg: Exp[A]) extends Def[B]
@@ -73,6 +76,14 @@ trait FunctionsExp extends Functions with EffectExp {
     case _ => super.boundSyms(e)
   }  
 
+  def makeFunction[A : Manifest, B : Manifest]() = manifest[Function1[A, B]]
+  
+  override def mirror[A:Manifest](e: Def[A], f: Transformer)/*(implicit ctx: SourceContext)*/: Exp[A] = 
+    (e match {
+       case l@Lambda(func,x,y) => toAtom(Lambda(f(func),x,f(y))(l.mA, l.mB)) (makeFunction()(l.mA, l.mB))
+       case _ => super.mirror(e, f)
+    }).asInstanceOf[Exp[A]]
+  
 // TODO: right now were trying to hoist as much as we can out of functions. 
 // That might not always be appropriate. A promising strategy would be to have
 // explicit 'hot' and 'cold' functions. 

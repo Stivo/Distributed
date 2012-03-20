@@ -11,6 +11,11 @@ trait ScalaCodegen extends GenericCodegen {
 
   override def toString = "scala"
 
+  override def quote(x: Exp[Any]) : String = x match {
+    case Const(s: String) => "\""+s.replaceAll("\\\\", "\\\\\\\\").replaceAll("\"", "\\\"")+"\""
+    case _ => super.quote(x)
+  }
+
   override def exceptionHandler(e: Exception, outFile:File, kstream:PrintWriter): Unit = {
       e.printStackTrace()
       kstream.close()

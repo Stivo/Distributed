@@ -41,7 +41,7 @@ trait BaseExp extends Base with Expressions with Transforming {
 trait BlockExp extends BaseExp with Blocks {
   
   implicit object CanTransformBlock extends CanTransform[Block] {
-    def transform[A](x: Block[A], t: Transformer): Block[A] = Block(t(x.res))
+    def transform[A](x: Block[A], t: Transformer): Block[A] = new {override val Type = x.Type} with Block(t(x.res))
   }
   
 }
