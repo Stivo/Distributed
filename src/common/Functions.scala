@@ -116,15 +116,15 @@ trait ScalaGenFunctions extends ScalaGenEffect with BaseGenFunctions {
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
     case e@Lambda(fun, x, y) =>
-      stream.println("val " + quote(sym) + " = {" + quote(x) + ": (" + x.Type + ") => ")
+      stream.println("val " + quote(sym) + " = {" + quote(x) + ": (" + remap(x.Type) + ") => ")
       emitBlock(y)
-      stream.println(quote(getBlockResult(y)) + ": " + y.Type)
+      stream.println(quote(getBlockResult(y)) + ": " + remap(y.Type))
       stream.println("}")
 
     case e@Lambda2(fun, x1, x2, y) =>
-      stream.println("val " + quote(sym) + " = { (" + quote(x1) + ": " + x1.Type + ", " + quote(x2) + ": " + x2.Type + ") => ")
+      stream.println("val " + quote(sym) + " = { (" + quote(x1) + ": " + remap(x1.Type) + ", " + quote(x2) + ": " + x2.Type + ") => ")
       emitBlock(y)
-      stream.println(quote(getBlockResult(y)) + ": " + y.Type)
+      stream.println(quote(getBlockResult(y)) + ": " + remap(y.Type))
       stream.println("}")
 
     case Apply(fun, arg) =>
