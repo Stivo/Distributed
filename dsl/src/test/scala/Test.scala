@@ -1,13 +1,14 @@
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.io.FileWriter
 import ch.epfl.distributed._
 import org.scalatest._
-import scala.virtualization.lms.common.{Base, StructExp, PrimitiveOps}
+import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps }
 
 trait ComplexBase extends Base {
-  
+
   class Complex
-  
+
   def Complex(re: Rep[Double], im: Rep[Double]): Rep[Complex]
   def infix_re(c: Rep[Complex]): Rep[Double]
   def infix_im(c: Rep[Complex]): Rep[Double]
@@ -16,29 +17,48 @@ trait ComplexBase extends Base {
 
 trait ComplexStructExp extends ComplexBase with StructExp with PrimitiveOps {
 
-  def Complex(re: Rep[Double], im: Rep[Double]) = struct[Complex](List("Complex"), Map("re"->re, "im"->im, "abs" -> im))
+  def Complex(re: Rep[Double], im: Rep[Double]) = struct[Complex](List("Complex"), Map("re" -> re, "im" -> im, "abs" -> im))
   def infix_re(c: Rep[Complex]): Rep[Double] = field[Double](c, "re")
   def infix_im(c: Rep[Complex]): Rep[Double] = field[Double](c, "im")
   def infix_abs(c: Rep[Complex]): Rep[Double] = field[Double](c, "abs")
 }
 
-trait VectorsProg extends VectorImplOps with ComplexBase {
-  
+trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps {
+
+  def nested(x: Rep[Unit]) = {
+    val words1 = Vector(getArgs(0))
+    words1.map(N2(_,558))
+      .map(x => N1(x, x.n2id, 38))
+      .filter(_.n1Junk!=30)
+      .map(_.n1id).save(getArgs(1))
+  }
+
+  def logEntry(x: Rep[Unit]) = {
+    val words1 = Vector(getArgs(0))
+    words1.map(LogEntry(1L, 3.5, _))
+      .filter(_.url.matches("asdf"))
+      //      .map(x => (unit(0), x))
+      //      .filter(_._1 > 0)
+      //      .map(_._2.url)
+      .map(_.request)
+      .save(getArgs(1))
+  }
+
   def fields(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
     words1 //.filter(_.matches("\\d+"))
-    .map(x => Complex(3, x.toInt))
-//    .filter(_._2.im > 3)
-//    .filter(_._1 == 0)
-    .filter(_.abs > 3)
-    .map(x => Complex(x.re, 3))
-    .map(_.im)
-//    .map(x => x._2.re)
-    .save(getArgs(1))
+      .map(x => Complex(3, x.toInt))
+      //    .filter(_._2.im > 3)
+      //    .filter(_._1 == 0)
+      .filter(_.abs > 3)
+      .map(x => Complex(x.re, x.im))
+      .map(x => x.im + x.re)
+      //    .map(x => x._2.re)
+      .save(getArgs(1))
     //)(0)
     unit(())
   }
-  
+
   def simple(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
     words1.filter(_.matches("\\d+")).map(_.toInt).map(_ + 3)
@@ -49,14 +69,14 @@ trait VectorsProg extends VectorImplOps with ComplexBase {
 
   def simple2(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
-    words1.map{ x=> (x,unit(1))}
-    .filter(_._2 > 5)
-    .map(_._1)
-    .save(getArgs(1))
+    words1.map { x => (x, unit(1)) }
+      .filter(_._2 > 5)
+      .map(_._1)
+      .save(getArgs(1))
     //)(0)
     unit(())
   }
-  
+
   def twoStage(x: Rep[Unit]) = {
     val words1 = Vector("words1")
     val words2 = Vector("words2")
@@ -89,18 +109,20 @@ class TestVectors extends Suite {
     try {
       println("-- begin")
 
-      val dsl = new VectorsProg with VectorImplOps with SparkVectorOpsExp with ComplexStructExp
+      val dsl = new VectorsProg with VectorImplOps with SparkVectorOpsExp with ComplexStructExp with ApplicationOpsExp
 
       val sw = new StringWriter()
       var pw = new PrintWriter(sw)
-            pw = new PrintWriter(System.out)
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.fields, "g", pw)
+      codegen.emitSource(dsl.nested, "g", pw)
 
-      //      val dest = "/home/stivo/master/spark/examples/src/main/scala/spark/examples/SparkGenerated.scala"
-      //      val fw = new FileWriter(dest)
-      //      fw.write(writer.toString)
-      //      fw.close
+      pw.flush
+      //      println(sw.toString)
+
+      val dest = "spark/src/main/scala/generated/SparkGenerated.scala"
+      val fw = new FileWriter(dest)
+      fw.write(sw.toString)
+      fw.close
 
       println("-- end")
     } catch {

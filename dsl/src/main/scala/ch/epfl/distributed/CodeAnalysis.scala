@@ -2,6 +2,7 @@ package ch.epfl.distributed
 
 import scala.virtualization.lms.util.GraphUtil
 import scala.collection.mutable.Buffer
+import java.util.regex.Pattern
 
 trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matchers {
 
@@ -29,9 +30,30 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
       _ match {
         case TTPDef(x: VectorNode) => Some(x)
         case TTPDef(Reflect(x: VectorNode, _, _)) => Some(x)
-        case _ => Nil
+        case _ => None
       }
     }
+    val objectCreations = state.ttps.flatMap {
+      case TTPDef(s @ IR.SimpleStruct("tuple2s" :: _, elems)) => None
+      case TTPDef(s @ IR.SimpleStruct(tag, elems)) => Some(s)
+      case _ => None
+    }
+    val remappings = objectCreations.map {
+      s =>
+        (s.m, s.tag.mkString("_"))
+    }.toMap
+    def cleanUpType(m : Manifest[_]) = {
+      var out = m.toString
+      remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
+      out
+    }
+    val seenTypes = objectCreations.map {
+      s =>
+        (s.tag.mkString("_"),
+          """case class %s (%s)"""
+          .format(s.tag.mkString("_"), s.elems.mapValues(x => cleanUpType(x.Type))
+            .map(x => "val %s : %s".format(x._1, x._2)).mkString(", ")))
+    }.toMap
     val lambdas = state.ttps.flatMap {
       _ match {
         case TTPDef(l @ Lambda(f, x, y)) => Some(l)
@@ -95,10 +117,7 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
     def computeFieldReads(node: VectorNode): Set[FieldRead] = {
       node match {
         case v @ VectorFilter(in, func) => analyzeFunction(v) ++ node.successorFieldReads
-        case v @ VectorMap(in, func) if {
-          val s1 = v.getTypes._2.toString
-          s1.contains("Tuple") || s1.contains("Struct")
-        } => {
+        case v @ VectorMap(in, func) if !v.getClosureTypes._2.erasure.isPrimitive => {
           // backup TTPs, or create new transformer?
           val transformer = new Transformer(state)
           // create narrowing transformation for this map
@@ -108,9 +127,20 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
           if (!transformer.doOneTransformation) {
             println("Transformation failed for " + node)
           }
+          // reapply transformation to have tuples as structs
+          val pullDeps = new PullDependenciesTransformation
+          transformer.doTransformation(pullDeps, 500)
+          transformer.doTransformation(new TupleStructTransformation(), 50)
+          transformer.doTransformation(pullDeps, 500)
+
           // analyze field reads of the new function
           val a2 = new Analyzer(transformer.currentState)
-          a2.analyzeFunction(narrowMapTransformation.lastOut)
+          val candidates = transformer.currentState.ttps.flatMap {
+            case TTPDef(vm @ VectorMap(in2, _)) if (in2 == in) => Some(vm)
+            case _ => None
+          }
+          println("candidates for map to be analyzed " + candidates)
+          a2.analyzeFunction(candidates.head)
         }
         case v @ VectorMap(in, func) => analyzeFunction(v)
         case v @ VectorReduce(in, func) =>

@@ -46,4 +46,12 @@ trait Matchers extends ScalaGenVector {
       case _ => None
     }
   }
+
+  def printDef(x: Any) = {
+    x match {
+      case SomeDef(x) => "some def " + x
+      case _ => "not a def"
+    }
+  }
+
 }

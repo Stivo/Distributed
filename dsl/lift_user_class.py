@@ -171,7 +171,7 @@ def liftClass(impls_dir, fname, fileOut):
     #for f in fields:
     # l = l + " case class " + clazz + f.capitalize() + "(__x: Exp[" + clazz + "]) extends Def[" + types[f] + "]\n"
     #l = l + "\n"
-    l = l + " def " + lclazz + "_obj_new(" + expify(fields, types) + ") = struct(\"" + clazz + "\"::Nil," + mapify(fields) + ")\n"
+    l = l + " def " + lclazz + "_obj_new(" + expify(fields, types) + ") = struct["+clazz+"](\"" + clazz + "\"::Nil," + mapify(fields) + ")\n"
     for f in fields:
         l = l + " def " + lclazz + "_" + f + "(__x: Rep[" + clazz + "]) = field["+ types[f] +"](__x, \"" + f + "\")\n"
     l = l + "\n"

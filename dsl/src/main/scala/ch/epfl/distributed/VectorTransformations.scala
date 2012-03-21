@@ -4,7 +4,7 @@ import scala.virtualization.lms.common.ScalaGenBase
 import scala.virtualization.lms.common.BooleanOps
 import scala.collection.mutable
 
-trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
+trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matchers {
 
   val IR: VectorOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const }
@@ -58,12 +58,17 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
       currentState.printAll
       var out = false
       transformations.find { transformation =>
+        val isPull = transformation.toString.contains("Pull")
         val marker = new MarkerTransformer(transformation, this)
         transformAll(marker)
         for (exp <- marker.getTodo.take(1)) {
           out = true
-          System.out.println("Applying " + transformation + " to node " + exp)
           val (ttps, substs) = transformation.applyToNode(exp, this)
+          if (!isPull) {
+            System.out.println("Applying " + transformation + " to node " + exp)
+            println(printDef(exp) + " => " + printDef(ttps.head))
+            println
+          }
           val newState = new TransformationState(currentState.ttps ++ ttps, currentState.results)
           val subst = new SubstTransformer()
           subst.subst ++= substs
@@ -265,12 +270,31 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
   //
   //	class FilterMergeTransformation extends ComposePredicateBooleanOpsExp with FilterMergeTransformationHack 
 
-  // TODO WIP
-  def narrow[A: Manifest](fields: List[String]) = { in: IR.Rep[_] =>
-    in match {
-      case Def(IR.SimpleStruct(tag, elems)) => IR.toAtom2(new IR.SimpleStruct[A](tag, elems.filterKeys(fields.contains)))
-      case _ => in
+  // TODO Nesting
+  def narrow[A: Manifest](fields: List[FieldRead]) = { in: IR.Rep[_] =>
+    println("narrow called with " + fields)
+    def trim(in: IR.Rep[_], path: String = "input"): IR.Rep[_] = {
+      println("trim called with " + path + " " + in)
+      println(in match {
+        case Def(IR.SimpleStruct(tag, elems)) => "is a simple struct with " + tag + " " + elems
+        case Def(x) => "is some def " + x
+        case _ => "is not a simple struct"
+      })
+      in match {
+        case Def(IR.SimpleStruct(tag, elems)) => IR.toAtom2(new IR.SimpleStruct[A](tag,
+          elems.filterKeys(key => fields.map(_.path).find(_.startsWith(path + "." + key)).isDefined)
+            .map { case (k, v) => (k, trim(v, path + "." + k)) }))
+        case _ => in
+      }
     }
+    /*
+    in match {
+      case Def(IR.SimpleStruct(tag, elems)) => {new IR.SimpleStruct[A](tag, elems.filterKeys(topLevel.contains))}
+      case Def(inDef) => {println("#%%%" +inDef); in}
+      case _ => {"#%%" +println(in); in}
+    }
+    */
+    trim(in)
   }
 
   class MapNarrowTransformation(target: IR.VectorNode, fields: List[FieldRead]) extends SimpleTransformation {
@@ -278,7 +302,7 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
     def doTransformationPure(inExp: Exp[_]) = inExp match {
       case Def(vm @ VectorMap(in, f)) if vm == target => {
         //      case Def(vm @ VectorMap(in, f)) => {
-        val narrower = narrow(fields.map(_.path))(vm.mB)
+        val narrower = narrow(fields)(vm.mB)
         //	    	 val lifted = IR.toAtom2(narrower)
         val out = VectorMap(in, f.andThen(narrower))(vm.mA, vm.mB)
         lastOut = out
@@ -297,6 +321,16 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector {
         IR.Field(t, "_1", ta.m)
       case Def(ta @ IR.Tuple2Access2(t)) =>
         IR.Field(t, "_2", ta.m)
+      case _ => null
+    }
+  }
+
+  class TypeTransformations(val map: Map[String, String]) extends SimpleTransformation {
+    def doTransformationPure(inExp: Exp[_]) = inExp match {
+      case Def(t @ IR.SimpleStruct(x, y)) if map.contains(x.mkString("_")) => {
+        val name = x.mkString("_")
+        new IR.ObjectCreation(name, y.values.toList)(t.m)
+      }
       case _ => null
     }
   }

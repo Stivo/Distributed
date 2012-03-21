@@ -5,6 +5,8 @@ import java.io.PrintWriter
 import scala.reflect.SourceContext
 import scala.virtualization.lms.util.GraphUtil
 import java.io.FileOutputStream
+import scala.collection.mutable
+import java.util.regex.Pattern
 
 trait SparkProgram extends VectorOpsExp with VectorImplOps with SparkVectorOpsExp {
 
@@ -95,10 +97,12 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) =
     {
       val out = rhs match {
-        case IR.SimpleStruct("tuple2s" :: Nil, elems) => emitValDef(sym, "(%s, %s)".format(quote(elems("_1")), quote(elems("_2"))))
-        case IR.Field(tuple, "_1", tp) => emitValDef(sym, "%s._1 // type %s".format(quote(tuple), tp))
-        case IR.Field(tuple, "_2", tp) => emitValDef(sym, "%s._2 // type %s".format(quote(tuple), tp))
+        case IR.SimpleStruct("tuple2s" :: Nil, elems) => emitValDef(sym, "(%s, %s) // creating tuple2 ourselves!!!".format(quote(elems("_1")), quote(elems("_2"))))
+        case IR.Field(tuple, "_1", tp) => emitValDef(sym, "%s._1".format(quote(tuple), tp))
+        case IR.Field(tuple, "_2", tp) => emitValDef(sym, "%s._2".format(quote(tuple), tp))
+        case IR.Field(tuple, x, tp) => emitValDef(sym, "%s.%s".format(quote(tuple), x))
         case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
+        case IR.ObjectCreation(name, fields) => emitValDef(sym, "%s(%s)".format(name, fields.map(quote).mkString(", ")))
         case nv @ NewVector(filename) => emitValDef(sym, "sc.textFile(%s)".format(quote(filename)))
         case vs @ VectorSave(vector, filename) => stream.println("%s.saveAsTextFile(%s)".format(quote(vector), quote(filename)))
         case vm @ VectorMap(vector, function) => emitValDef(sym, "%s.map(%s)".format(quote(vector), quote(vm.closure)))
@@ -129,7 +133,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       val pullDeps = new PullSparkDependenciesTransformation()
 
       // perform spark optimizations
-      // transformer.doTransformation(new MapMergeTransformation, 500)
+//       transformer.doTransformation(new MapMergeTransformation, 500)
       //      transformer.doTransformation(new ReduceByKeyTransformation, 500)
       transformer.doTransformation(pullDeps, 500)
 
@@ -137,16 +141,19 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       transformer.doTransformation(pullDeps, 500)
       //      // perform field usage analysis
       val analyzer = new Analyzer(transformer.currentState)
+      transformer.currentState.ttps.foreach(println)
       println("################# here #####################")
-      println(analyzer.ordered)
-      println(analyzer.lambdas)
-      println(analyzer.lambda2s)
+      //      println(analyzer.seenTypes)
       analyzer.ordered.foreach(x => println(x + " " + analyzer.getNodesInClosure(x)))
       analyzer.makeFieldAnalysis
       val out = new FileOutputStream("test.dot")
       out.write(analyzer.exportToGraph.getBytes)
       out.close
       println("############# HERE END #####################")
+      transformer.doTransformation(new TypeTransformations(analyzer.seenTypes), 500)
+      transformer.doTransformation(pullDeps, 500)
+      remappings ++= analyzer.remappings
+      types ++= analyzer.seenTypes.values
       //      transformer.currentState.ttps.foreach(println)
       // insert vectormaps and replace creation of structs with narrower types
 
@@ -157,6 +164,19 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       super.focusExactScopeFat(currentScope0)(result0.map(IR.Block(_)))(body)
     } else {
       super.focusExactScopeFat(currentScope0In)(result0B)(body)
+    }
+  }
+
+  val remappings = mutable.Map[Manifest[_], String]()
+  val types = mutable.Buffer[String]()
+
+  override def remap[A](m: Manifest[A]): String = {
+    if (m.toString.contains("Tuple2")) {
+      var out = m.toString
+      remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
+      out
+    } else {
+      remappings.getOrElse(m, super.remap(m))
     }
   }
 
@@ -190,7 +210,8 @@ object %s {
     emitBlock(y)(stream)
 
     stream.println("}")
-
+    stream.println("// Types that are used in this program")
+    stream.println(types.mkString("\n"))
     stream.println("}")
     stream.println("/*****************************************\n" +
       "  End of Spark Code                  \n" +

@@ -162,6 +162,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     val mB = manifest[B]
     def getClosureTypes = (mA, mB)
     def getTypes = (makeVectorManifest[A], makeVectorManifest[B])
+    override def toString = "VectorMap(%s, %s)".format(in, closure)
   }
 
   case class VectorFilter[A: Manifest](in: Exp[Vector[A]], func: Exp[A] => Exp[Boolean])
@@ -212,6 +213,8 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
 
   case class Narrowing(struct: Vector[Rep[SimpleStruct[_]]], fields: List[String]) extends Def[Vector[Rep[SimpleStruct[_]]]]
 
+  case class ObjectCreation[A: Manifest](className: String, fields: List[Rep[_]]) extends Def[A]
+
   override def get_args() = GetArgs()
   override def vector_new[A: Manifest](file: Exp[String]) = NewVector[A](file)
   override def vector_map[A: Manifest, B: Manifest](vector: Exp[Vector[A]], f: Exp[A] => Exp[B]) = VectorMap[A, B](vector, f)
@@ -249,6 +252,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     case VectorFlatten(x) => syms(x) ++ super.syms(e)
     case NewVector(arg) => syms(arg)
     case VectorSave(vec, path) => syms(vec, path)
+    case ObjectCreation(_, fields) => syms(fields)
     case _ => super.syms(e)
   }
 
@@ -258,6 +262,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     case VectorFlatten(x) => freqNormal(x)
     case NewVector(arg) => freqNormal(arg)
     case VectorSave(vec, path) => freqNormal(vec, path)
+    case ObjectCreation(_, fields) => freqNormal(fields)
     case _ => super.symsFreq(e)
   }
 
