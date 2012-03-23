@@ -27,9 +27,11 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps {
 
   def nested(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
-    words1.map(N2(_,558))
+    words1.map(x => N2(x, 558))
+      //    .map(x => N2(x.n2id, 238))
       .map(x => N1(x, x.n2id, 38))
-      .filter(_.n1Junk!=30)
+      //      .filter(_.n2.n2junk>3)
+      .filter(_.n1Junk != 30)
       .map(_.n1id).save(getArgs(1))
   }
 

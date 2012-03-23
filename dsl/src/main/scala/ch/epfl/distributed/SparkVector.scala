@@ -7,6 +7,7 @@ import scala.virtualization.lms.util.GraphUtil
 import java.io.FileOutputStream
 import scala.collection.mutable
 import java.util.regex.Pattern
+import java.io.StringWriter
 
 trait SparkProgram extends VectorOpsExp with VectorImplOps with SparkVectorOpsExp {
 
@@ -94,34 +95,60 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
   import IR.{ VectorReduceByKey }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
-  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) =
-    {
-      val out = rhs match {
-        case IR.SimpleStruct("tuple2s" :: Nil, elems) => emitValDef(sym, "(%s, %s) // creating tuple2 ourselves!!!".format(quote(elems("_1")), quote(elems("_2"))))
-        case IR.Field(tuple, "_1", tp) => emitValDef(sym, "%s._1".format(quote(tuple), tp))
-        case IR.Field(tuple, "_2", tp) => emitValDef(sym, "%s._2".format(quote(tuple), tp))
-        case IR.Field(tuple, x, tp) => emitValDef(sym, "%s.%s".format(quote(tuple), x))
-        case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
-        case IR.ObjectCreation(name, fields) => emitValDef(sym, "%s(%s)".format(name, fields.map(quote).mkString(", ")))
-        case nv @ NewVector(filename) => emitValDef(sym, "sc.textFile(%s)".format(quote(filename)))
-        case vs @ VectorSave(vector, filename) => stream.println("%s.saveAsTextFile(%s)".format(quote(vector), quote(filename)))
-        case vm @ VectorMap(vector, function) => emitValDef(sym, "%s.map(%s)".format(quote(vector), quote(vm.closure)))
-        case vf @ VectorFilter(vector, function) => emitValDef(sym, "%s.filter(%s)".format(quote(vector), quote(vf.closure)))
-        case vm @ VectorFlatMap(vector, function) => emitValDef(sym, "%s.flatMap(%s)".format(quote(vector), quote(vm.closure)))
-        case vm @ VectorFlatten(v1) => {
-          var out = "(" + v1.map(quote(_)).mkString(").union(")
-          out += ")"
-          emitValDef(sym, out)
-        }
-        case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "%s.groupByKey".format(quote(vector)))
-        case red @ VectorReduce(vector, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(vector), quote(red.closure)))
-        case red @ VectorReduceByKey(vector, f) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(vector), quote(red.closure)))
-        case GetArgs() => emitValDef(sym, "sparkInputArgs.drop(1); // First argument is for spark context")
-        case _ => super.emitNode(sym, rhs)
-      }
-      //    println(sym+" "+rhs)
-      out
+  def makeTypeFor(name: String, fields: Iterable[String]) = {
+    val fieldsSet = fields.toSet
+    val fieldsInType = typeInfos.getOrElse(name, Map[String, String]())
+    val fieldIndexes = fieldsInType.keys.toList
+    val indexesHere = fields.map(fieldIndexes.indexOf(_))
+    if (!types.contains(name)) {
+      types(name) = "trait %s {\n%s\n}".format(name,
+        fieldsInType.map {
+          case (name, typ) =>
+            """def %s : %s = throw new RuntimeException("Should not try to access %s here, internal error")"""
+              .format(name, typ, name)
+        }.mkString("\n"))
     }
+    val typeName = name + ((List("") ++ indexesHere).mkString("_"))
+    if (!types.contains(typeName)) {
+      val args = fieldsInType.filterKeys(fieldsSet.contains(_)).map { case (name, typ) => "override val %s : %s".format(name, typ) }.mkString(", ")
+      types(typeName) = """case class %s(%s) extends %s""".format(typeName, args, name)
+    }
+    typeName
+  }
+
+  override val inlineClosures = false
+  
+  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = {
+    val out = rhs match {
+      case IR.SimpleStruct("tuple2s" :: Nil, elems) => emitValDef(sym, "(%s, %s) // creating tuple2 ourselves!!!".format(quote(elems("_1")), quote(elems("_2"))))
+      case IR.Field(tuple, "_1", tp) => emitValDef(sym, "%s._1".format(quote(tuple), tp))
+      case IR.Field(tuple, "_2", tp) => emitValDef(sym, "%s._2".format(quote(tuple), tp))
+      case IR.Field(tuple, x, tp) => emitValDef(sym, "%s.%s".format(quote(tuple), x))
+      case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
+      case IR.Lambda(_, _, _) if inlineClosures =>
+      case IR.ObjectCreation(name, fields) => {
+        val typeName = makeTypeFor(name, fields.keys)
+        emitValDef(sym, "%s(%s)".format(typeName, fields.values.map(quote).mkString(", ")))
+      }
+      case nv @ NewVector(filename) => emitValDef(sym, "sc.textFile(%s)".format(quote(filename)))
+      case vs @ VectorSave(vector, filename) => stream.println("%s.saveAsTextFile(%s)".format(quote(vector), quote(filename)))
+      case vm @ VectorMap(vector, function) => emitValDef(sym, "%s.map(%s)".format(quote(vector), handleClosure(vm.closure)))
+      case vm @ VectorFilter(vector, function) => emitValDef(sym, "%s.filter(%s)".format(quote(vector), handleClosure(vm.closure)))
+      case vm @ VectorFlatMap(vector, function) => emitValDef(sym, "%s.flatMap(%s)".format(quote(vector), handleClosure(vm.closure)))
+      case vm @ VectorFlatten(v1) => {
+        var out = "(" + v1.map(quote(_)).mkString(").union(")
+        out += ")"
+        emitValDef(sym, out)
+      }
+      case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "%s.groupByKey".format(quote(vector)))
+      case red @ VectorReduce(vector, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(vector), quote(red.closure)))
+      case red @ VectorReduceByKey(vector, f) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(vector), quote(red.closure)))
+      case GetArgs() => emitValDef(sym, "sparkInputArgs.drop(1); // First argument is for spark context")
+      case _ => super.emitNode(sym, rhs)
+    }
+    //    println(sym+" "+rhs)
+    out
+  }
 
   override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
     val hasVectorNodes = !currentScope0In.flatMap { TTPDef.unapply }.flatMap { case x: VectorNode => Some(x) case _ => None }.isEmpty
@@ -133,7 +160,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       val pullDeps = new PullSparkDependenciesTransformation()
 
       // perform spark optimizations
-//       transformer.doTransformation(new MapMergeTransformation, 500)
+      //       transformer.doTransformation(new MapMergeTransformation, 500)
       //      transformer.doTransformation(new ReduceByKeyTransformation, 500)
       transformer.doTransformation(pullDeps, 500)
 
@@ -150,10 +177,22 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       out.write(analyzer.exportToGraph.getBytes)
       out.close
       println("############# HERE END #####################")
-      transformer.doTransformation(new TypeTransformations(analyzer.seenTypes), 500)
+      var goOn = true
+      analyzer.ordered.foreach {
+        case _ if !goOn =>
+        case v @ VectorMap(in, func) if !(v.getClosureTypes._2.erasure.isPrimitive || v.getClosureTypes._2.toString == "java.lang.String") => {
+          println("running map narrow on real tree")
+          println(v.successorFieldReads + " " + v.directFieldReads)
+          transformer.doTransformation(new MapNarrowTransformation(v, v.successorFieldReads.toList), 50)
+          goOn = false
+        }
+        case _ =>
+      }
+      transformer.doTransformation(pullDeps, 500)
+      transformer.doTransformation(new TypeTransformations(analyzer.typeInfos.keys), 500)
       transformer.doTransformation(pullDeps, 500)
       remappings ++= analyzer.remappings
-      types ++= analyzer.seenTypes.values
+      typeInfos ++= analyzer.typeInfos
       //      transformer.currentState.ttps.foreach(println)
       // insert vectormaps and replace creation of structs with narrower types
 
@@ -168,7 +207,8 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
   }
 
   val remappings = mutable.Map[Manifest[_], String]()
-  val types = mutable.Buffer[String]()
+  val types = mutable.Map[String, String]()
+  val typeInfos = mutable.Map[String, Map[String, String]]()
 
   override def remap[A](m: Manifest[A]): String = {
     if (m.toString.contains("Tuple2")) {
@@ -211,7 +251,7 @@ object %s {
 
     stream.println("}")
     stream.println("// Types that are used in this program")
-    stream.println(types.mkString("\n"))
+    stream.println(types.values.mkString("\n"))
     stream.println("}")
     stream.println("/*****************************************\n" +
       "  End of Spark Code                  \n" +

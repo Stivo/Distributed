@@ -325,11 +325,12 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
     }
   }
 
-  class TypeTransformations(val map: Map[String, String]) extends SimpleTransformation {
+  class TypeTransformations(val types: Iterable[String]) extends SimpleTransformation {
+    lazy val set = types.toSet
     def doTransformationPure(inExp: Exp[_]) = inExp match {
-      case Def(t @ IR.SimpleStruct(x, y)) if map.contains(x.mkString("_")) => {
+      case Def(t @ IR.SimpleStruct(x, y)) if set.contains(x.mkString("_")) => {
         val name = x.mkString("_")
-        new IR.ObjectCreation(name, y.values.toList)(t.m)
+        new IR.ObjectCreation(name, y)(t.m)
       }
       case _ => null
     }

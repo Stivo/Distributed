@@ -69,6 +69,7 @@ trait VectorOps extends VectorBase {
     def filter(f: Rep[A] => Rep[Boolean]) = vector_filter(vector, f)
     def save(path: Rep[String]) = vector_save(vector, path)
     def ++(vector2: Rep[Vector[A]]) = vector_++(vector, vector2)
+    //    def cache = vector_cache(vector)
   }
 
   implicit def repVecToVecIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[Vector[(K, Iterable[V])]]) = new vecIterableTupleOpsCls(x)
@@ -88,6 +89,7 @@ trait VectorOps extends VectorBase {
   def vector_map[A: Manifest, B: Manifest](vector: Rep[Vector[A]], f: Rep[A] => Rep[B]): Rep[Vector[B]]
   def vector_flatMap[A: Manifest, B: Manifest](vector: Rep[Vector[A]], f: Rep[A] => Rep[Iterable[B]]): Rep[Vector[B]]
   def vector_filter[A: Manifest](vector: Rep[Vector[A]], f: Rep[A] => Rep[Boolean]): Rep[Vector[A]]
+  //  def vector_cache[A: Manifest](vector: Rep[Vector[A]]): Rep[Vector[A]]
   def vector_save[A: Manifest](vector: Rep[Vector[A]], path: Rep[String]): Rep[Unit]
   def vector_++[A: Manifest](vector1: Rep[Vector[A]], vector2: Rep[Vector[A]]): Rep[Vector[A]]
   def vector_reduce[K: Manifest, V: Manifest](vector: Rep[Vector[(K, Iterable[V])]], f: (Rep[V], Rep[V]) => Rep[V]): Rep[Vector[(K, V)]]
@@ -213,7 +215,9 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
 
   case class Narrowing(struct: Vector[Rep[SimpleStruct[_]]], fields: List[String]) extends Def[Vector[Rep[SimpleStruct[_]]]]
 
-  case class ObjectCreation[A: Manifest](className: String, fields: List[Rep[_]]) extends Def[A]
+  case class ObjectCreation[A: Manifest](className: String, fields: Map[String, Rep[_]]) extends Def[A] {
+    val mA = manifest[A]
+  }
 
   override def get_args() = GetArgs()
   override def vector_new[A: Manifest](file: Exp[String]) = NewVector[A](file)
@@ -229,6 +233,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   override def vector_groupByKey[K: Manifest, V: Manifest](vector: Exp[Vector[(K, V)]]) = VectorGroupByKey(vector)
 
   override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = (e match {
+    case o @ ObjectCreation(name, fields) => toAtom(ObjectCreation(name, fields.mapValues(f(_)))(o.mA))(o.mA)
     case flat @ VectorFlatten(list) => toAtom(VectorFlatten(f(list))(flat.mA))
     case vm @ NewVector(vector) => toAtom(NewVector(f(vector))(vm.mA))(mtype(vm.mA))
     case vm @ VectorMap(vector, func) => toAtom(
@@ -287,4 +292,31 @@ trait ScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
     case GetArgs() => emitValDef(sym, "getting the arguments")
     case _ => super.emitNode(sym, rhs)
   }
+
+  def writeClosure(closure: Exp[Any => Any]) = {
+    val sw = new StringWriter()
+    val pw = new PrintWriter(sw)
+    closure match {
+      case Def(Lambda(fun, x, y)) => {
+        pw.println("{ %s => ".format(quote(x)))
+        emitBlock(y)(pw)
+        pw.println(quote(getBlockResult(y)))
+        pw.print("}")
+      }
+      case _ =>
+    }
+    pw.flush
+    sw.toString
+  }
+
+  def inlineClosures = false
+
+  def handleClosure(closure: Exp[Any => Any]) = {
+    if (inlineClosures) {
+      writeClosure(closure)
+    } else {
+      quote(closure)
+    }
+  }
+
 }

@@ -42,17 +42,14 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
       s =>
         (s.m, s.tag.mkString("_"))
     }.toMap
-    def cleanUpType(m : Manifest[_]) = {
+    def cleanUpType(m: Manifest[_]) = {
       var out = m.toString
       remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
       out
     }
-    val seenTypes = objectCreations.map {
+    val typeInfos = objectCreations.map {
       s =>
-        (s.tag.mkString("_"),
-          """case class %s (%s)"""
-          .format(s.tag.mkString("_"), s.elems.mapValues(x => cleanUpType(x.Type))
-            .map(x => "val %s : %s".format(x._1, x._2)).mkString(", ")))
+        (s.tag.mkString("_"), s.elems.mapValues(x => cleanUpType(x.Type)))
     }.toMap
     val lambdas = state.ttps.flatMap {
       _ match {
@@ -127,11 +124,6 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
           if (!transformer.doOneTransformation) {
             println("Transformation failed for " + node)
           }
-          // reapply transformation to have tuples as structs
-          val pullDeps = new PullDependenciesTransformation
-          transformer.doTransformation(pullDeps, 500)
-          transformer.doTransformation(new TupleStructTransformation(), 50)
-          transformer.doTransformation(pullDeps, 500)
 
           // analyze field reads of the new function
           val a2 = new Analyzer(transformer.currentState)
