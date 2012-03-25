@@ -270,6 +270,84 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
   //
   //	class FilterMergeTransformation extends ComposePredicateBooleanOpsExp with FilterMergeTransformationHack 
 
+  // What to do:
+  // Uf ebeni Lambda asetze
+  // S'block result ersetze mit oeppisem wo davoe list und nur teil zrugggit
+  // in: input.n2.n2Id, input.n1Id
+  // code wo generiert wird:
+  // IR.SimpleStruct("n1"::Nil, Map("n2" -> IR.SimpleStruct("n2"::Nil, 
+  //	Map("n2Id" -> FieldRead(FieldRead(out, "n2", manifest), "n2Id", manifest))),
+  //    "n1Id" -> FieldRead(out, "n1Id", manifest)))
+  // benoetigt: 
+  //	- TypeInfos, fuer N2 etc. muss vom Output typ hergleitet werde => parat gstellt in analyzer.typeInfos2
+  //	- manifest fuer d' Field accesses => au det
+  //	- Order vo da felder innerhalb vo dae maps, muss vo dae Typeinfos hergleitet werde // au det
+  // nur im erschte analyzer lauf type infos usehole, nachher sinds nueme vollstaendig
+  /* ablauf:
+   *	- Macht en FieldRead uf em Output zum dra anecho.
+   *	- Luegt dae typ nah. Typ isch Struct, also rekursiv chinder ifuelle.
+   *	- D' Chinder richtig sortiere fuer dae typ
+   *	- Speicheret fuer dae baumchnote d' sym woher das er chunt.
+   *	- Wenn alli chinde gmacht sind, struct erzuuge mit richtiger reihefolg mit dae syms.
+   *
+   * bispil:
+   * 	- Gseht input.n2. Luegt dae typ nah (N2). Macht en FieldRead uf Output mit feld id n2, manifest vo typeinfos. Typ isch struct, also chinder berechne.
+   * 	- Gseht input.n2.n2Id. Luegt dae typ nah. Macht en FieldRead uf input.n2 mit id n2id. Manifest chunt vo typeinfos. Git es Sym fuer dae fieldread.
+   * 	- SimpleStruct mache fuer n2: Sym von n2.n2Id wird brucht i dae elem lischte. Elem lischte sortiere nach TypeInfo.
+   * 	- Gseht input.n1Id. Luegt dae typ nah. Macht en FieldRead etc. Erstellt SimpleStruct mit daem.
+   * => Problem: Tuples haend kei so typeInfos. Det mu mer andersch usefinde wele typ das es haet. Soett im Output typ machbar si.
+   * TODO
+   * FieldReads als Baum darstelle, noed eifach als strings.
+   * Field Info naschlah mit emene Pfad im Baum.
+   * Sortiere vo Felder.
+   * Baum wo me chan die erzuegte Syms zwueschespeichere? Oder eifach als return values ine lischte tue?
+   * Teschte oeb LMS dae noed benutzti Code au wuekli furtruehrt.
+   * Susch selber optimierig als transformer implementiere: Eifach FieldRead(SimpleStruct) ersetze. Chunt ufs gliche use, isch aber generischer
+   * Loest folgendi problem:
+   * - analyse
+   * - vector map ifuege wo dae typ reduziert: benutzti felder sind bekannt, also es simplestruct us em input generiere wo all die liest
+   * - innerhalb vo eim scope wird immer no em tiark sin optimierende code benutzt
+   * - git uf wenns zu schwer wird, isch aber erwiiterbar fuer bestimmti faell.
+   * reschtproblem:
+   * - Evtl. zu viel type veraendere, zu viel overhead. Aber gar noed so eifach es bispil z'finde wege dae immutability.
+   * Implementierigsreihefolg:
+   * - narrow mit emene generische ersetze, wo uf lambda ebeni ihakt und fieldreads generiert
+   * - das narrow uf all awende (probewiis)
+   * - transformer implementiere wo FieldRead(SimpleStruct) eliminiert
+   */
+
+  // TODO Nesting
+  def narrow[A: Manifest](fields: List[FieldRead], typ: Manifest[_]) = { in: IR.Rep[_] =>
+    println("narrow called with " + fields)
+    val sortedFields = fields.map(_.path.substring(6)).sorted
+    trait Node
+    class Leaf(path: String, fieldInfo: FieldInfo[_]) extends Node
+    class Tree(path: String, fieldInfo: FieldInfo[_], children: mutable.Map[String, Node]) extends Node
+
+    def trim(in: IR.Rep[_], path: String = "input"): IR.Rep[_] = {
+      println("trim called with " + path + " " + in)
+      println(in match {
+        case Def(IR.SimpleStruct(tag, elems)) => "is a simple struct with " + tag + " " + elems
+        case Def(x) => "is some def " + x
+        case _ => "is not a simple struct"
+      })
+      in match {
+        case Def(IR.SimpleStruct(tag, elems)) => IR.toAtom2(new IR.SimpleStruct[A](tag,
+          elems.filterKeys(key => fields.map(_.path).find(_.startsWith(path + "." + key)).isDefined)
+            .map { case (k, v) => (k, trim(v, path + "." + k)) }))
+        case _ => in
+      }
+    }
+    /*
+    in match {
+      case Def(IR.SimpleStruct(tag, elems)) => {new IR.SimpleStruct[A](tag, elems.filterKeys(topLevel.contains))}
+      case Def(inDef) => {println("#%%%" +inDef); in}
+      case _ => {"#%%" +println(in); in}
+    }
+    */
+    trim(in)
+  }
+
   // TODO Nesting
   def narrow[A: Manifest](fields: List[FieldRead]) = { in: IR.Rep[_] =>
     println("narrow called with " + fields)
@@ -325,8 +403,8 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
     }
   }
 
-  class TypeTransformations(val types: Iterable[String]) extends SimpleTransformation {
-    lazy val set = types.toSet
+  class TypeTransformations(val typeHandler: TypeHandler) extends SimpleTransformation {
+    lazy val set = typeHandler.typeInfos.keySet
     def doTransformationPure(inExp: Exp[_]) = inExp match {
       case Def(t @ IR.SimpleStruct(x, y)) if set.contains(x.mkString("_")) => {
         val name = x.mkString("_")

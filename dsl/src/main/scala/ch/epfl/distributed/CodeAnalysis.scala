@@ -33,24 +33,6 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
         case _ => None
       }
     }
-    val objectCreations = state.ttps.flatMap {
-      case TTPDef(s @ IR.SimpleStruct("tuple2s" :: _, elems)) => None
-      case TTPDef(s @ IR.SimpleStruct(tag, elems)) => Some(s)
-      case _ => None
-    }
-    val remappings = objectCreations.map {
-      s =>
-        (s.m, s.tag.mkString("_"))
-    }.toMap
-    def cleanUpType(m: Manifest[_]) = {
-      var out = m.toString
-      remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
-      out
-    }
-    val typeInfos = objectCreations.map {
-      s =>
-        (s.tag.mkString("_"), s.elems.mapValues(x => cleanUpType(x.Type)))
-    }.toMap
     val lambdas = state.ttps.flatMap {
       _ match {
         case TTPDef(l @ Lambda(f, x, y)) => Some(l)

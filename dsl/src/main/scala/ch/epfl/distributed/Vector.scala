@@ -12,6 +12,7 @@ import java.io.StringWriter
 import scala.reflect.SourceContext
 import scala.collection.mutable
 import scala.collection.immutable
+import java.util.regex.Pattern
 
 trait Vector[+A]
 
@@ -100,9 +101,7 @@ object FakeSourceContext {
   def apply() = SourceContext("unknown", Nil)
 }
 
-case class FieldRead(val path: String) {
-
-}
+case class FieldRead(val path: String)
 
 trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   def toAtom2[T: Manifest](d: Def[T])(implicit ctx: SourceContext): Exp[T] = super.toAtom(d)
@@ -277,7 +276,11 @@ trait VectorImplOps extends VectorOps with FunctionsExp {
 
 }
 
-trait ScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
+trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
+  val IR: VectorOpsExp
+}
+
+trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
   val IR: VectorOpsExp
   import IR._
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
@@ -291,6 +294,18 @@ trait ScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
     case red @ VectorReduce(vector, f) => emitValDef(sym, "reducing vector")
     case GetArgs() => emitValDef(sym, "getting the arguments")
     case _ => super.emitNode(sym, rhs)
+  }
+
+  var typeHandler: TypeHandler = null
+
+  def hasVectorNodes(ttps: List[TTP]) = !ttps.flatMap { TTPDef.unapply }.flatMap { case x: VectorNode => Some(x) case _ => None }.isEmpty
+
+  override def fattenAll(e: List[TP[Any]]): List[TTP] = {
+    val out = super.fattenAll(e)
+    if (!typeHandler.isInstanceOf[TypeHandler] || hasVectorNodes(out)) {
+      typeHandler = new TypeHandler(out)
+    }
+    out
   }
 
   def writeClosure(closure: Exp[Any => Any]) = {
@@ -317,6 +332,42 @@ trait ScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
     } else {
       quote(closure)
     }
+  }
+
+  class FieldInfo[A: Manifest](val name: String, val niceType: String, position: Int) {
+    val m = manifest[A]
+  }
+  class TypeInfo[A: Manifest](val name: String, fields: List[FieldInfo[_]]) {
+    val m = manifest[A]
+  }
+
+  class TypeHandler(ttps: List[TTP]) {
+    val objectCreations = ttps.flatMap {
+      case TTP(_, ThinDef(s @ SimpleStruct("tuple2s" :: _, elems))) => None
+      case TTP(_, ThinDef(s @ SimpleStruct(tag, elems))) => Some(s)
+      case _ => None
+    }
+
+    val remappings = objectCreations.map {
+      s =>
+        (s.m, s.tag.mkString("_"))
+    }.toMap
+    def cleanUpType(m: Manifest[_]) = {
+      var out = m.toString
+      remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
+      out
+    }
+    val typeInfos = objectCreations.map {
+      s =>
+        (s.tag.mkString("_"), s.elems.mapValues(x => cleanUpType(x.Type)))
+    }.toMap
+    val typeInfos2 = objectCreations.map {
+      s =>
+        var i = -1
+        val name = s.tag.mkString("_")
+        (name, new TypeInfo(name, s.elems.map { x => i += 1; new FieldInfo(x._1, cleanUpType(x._2.Type), i)(x._2.Type) }.toList)(s.m))
+    }.toMap
+
   }
 
 }

@@ -1,6 +1,6 @@
 package ch.epfl.distributed
 
-trait Matchers extends ScalaGenVector {
+trait Matchers extends AbstractScalaGenVector {
   val IR: VectorOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
   import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }

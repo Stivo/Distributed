@@ -39,10 +39,11 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps {
     val words1 = Vector(getArgs(0))
     words1.map(LogEntry(1L, 3.5, _))
       .filter(_.url.matches("asdf"))
+      //      .filter(_.request == 1L)
       //      .map(x => (unit(0), x))
       //      .filter(_._1 > 0)
       //      .map(_._2.url)
-      .map(_.request)
+      .map(_.url)
       .save(getArgs(1))
   }
 
@@ -116,7 +117,7 @@ class TestVectors extends Suite {
       val sw = new StringWriter()
       var pw = new PrintWriter(sw)
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.nested, "g", pw)
+      codegen.emitSource(dsl.logEntry, "g", pw)
 
       pw.flush
       //      println(sw.toString)

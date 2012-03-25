@@ -12,23 +12,36 @@ object Micro extends App {
 
   class N1_1(override val f1: Int, override val f2: String) extends N1
   case class N1_1C(override val f1: Int, override val f2: String) extends N1
-
+  case class N1_1CS(val f1: Int, val f2: String)
   class N1_N(val f1: Int, val f2: String)
 
-  type X = N1_1C
-  type XCasted = N1
+  type X = N1_1
+  type XCasted = X //N1
   val ar = new Array[XCasted](1000000)
 
   var x = 3
   var y = "tyii"
+  var j = 0
   var i = 0
-  while (i < ar.length) {
-    ar(i) = new X(i, "asdf")
-    i += 1
+  var times = Buffer[Long]()
+  while (j < 20) {
+    var start1 = System.nanoTime
+    i = 0
+    while (i < ar.length) {
+      ar(i) = new X(i, "asdf")
+      i += 1
+    }
+    val time = (System.nanoTime - start1) / 1000
+    times += time
+    println("allocation time " + (time))
+    j += 1
   }
   println("Objects allocated")
-  var j = 0
-  var times = Buffer[Long]()
+  val lowest5_alloc = times.sorted.take(5)
+
+  println(lowest5_alloc.sum / 5.0 + " " + lowest5_alloc)
+
+  j = 0
   while (j < 20) {
     var start1 = System.nanoTime
     i = 0

@@ -97,7 +97,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
 
   def makeTypeFor(name: String, fields: Iterable[String]) = {
     val fieldsSet = fields.toSet
-    val fieldsInType = typeInfos.getOrElse(name, Map[String, String]())
+    val fieldsInType = typeHandler.typeInfos.getOrElse(name, Map[String, String]())
     val fieldIndexes = fieldsInType.keys.toList
     val indexesHere = fields.map(fieldIndexes.indexOf(_))
     if (!types.contains(name)) {
@@ -116,8 +116,10 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     typeName
   }
 
+  val types = mutable.Map[String, String]()
+
   override val inlineClosures = false
-  
+
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = {
     val out = rhs match {
       case IR.SimpleStruct("tuple2s" :: Nil, elems) => emitValDef(sym, "(%s, %s) // creating tuple2 ourselves!!!".format(quote(elems("_1")), quote(elems("_2"))))
@@ -151,8 +153,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
   }
 
   override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
-    val hasVectorNodes = !currentScope0In.flatMap { TTPDef.unapply }.flatMap { case x: VectorNode => Some(x) case _ => None }.isEmpty
-    if (hasVectorNodes) {
+    if (hasVectorNodes(currentScope0In)) {
       // set up transformer
       var result0 = result0B.map(getBlockResultFull)
       var state = new TransformationState(currentScope0In, result0)
@@ -167,9 +168,10 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       transformer.doTransformation(new TupleStructTransformation, 5)
       transformer.doTransformation(pullDeps, 500)
       //      // perform field usage analysis
-      val analyzer = new Analyzer(transformer.currentState)
+      val analyzer = new Analyzer(transformer.currentState) // TODO , typeHandler)
       transformer.currentState.ttps.foreach(println)
       println("################# here #####################")
+      println(typeHandler.typeInfos)
       //      println(analyzer.seenTypes)
       analyzer.ordered.foreach(x => println(x + " " + analyzer.getNodesInClosure(x)))
       analyzer.makeFieldAnalysis
@@ -189,11 +191,9 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
         case _ =>
       }
       transformer.doTransformation(pullDeps, 500)
-      transformer.doTransformation(new TypeTransformations(analyzer.typeInfos.keys), 500)
+      transformer.doTransformation(new TypeTransformations(typeHandler), 500)
       transformer.doTransformation(pullDeps, 500)
-      remappings ++= analyzer.remappings
-      typeInfos ++= analyzer.typeInfos
-      //      transformer.currentState.ttps.foreach(println)
+      transformer.currentState.ttps.foreach(println)
       // insert vectormaps and replace creation of structs with narrower types
 
       state = transformer.currentState
@@ -206,17 +206,14 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     }
   }
 
-  val remappings = mutable.Map[Manifest[_], String]()
-  val types = mutable.Map[String, String]()
-  val typeInfos = mutable.Map[String, Map[String, String]]()
-
   override def remap[A](m: Manifest[A]): String = {
+    val remappings = typeHandler.remappings
     if (m.toString.contains("Tuple2")) {
       var out = m.toString
       remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
       out
     } else {
-      remappings.getOrElse(m, super.remap(m))
+      remappings.getOrElse(m.asInstanceOf[Manifest[Any]], super.remap(m))
     }
   }
 
@@ -242,10 +239,19 @@ import SparkContext._
 
 object %s {
         def main(sparkInputArgs: Array[String]) {
+/*  TODO: add this
+    System.setProperty("spark.serializer", "spark.KryoSerializer")
+    System.setProperty("spark.kryo.registrator", "spark.examples.Registrator")
+	class Registrator extends KryoRegistrator {
+	  def registerClasses(kryo: Kryo) {
+	    kryo.register(classOf[LogEntry_2])
+	    kryo.register(classOf[LogEntry])
+	  }
+	}
+*/
+
     		val sc = new SparkContext(sparkInputArgs(0), "%s")
         """.format(className, className))
-
-    // TODO: separate concerns, should not hard code "pxX" name scheme for static data here
 
     emitBlock(y)(stream)
 
