@@ -25,7 +25,7 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
   import IR.{ ClosureNode, Closure2Node, freqHot, freqNormal, Lambda, Lambda2 }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
-  class Analyzer(state: TransformationState) {
+  class Analyzer(state: TransformationState, typeHandler: TypeHandler) {
     val nodes = state.ttps.flatMap {
       _ match {
         case TTPDef(x: VectorNode) => Some(x)
@@ -96,24 +96,33 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
     def computeFieldReads(node: VectorNode): Set[FieldRead] = {
       node match {
         case v @ VectorFilter(in, func) => analyzeFunction(v) ++ node.successorFieldReads
-        case v @ VectorMap(in, func) if !v.getClosureTypes._2.erasure.isPrimitive => {
+        case v @ VectorMap(in, func) if !SimpleType.unapply(v.getClosureTypes._2).isDefined => {
           // backup TTPs, or create new transformer?
           val transformer = new Transformer(state)
           // create narrowing transformation for this map
-          val narrowMapTransformation = new MapNarrowTransformation(v, node.successorFieldReads.toList)
+          var ll: IR.Lambda[_, _] = null
+          v.closure match {
+            case Def(l @ IR.Lambda(_, _, _)) => ll = l
+          }
+          val narrowMapTransformation = new MapNarrowTransformationNew(ll, node.successorFieldReads.toList, typeHandler)
           transformer.transformations = List(narrowMapTransformation)
           // run transformer
           if (!transformer.doOneTransformation) {
             println("Transformation failed for " + node)
           }
-
+          val pullDeps = new PullDependenciesTransformation()
+          transformer.doTransformation(pullDeps, 500)
+          transformer.doTransformation(new FieldOnStructReadTransformation, 500)
+          transformer.doTransformation(pullDeps, 500)
           // analyze field reads of the new function
-          val a2 = new Analyzer(transformer.currentState)
+          val a2 = new Analyzer(transformer.currentState, typeHandler)
           val candidates = transformer.currentState.ttps.flatMap {
             case TTPDef(vm @ VectorMap(in2, _)) if (in2 == in) => Some(vm)
             case _ => None
           }
           println("candidates for map to be analyzed " + candidates)
+          println(a2.getNodesInClosure(candidates.head).map(x => (x, printDef(x))))
+          // TODO: Fix this! If two maps read from the same, this is gonna blow
           a2.analyzeFunction(candidates.head)
         }
         case v @ VectorMap(in, func) => analyzeFunction(v)

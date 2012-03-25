@@ -129,6 +129,8 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
       case IR.Lambda(_, _, _) if inlineClosures =>
       case IR.ObjectCreation(name, fields) => {
+        // TODO: sort here?
+        val typeInfo = typeHandler.typeInfos2(name)
         val typeName = makeTypeFor(name, fields.keys)
         emitValDef(sym, "%s(%s)".format(typeName, fields.values.map(quote).mkString(", ")))
       }
@@ -168,7 +170,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       transformer.doTransformation(new TupleStructTransformation, 5)
       transformer.doTransformation(pullDeps, 500)
       //      // perform field usage analysis
-      val analyzer = new Analyzer(transformer.currentState) // TODO , typeHandler)
+      val analyzer = new Analyzer(transformer.currentState, typeHandler)
       transformer.currentState.ttps.foreach(println)
       println("################# here #####################")
       println(typeHandler.typeInfos)
@@ -179,13 +181,16 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       out.write(analyzer.exportToGraph.getBytes)
       out.close
       println("############# HERE END #####################")
+      // TODO apply this iteratively, until all maps with ObjectCreations are covered
       var goOn = true
       analyzer.ordered.foreach {
         case _ if !goOn =>
-        case v @ VectorMap(in, func) if !(v.getClosureTypes._2.erasure.isPrimitive || v.getClosureTypes._2.toString == "java.lang.String") => {
+        case v @ VectorMap(in, func) if !SimpleType.unapply(v.getClosureTypes._2).isDefined => {
           println("running map narrow on real tree")
           println(v.successorFieldReads + " " + v.directFieldReads)
-          transformer.doTransformation(new MapNarrowTransformation(v, v.successorFieldReads.toList), 50)
+          transformer.doTransformation(new MapNarrowTransformationNew(SomeDef.unapply(v.closure).get.asInstanceOf[Lambda[_, _]], v.successorFieldReads.toList, typeHandler), 50)
+          transformer.doTransformation(pullDeps, 500)
+          transformer.doTransformation(new FieldOnStructReadTransformation, 500)
           goOn = false
         }
         case _ =>
@@ -193,7 +198,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       transformer.doTransformation(pullDeps, 500)
       transformer.doTransformation(new TypeTransformations(typeHandler), 500)
       transformer.doTransformation(pullDeps, 500)
-      transformer.currentState.ttps.foreach(println)
+      //      transformer.currentState.ttps.foreach(println)
       // insert vectormaps and replace creation of structs with narrower types
 
       state = transformer.currentState

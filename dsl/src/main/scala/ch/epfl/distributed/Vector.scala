@@ -101,7 +101,9 @@ object FakeSourceContext {
   def apply() = SourceContext("unknown", Nil)
 }
 
-case class FieldRead(val path: String)
+case class FieldRead(val path: String) {
+  val getPath = path.split("\\.").toList
+}
 
 trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   def toAtom2[T: Manifest](d: Def[T])(implicit ctx: SourceContext): Exp[T] = super.toAtom(d)
@@ -334,14 +336,21 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
     }
   }
 
-  class FieldInfo[A: Manifest](val name: String, val niceType: String, position: Int) {
-    val m = manifest[A]
-  }
-  class TypeInfo[A: Manifest](val name: String, fields: List[FieldInfo[_]]) {
-    val m = manifest[A]
-  }
-
   class TypeHandler(ttps: List[TTP]) {
+    trait PartInfo[A] {
+      def m: Manifest[A]
+      def niceName: String
+    }
+    case class FieldInfo[A: Manifest](val name: String, val niceType: String, position: Int) extends PartInfo[A] {
+      val m = manifest[A]
+      def niceName = niceType
+      lazy val containingType = typeInfos2.map(_._2).filter(_.fields.size > position).find(_.fields(position) == this).get
+    }
+    case class TypeInfo[A: Manifest](val name: String, fields: List[FieldInfo[_]]) extends PartInfo[A] {
+      val m = manifest[A]
+      def getField(field: String) = fields.find(_.name == field)
+      def niceName = name
+    }
     val objectCreations = ttps.flatMap {
       case TTP(_, ThinDef(s @ SimpleStruct("tuple2s" :: _, elems))) => None
       case TTP(_, ThinDef(s @ SimpleStruct(tag, elems))) => Some(s)
@@ -367,6 +376,25 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
         val name = s.tag.mkString("_")
         (name, new TypeInfo(name, s.elems.map { x => i += 1; new FieldInfo(x._1, cleanUpType(x._2.Type), i)(x._2.Type) }.toList)(s.m))
     }.toMap
+
+    def getTypeAt(path: String, m: Manifest[Any]): PartInfo[_] = {
+      // TODO: This should work for expressions which are nested
+      val pathParts = path.split("\\.").drop(1).toList
+      var typeNow: Any = m
+      pathParts match {
+        case Nil =>
+        case x :: Nil if remappings.contains(m) => typeNow = typeInfos2(remappings(m)).getField(x).get
+        case "_1" :: Nil => typeNow = m.typeArguments(0)
+        case "_2" :: Nil => typeNow = m.typeArguments(1)
+        case _ => throw new RuntimeException("did not find type for " + path + " in " + m)
+      }
+      typeNow match {
+        case x: TypeInfo[_] => x
+        case x: Manifest[_] if remappings.contains(m) => typeInfos2(remappings(m))
+        case x: FieldInfo[_] => x
+        case _ => throw new RuntimeException("could not use result type " + typeNow + " for " + path + " in " + m)
+      }
+    }
 
   }
 

@@ -54,4 +54,12 @@ trait Matchers extends AbstractScalaGenVector {
     }
   }
 
+  object SimpleType {
+    def unapply(x: Manifest[_]): Option[Manifest[_]] = x match {
+      case _ if x.erasure.isPrimitive => Some(x)
+      case _ if x.erasure.getName == "java.lang.String" => Some(x)
+      case _ => None
+    }
+  }
+
 }
