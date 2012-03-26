@@ -174,7 +174,6 @@ def liftClass(impls_dir, fname, fileOut):
     l = l + " def " + lclazz + "_obj_new(" + expify(fields, types) + ") = struct["+clazz+"](\"" + clazz + "\"::Nil," + mapify(fields) + ")\n"
     for f in fields:
         l = l + " def " + lclazz + "_" + f + "(__x: Rep[" + clazz + "]) = field["+ types[f] +"](__x, \"" + f + "\")\n"
-    l = l + "\n"
     #emit Mirror
 
     l = l + "}\n\n"

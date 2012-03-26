@@ -321,13 +321,14 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
               IR.toAtom2(IR.SimpleStruct(name :: Nil, elems.toMap)(ti.m))(ti.m, FakeSourceContext())
             }
             case fi @ FieldInfo(name, niceType, position) => {
+//              val newSym = IR.field(readFromSym, name)(fi.m)
               val newSym = IR.toAtom2(IR.Field(readFromSym, name, fi.m))(fi.m, FakeSourceContext())
               if (node.children.isEmpty) {
                 newSym
               } else {
                 val elems = for ((childName, node) <- node.children)
                   yield (childName, build(path + "." + childName, newSym));
-                val typ = fi.containingType
+                val typ = fi.getType
                 IR.toAtom2(IR.SimpleStruct(typ.name :: Nil, elems.toMap)(typ.m))(typ.m, FakeSourceContext())
               }
 

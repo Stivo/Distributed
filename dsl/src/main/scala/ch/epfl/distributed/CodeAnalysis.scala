@@ -96,7 +96,7 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
     def computeFieldReads(node: VectorNode): Set[FieldRead] = {
       node match {
         case v @ VectorFilter(in, func) => analyzeFunction(v) ++ node.successorFieldReads
-        case v @ VectorMap(in, func) if !SimpleType.unapply(v.getClosureTypes._2).isDefined => {
+        case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed") && !SimpleType.unapply(v.getClosureTypes._2).isDefined => {
           // backup TTPs, or create new transformer?
           val transformer = new Transformer(state)
           // create narrowing transformation for this map

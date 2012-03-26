@@ -129,10 +129,10 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
       case IR.Lambda(_, _, _) if inlineClosures =>
       case IR.ObjectCreation(name, fields) => {
-        // TODO: sort here?
         val typeInfo = typeHandler.typeInfos2(name)
-        val typeName = makeTypeFor(name, fields.keys)
-        emitValDef(sym, "%s(%s)".format(typeName, fields.values.map(quote).mkString(", ")))
+        val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)
+        val typeName = makeTypeFor(name, fieldsList.map(_._1))
+        emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
       }
       case nv @ NewVector(filename) => emitValDef(sym, "sc.textFile(%s)".format(quote(filename)))
       case vs @ VectorSave(vector, filename) => stream.println("%s.saveAsTextFile(%s)".format(quote(vector), quote(filename)))
@@ -169,33 +169,27 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
 
       transformer.doTransformation(new TupleStructTransformation, 5)
       transformer.doTransformation(pullDeps, 500)
-      //      // perform field usage analysis
-      val analyzer = new Analyzer(transformer.currentState, typeHandler)
-      transformer.currentState.ttps.foreach(println)
-      println("################# here #####################")
-      println(typeHandler.typeInfos)
-      //      println(analyzer.seenTypes)
-      analyzer.ordered.foreach(x => println(x + " " + analyzer.getNodesInClosure(x)))
-      analyzer.makeFieldAnalysis
-      val out = new FileOutputStream("test.dot")
-      out.write(analyzer.exportToGraph.getBytes)
-      out.close
-      println("############# HERE END #####################")
-      // TODO apply this iteratively, until all maps with ObjectCreations are covered
-      var goOn = true
-      analyzer.ordered.foreach {
-        case _ if !goOn =>
-        case v @ VectorMap(in, func) if !SimpleType.unapply(v.getClosureTypes._2).isDefined => {
-          println("running map narrow on real tree")
-          println(v.successorFieldReads + " " + v.directFieldReads)
-          transformer.doTransformation(new MapNarrowTransformationNew(SomeDef.unapply(v.closure).get.asInstanceOf[Lambda[_, _]], v.successorFieldReads.toList, typeHandler), 50)
-          transformer.doTransformation(pullDeps, 500)
-          transformer.doTransformation(new FieldOnStructReadTransformation, 500)
-          goOn = false
-        }
-        case _ =>
-      }
-      transformer.doTransformation(pullDeps, 500)
+      var oneFound = false
+      do {
+          oneFound = false
+	      // perform field usage analysis
+	      val analyzer = new Analyzer(transformer.currentState, typeHandler)
+	      analyzer.makeFieldAnalysis
+	      var goOn = true
+	      analyzer.ordered.foreach {
+	        case _ if !goOn =>
+	        case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed") && !SimpleType.unapply(v.getClosureTypes._2).isDefined => {
+	          oneFound = true
+	          v.metaInfos += (("narrowed", true))
+	          transformer.doTransformation(new MapNarrowTransformationNew(SomeDef.unapply(v.closure).get.asInstanceOf[Lambda[_, _]], v.successorFieldReads.toList, typeHandler), 50)
+	          transformer.doTransformation(pullDeps, 500)
+	          transformer.doTransformation(new FieldOnStructReadTransformation, 500)
+	          goOn = false
+	        }
+	        case _ =>
+	      }
+	      transformer.doTransformation(pullDeps, 500)
+      } while(oneFound)
       transformer.doTransformation(new TypeTransformations(typeHandler), 500)
       transformer.doTransformation(pullDeps, 500)
       //      transformer.currentState.ttps.foreach(println)
@@ -262,7 +256,7 @@ object %s {
 
     stream.println("}")
     stream.println("// Types that are used in this program")
-    stream.println(types.values.mkString("\n"))
+    stream.println(types.values.toList.sorted.mkString("\n"))
     stream.println("}")
     stream.println("/*****************************************\n" +
       "  End of Spark Code                  \n" +
