@@ -2,6 +2,7 @@ package ch.epfl.distributed
 
 import scala.virtualization.lms.util.GraphUtil
 import scala.collection.mutable.Buffer
+import scala.collection.mutable
 import java.util.regex.Pattern
 import scala.util.Random
 
@@ -95,9 +96,12 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
     }
 
     def computeFieldReads(node: VectorNode): Set[FieldRead] = {
-      node match {
+      val out: Set[FieldRead] = node match {
         case v @ VectorFilter(in, func) => analyzeFunction(v) ++ node.successorFieldReads
-        case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed") && !SimpleType.unapply(v.getClosureTypes._2).isDefined => {
+
+        case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed")
+          && !SimpleType.unapply(v.getClosureTypes._2).isDefined
+          && hasObjectCreationInClosure(v) => {
           // backup TTPs, or create new transformer?
           val transformer = new Transformer(state)
           // tag this map to recognize it after transformations
@@ -127,14 +131,62 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
           v.metaInfos.remove(id)
           a2.analyzeFunction(candidates.head)
         }
+
         case v @ VectorMap(in, func) => analyzeFunction(v)
+
         case v @ VectorReduce(in, func) =>
-          analyzeFunction(v)
+          // analyze function
+          // convert the analyzed accesses to accesses of input._2.iterable
+          val part1 = (analyzeFunction(v) ++ Set(FieldRead("input")))
             .map(_.path.drop(5))
             .map(x => "input._2.iterable" + x)
-            .map(FieldRead)
-        case _ => Set()
+          // add the iterable to the path for reads from successors
+          val part2 = v.successorFieldReads.map { _.getPath }.map {
+            case "input" :: "_2" :: x => "input" :: "_2" :: "iterable" :: x
+            case x => x
+          }.map(_.mkString("."))
+          (part1 ++ part2).map(FieldRead)
+
+        case v @ VectorGroupByKey(in) =>
+          // rewrite access to input._2.iterable.X to input._2.X
+          // add access to _1
+          ((v.successorFieldReads.map(_.getPath).map {
+            case "input" :: "_2" :: "iterable" :: x => "input" :: "_2" :: x
+            case x => x
+          }.map(_.mkString("."))) ++ Set("input._1")).map(FieldRead).toSet
+
+        case v @ VectorFlatten(inputs) =>
+          // just pass on the successor field reads
+          v.successorFieldReads.toSet
+
+        case v @ VectorSave(_, _) => {
+          if (SimpleType.unapply(v.mA).isDefined) {
+            Set()
+          } else {
+            import typeHandler._
+            // traverse all subtypes, mark all fields as read
+            val typ = typeHandler.getTypeAt("input", v.mA)
+            val reads = new mutable.HashSet[String]()
+            def visitAll(path: String, typ: PartInfo[_]) {
+              reads += path
+              typ match {
+                case TypeInfo(name, fields) => fields.foreach(x => visitAll(path + "." + x.name, x))
+                case FieldInfo(name, typ, pos) if typeHandler.typeInfos2.contains(typ) =>
+                  typeHandler.typeInfos2(typ).fields.foreach(x => visitAll(path + "." + x.name, x))
+                case _ =>
+              }
+            }
+            visitAll("input", typ)
+            reads.map(FieldRead).toSet
+          }
+        }
+
+        case NewVector(_) => Set()
+
+        case x => throw new RuntimeException("Need to implement field analysis for " + x)
+        //Set[FieldRead]()
       }
+      out
     }
 
     def makeFieldAnalysis {
@@ -151,6 +203,11 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
           getInputs(node).foreach { _.successorFieldReads ++= reads }
           println("Computed field reads for " + node + " got " + reads)
       }
+    }
+
+    def hasObjectCreationInClosure(v: VectorNode) = {
+      val nodes = getNodesInClosure(v)
+      nodes.find { case Def(s: IR.SimpleStruct[_]) => true case _ => false }.isDefined
     }
 
     def getIdForNode(n: VectorNode with Def[_]) = {

@@ -361,19 +361,6 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
     }
   }
 
-  class TupleStructTransformation extends SimpleTransformation {
-
-    def doTransformationPure(inExp: Exp[_]) = inExp match {
-      case Def(t @ IR.ETuple2(x, y)) =>
-        IR.Tuple2SC(x, y)(t.m1, t.m2)
-      case Def(ta @ IR.Tuple2Access1(t)) =>
-        IR.Field(t, "_1", ta.m)
-      case Def(ta @ IR.Tuple2Access2(t)) =>
-        IR.Field(t, "_2", ta.m)
-      case _ => null
-    }
-  }
-
   class FieldOnStructReadTransformation extends Transformation {
 
     def appliesToNode(inExp: Exp[_], t: Transformer): Boolean = inExp match {

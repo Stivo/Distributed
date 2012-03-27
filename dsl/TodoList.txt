@@ -1,0 +1,54 @@
+Problems:
+
+Problem with innerscope:
+- InnerScope gets changed in focusExactScopeFat. 
+The old one is used later and the new symbols are not found in the old scope.
+
+Tuples
+- How can tuples be reduced? Tuples are case classes with fields.
+Would have to generate classes that extend them and implement special
+serialization for these classes.
+
+Either:
+class Tuple2_Int_String_1(val x : Int) extends Tuple2[Int, String](x, null)
+
+class Tuple2_Int_String_1(val x : Int) extends Tuple2[Int, String](x, null)
+kryo.register(Tuple2_Int_String_1.class, new SimpleSerializer<Tuple2_Int_String_1>() {
+        public void write (ByteBuffer buffer, Tuple2_Int_String_1 tuple) {
+                buffer.putInt(color._1);
+        }
+        public Tuple2_Int_String_1 read (ByteBuffer buffer) {
+                return new Tuple2_Int_String_1(buffer.getInt());
+        }
+});
+
+=> Requires:
+- Serialization implementation for all backends for narrowed tuples
+- Default value per type: null for reference types, 0 for numbers?
+- Tuple Type generation with right names and types (no problem)
+
+OR:
+An ugly hack, meaning that tuples will always use all their fields
+
+Decisions to take:
+- Tuples
+- VectorReduceByKey: Only used by spark, so put it in vector or not? If not, VectorAnalysis needs a spark subtrait.
+
+
+TODO List:
+- FlatMap analysis: How should that work? Will only kill unneeded fields, not unneeded code.
+- Insert VectorMap narrowing nodes on edges
+- Get Spark build running (wait for 0.12 sbt?)
+- Cache node for spark
+- merge filters
+- Implement Join2
+- Unit Tests. 
+	- Field analysis & narrowing
+	- Transformers & dependency pulling 
+	- Tests that check if the generated code compiles.
+
+Easy, low priority tasks:
+- Add Tuple3, 4 etc
+- Extend String class with more methods (startsWith, endsWith, contains etc)
+- Spark reduce by key optimization: Allow if all readers of group by key are reduces
+- Refactor field reads to use a list as representation instead of the string

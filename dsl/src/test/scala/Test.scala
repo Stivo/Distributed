@@ -4,6 +4,7 @@ import java.io.FileWriter
 import ch.epfl.distributed._
 import org.scalatest._
 import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps }
+import scala.util.Random
 
 trait ComplexBase extends Base {
 
@@ -28,14 +29,16 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps {
   def nested(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
     words1
-      //.map(x => N2(x, 558))
+      .map(x => N2(x, 558))
       //    .map(x => N2(x.n2id, 238))
       //      .map(x => if (x.n2junk > 5) N1(x, x.n2id, 38) else N1(x, x.n2id+1, 355))
-      .map(x => if (x.matches("asdf")) N2(x, 5) else N2(x, 7))
-      //    .map(x => N1(x, x.n2id, 38))
+      //      .map(x => if (x.matches("asdf")) N2(x, 5) else N2(x, 7))
+      .map(x => N1(x, x.n2id, 38))
+      .filter(_.n1Junk == 38)
       //            .filter(_.n2.n2id=="asdf")
       //      .filter(_.n1Junk != 30)
-      .map(_.n2junk).save(getArgs(1))
+      .map(_.n2)
+      .save(getArgs(1))
   }
 
   def logEntry(x: Rep[Unit]) = {
@@ -46,7 +49,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps {
       //      .map(x => (unit(0), x))
       //      .filter(_._1 > 0)
       //      .map(_._2.url)
-      .map(_.url)
+      //      .map(_.url)
       .save(getArgs(1))
   }
 
@@ -76,11 +79,32 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps {
   def simple2(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
     words1.map { x => (x, unit(1)) }
-      .filter(_._2 > 5)
+      .filter(!_._1.matches("asdf"))
       .map(_._1)
       .save(getArgs(1))
     //)(0)
     unit(())
+  }
+
+  def wordCount(x: Rep[Unit]) = {
+    val words1 = Vector("words1")
+    val words2 = Vector("words2")
+    val wordsInLine = words1 ++ words2 //.flatMap( _.split(" ").toSeq)
+    //    words.map(_.contains(" ")).save("lines with more than one word")
+    val wordsTupled = wordsInLine.map((_, unit(1)))
+    val wordsGrouped = wordsTupled.groupByKey
+    val counted = wordsGrouped.reduce(_ + _)
+    counted.save("wordcounts")
+  }
+
+  def findLogEntry(x: Rep[Unit]) = {
+    val words = Vector("words1")
+    //    words.map(_.contains(" ")).save("lines with more than one word")
+    val wordsTupled = words.map(x => (x, LogEntry(Random.nextLong(), Random.nextDouble, x)))
+    val wordsGrouped = wordsTupled.groupByKey
+    val counted = wordsGrouped.reduce((x, y) => if (x.request > y.request) x else y)
+    counted.map(x => x._2.url)
+      .save("logEntries")
   }
 
   def twoStage(x: Rep[Unit]) = {
@@ -120,7 +144,7 @@ class TestVectors extends Suite {
       val sw = new StringWriter()
       var pw = new PrintWriter(sw)
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.nested, "g", pw)
+      codegen.emitSource(dsl.wordCount, "g", pw)
 
       pw.flush
       //      println(sw.toString)

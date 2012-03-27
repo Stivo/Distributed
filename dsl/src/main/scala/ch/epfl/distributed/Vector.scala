@@ -16,32 +16,18 @@ import java.util.regex.Pattern
 
 trait Vector[+A]
 
-trait Tuple2Struct extends Base with Expressions {
-  class Tuple2S[X: Manifest, Y: Manifest]
-  //  def Tuple2SC[X : Manifest,Y : Manifest](x : Rep[X], y : Rep[Y]) : Rep[Tuple2S[X,Y]]
-  //  def infix__1[X : Manifest](c: Rep[Tuple2S[X,_]]): Rep[X]
-  //  def infix__2[X : Manifest](c: Rep[Tuple2S[_,X]]): Rep[X]
-}
-
-trait Tuple2StructExp extends Tuple2Struct with StructExp {
-  def Tuple2SC[X: Manifest, Y: Manifest](x: Rep[X], y: Rep[Y]) =
-    SimpleStruct[Tuple2[X, Y]](List("tuple2s"), Map("_1" -> x, "_2" -> y))
-  //  def infix__1[X : Manifest](c: Rep[Tuple2S[X,_]]): Rep[X] = field[X](c, "_1")
-  //  def infix__2[X : Manifest](c: Rep[Tuple2S[_,X]]): Rep[X] = field[X](c, "_2")
-}
-
 trait VectorBase extends Base with LiftAll
   with Equal with IfThenElse with Variables with While with Functions
   with ImplicitOps with NumericOps with OrderingOps with StringOps
   with BooleanOps with PrimitiveOps with MiscOps with TupleOps
   with MathOps with CastingOps with ObjectOps with ArrayOps
-  with StringAndNumberOps with ListOps with Tuple2Struct
+  with StringAndNumberOps with ListOps
 
 trait VectorBaseExp extends VectorBase
-  with DSLOpsExp with Tuple2StructExp with BlockExp
+  with DSLOpsExp with BlockExp
   with EqualExp with IfThenElseExp with VariablesExp with WhileExp with FunctionsExp
   with ImplicitOpsExp with NumericOpsExp with OrderingOpsExp with StringOpsExp
-  with BooleanOpsExp with PrimitiveOpsExp with MiscOpsExp with TupleOpsExp
+  with BooleanOpsExp with PrimitiveOpsExp with MiscOpsExp with StructTupleOpsExp
   with MathOpsExp with CastingOpsExp with ObjectOpsExp with ArrayOpsExp with RangeOpsExp
   with StructExp with StructExpOpt
   with StructFatExp with StructFatExpOptCommon
@@ -306,6 +292,8 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
     case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "grouping vector by key")
     case red @ VectorReduce(vector, f) => emitValDef(sym, "reducing vector")
     case GetArgs() => emitValDef(sym, "getting the arguments")
+    case IR.Lambda(_, _, _) if inlineClosures =>
+    case IR.Lambda2(_, _, _, _) if inlineClosures =>
     case _ => super.emitNode(sym, rhs)
   }
 
@@ -321,7 +309,7 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
     out
   }
 
-  def writeClosure(closure: Exp[Any => Any]) = {
+  def writeClosure(closure: Exp[_]) = {
     val sw = new StringWriter()
     val pw = new PrintWriter(sw)
     closure match {
@@ -331,7 +319,12 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
         pw.println(quote(getBlockResult(y)))
         pw.print("}")
       }
-      case _ =>
+      case Def(Lambda2(fun, x1, x2, y)) => {
+        pw.println("{ (%s, %s) => ".format(quote(x1), quote(x2)))
+        emitBlock(y)(pw)
+        pw.println(quote(getBlockResult(y)))
+        pw.print("}")
+      }
     }
     pw.flush
     sw.toString
@@ -339,7 +332,7 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
 
   def inlineClosures = false
 
-  def handleClosure(closure: Exp[Any => Any]) = {
+  def handleClosure(closure: Exp[_]) = {
     if (inlineClosures) {
       writeClosure(closure)
     } else {
@@ -364,7 +357,7 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
       def niceName = name
     }
     val objectCreations = ttps.flatMap {
-      case TTP(_, ThinDef(s @ SimpleStruct("tuple2s" :: _, elems))) => None
+      //case TTP(_, ThinDef(s @ SimpleStruct("tuple2s" :: _, elems))) => None
       case TTP(_, ThinDef(s @ SimpleStruct(tag, elems))) => Some(s)
       case _ => None
     }

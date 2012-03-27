@@ -116,7 +116,9 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     val typeName = name + ((List("") ++ indexesHere).mkString("_"))
     if (!types.contains(typeName)) {
       val args = fieldsInType.filterKeys(fieldsSet.contains(_)).map { case (name, typ) => "override val %s : %s".format(name, typ) }.mkString(", ")
-      types(typeName) = """case class %s(%s) extends %s""".format(typeName, args, name)
+      types(typeName) = """case class %s(%s) extends %s {
+   override def toString() = "%s("+%s+")"
+    }""".format(typeName, args, name, name, fieldsInType.keys.mkString("""+","+"""))
     }
     typeName
   }
@@ -127,12 +129,11 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = {
     val out = rhs match {
-      case IR.SimpleStruct("tuple2s" :: Nil, elems) => emitValDef(sym, "(%s, %s) // creating tuple2 ourselves!!!".format(quote(elems("_1")), quote(elems("_2"))))
-      case IR.Field(tuple, "_1", tp) => emitValDef(sym, "%s._1".format(quote(tuple), tp))
-      case IR.Field(tuple, "_2", tp) => emitValDef(sym, "%s._2".format(quote(tuple), tp))
       case IR.Field(tuple, x, tp) => emitValDef(sym, "%s.%s".format(quote(tuple), x))
       case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
-      case IR.Lambda(_, _, _) if inlineClosures =>
+      case IR.ObjectCreation(name, fields) if (name.startsWith("tuple2s")) => {
+        emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
+      }
       case IR.ObjectCreation(name, fields) => {
         val typeInfo = typeHandler.typeInfos2(name)
         val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)
@@ -150,8 +151,8 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
         emitValDef(sym, out)
       }
       case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "%s.groupByKey".format(quote(vector)))
-      case red @ VectorReduce(vector, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(vector), quote(red.closure)))
-      case red @ VectorReduceByKey(vector, f) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(vector), quote(red.closure)))
+      case red @ VectorReduce(vector, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(vector), handleClosure(red.closure)))
+      case red @ VectorReduceByKey(vector, f) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(vector), handleClosure(red.closure)))
       case GetArgs() => emitValDef(sym, "sparkInputArgs.drop(1); // First argument is for spark context")
       case _ => super.emitNode(sym, rhs)
     }
@@ -171,12 +172,10 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       // TODO investigate
       //      transformer.currentState.printAll("Before map merge")
       // perform spark optimizations
-      //      transformer.doTransformation(new MapMergeTransformation, 500)
+      transformer.doTransformation(new MapMergeTransformation, 500)
       //      transformer.currentState.printAll("After map merge")
       //      transformer.doTransformation(new ReduceByKeyTransformation, 500)
-      transformer.doTransformation(pullDeps, 500)
 
-      transformer.doTransformation(new TupleStructTransformation, 5)
       transformer.doTransformation(pullDeps, 500)
       var oneFound = false
       do {
@@ -187,7 +186,9 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
         var goOn = true
         analyzer.ordered.foreach {
           case _ if !goOn =>
-          case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed") && !SimpleType.unapply(v.getClosureTypes._2).isDefined => {
+          case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed")
+            && !SimpleType.unapply(v.getClosureTypes._2).isDefined
+            && analyzer.hasObjectCreationInClosure(v) => {
             oneFound = true
             v.metaInfos += (("narrowed", true))
             // transformer.currentState.printAll("Before narrowing")
@@ -202,6 +203,11 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       } while (oneFound)
       transformer.doTransformation(new TypeTransformations(typeHandler), 500)
       transformer.doTransformation(pullDeps, 500)
+      val out = new FileOutputStream("test.dot")
+      val analyzer = new Analyzer(transformer.currentState, typeHandler)
+      analyzer.makeFieldAnalysis
+      out.write(analyzer.exportToGraph.getBytes)
+      out.close
       //      transformer.currentState.ttps.foreach(println)
       // insert vectormaps and replace creation of structs with narrower types
 
@@ -216,14 +222,10 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
   }
 
   override def remap[A](m: Manifest[A]): String = {
-    val remappings = typeHandler.remappings
-    if (m.toString.contains("Tuple2")) {
-      var out = m.toString
-      remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
-      out
-    } else {
-      remappings.getOrElse(m.asInstanceOf[Manifest[Any]], super.remap(m))
-    }
+    val remappings = typeHandler.remappings.filter(!_._2.startsWith("tuple2s_"))
+    var out = m.toString
+    remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
+    out
   }
 
   override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
