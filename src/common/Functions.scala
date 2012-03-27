@@ -26,7 +26,11 @@ trait FunctionsExp extends Functions with EffectExp {
     val mA = manifest[A]
     val mB = manifest[B]
   }
-  case class Lambda2[A1:Manifest,A2:Manifest,B:Manifest](f: (Exp[A1],Exp[A2]) => Exp[B], x1: Sym[A1], x2: Sym[A2], y: Block[B]) extends Def[(A1,A2) => B]
+  case class Lambda2[A1:Manifest,A2:Manifest,B:Manifest](f: (Exp[A1],Exp[A2]) => Exp[B], x1: Sym[A1], x2: Sym[A2], y: Block[B]) extends Def[(A1,A2) => B]{
+    val mA1 = manifest[A1]
+    val mA2 = manifest[A2]
+    val mB = manifest[B]
+  }
 
   case class Apply[A:Manifest,B:Manifest](f: Exp[A => B], arg: Exp[A]) extends Def[B]
 
@@ -77,10 +81,12 @@ trait FunctionsExp extends Functions with EffectExp {
   }  
 
   def makeFunction[A : Manifest, B : Manifest]() = manifest[Function1[A, B]]
+  def makeFunction2[A1 : Manifest, A2 : Manifest, B : Manifest]() = manifest[Function2[A1, A2, B]]
   
   override def mirror[A:Manifest](e: Def[A], f: Transformer)/*(implicit ctx: SourceContext)*/: Exp[A] = 
     (e match {
        case l@Lambda(func,x,y) => toAtom(Lambda(f(func),x,f(y))(l.mA, l.mB)) (makeFunction()(l.mA, l.mB))
+       case l@Lambda2(func,x1, x2 ,y) => toAtom(Lambda2(f(func),x1,x2,f(y))(l.mA1, l.mA2, l.mB)) (makeFunction2()(l.mA1, l.mA2, l.mB))
        case _ => super.mirror(e, f)
     }).asInstanceOf[Exp[A]]
   
@@ -122,7 +128,7 @@ trait ScalaGenFunctions extends ScalaGenEffect with BaseGenFunctions {
       stream.println("}")
 
     case e@Lambda2(fun, x1, x2, y) =>
-      stream.println("val " + quote(sym) + " = { (" + quote(x1) + ": " + remap(x1.Type) + ", " + quote(x2) + ": " + x2.Type + ") => ")
+      stream.println("val " + quote(sym) + " = { (" + quote(x1) + ": " + remap(x1.Type) + ", " + quote(x2) + ": " + remap(x2.Type) + ") => ")
       emitBlock(y)
       stream.println(quote(getBlockResult(y)) + ": " + remap(y.Type))
       stream.println("}")

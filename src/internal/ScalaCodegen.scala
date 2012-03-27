@@ -13,6 +13,7 @@ trait ScalaCodegen extends GenericCodegen {
 
   override def quote(x: Exp[Any]) : String = x match {
     case Const(s: String) => "\""+s.replaceAll("\\\\", "\\\\\\\\").replaceAll("\"", "\\\"")+"\""
+    case Const(l : Long) => l+"L"
     case _ => super.quote(x)
   }
 
