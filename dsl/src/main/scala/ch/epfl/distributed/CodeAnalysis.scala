@@ -3,6 +3,7 @@ package ch.epfl.distributed
 import scala.virtualization.lms.util.GraphUtil
 import scala.collection.mutable.Buffer
 import java.util.regex.Pattern
+import scala.util.Random
 
 trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matchers {
 
@@ -99,16 +100,18 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
         case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed") && !SimpleType.unapply(v.getClosureTypes._2).isDefined => {
           // backup TTPs, or create new transformer?
           val transformer = new Transformer(state)
+          // tag this map to recognize it after transformations
+          val id = "id_" + Random.nextString(20)
+          v.metaInfos(id) = true
           // create narrowing transformation for this map
-          var ll: IR.Lambda[_, _] = null
-          v.closure match {
-            case Def(l @ IR.Lambda(_, _, _)) => ll = l
+          var ll: IR.Lambda[_, _] = v.closure match {
+            case Def(l @ IR.Lambda(_, _, _)) => l
           }
           val narrowMapTransformation = new MapNarrowTransformationNew(ll, node.successorFieldReads.toList, typeHandler)
           transformer.transformations = List(narrowMapTransformation)
-          // run transformer
+          // run transformation
           if (!transformer.doOneTransformation) {
-            println("Transformation failed for " + node)
+            println("Transformation failed for " + node + " during field analysis")
           }
           val pullDeps = new PullDependenciesTransformation()
           transformer.doTransformation(pullDeps, 500)
@@ -117,12 +120,11 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
           // analyze field reads of the new function
           val a2 = new Analyzer(transformer.currentState, typeHandler)
           val candidates = transformer.currentState.ttps.flatMap {
-            case TTPDef(vm @ VectorMap(in2, _)) if (in2 == in) => Some(vm)
+            case TTPDef(vm @ VectorMap(_, _)) if (vm.metaInfos.contains(id)) => Some(vm)
             case _ => None
           }
-          println("candidates for map to be analyzed " + candidates)
-          println(a2.getNodesInClosure(candidates.head).map(x => (x, printDef(x))))
-          // TODO: Fix this! If two maps read from the same, this is gonna blow
+          // remove the tag, not needed afterwards
+          v.metaInfos.remove(id)
           a2.analyzeFunction(candidates.head)
         }
         case v @ VectorMap(in, func) => analyzeFunction(v)

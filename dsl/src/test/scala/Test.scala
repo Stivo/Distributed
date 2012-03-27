@@ -27,12 +27,15 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps {
 
   def nested(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
-    words1.map(x => N2(x, 558))
+    words1
+      //.map(x => N2(x, 558))
       //    .map(x => N2(x.n2id, 238))
-      .map(x => N1(x, x.n2id, 38))
-      //      .filter(_.n2.n2junk>3)
-      .filter(_.n1Junk != 30)
-      .map(_.n1id).save(getArgs(1))
+      //      .map(x => if (x.n2junk > 5) N1(x, x.n2id, 38) else N1(x, x.n2id+1, 355))
+      .map(x => if (x.matches("asdf")) N2(x, 5) else N2(x, 7))
+      //    .map(x => N1(x, x.n2id, 38))
+      //            .filter(_.n2.n2id=="asdf")
+      //      .filter(_.n1Junk != 30)
+      .map(_.n2junk).save(getArgs(1))
   }
 
   def logEntry(x: Rep[Unit]) = {
@@ -112,12 +115,12 @@ class TestVectors extends Suite {
     try {
       println("-- begin")
 
-      val dsl = new VectorsProg with VectorImplOps with SparkVectorOpsExp with ComplexStructExp with ApplicationOpsExp
+      val dsl = new VectorsProg with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp
 
       val sw = new StringWriter()
       var pw = new PrintWriter(sw)
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.logEntry, "g", pw)
+      codegen.emitSource(dsl.nested, "g", pw)
 
       pw.flush
       //      println(sw.toString)

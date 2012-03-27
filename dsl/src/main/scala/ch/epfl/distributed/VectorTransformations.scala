@@ -55,30 +55,50 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
     }
 
     def doOneTransformation = {
-      currentState.printAll
+      //      currentState.printAll()
       var out = false
       transformations.find { transformation =>
-        val isPull = transformation.toString.contains("Pull")
         val marker = new MarkerTransformer(transformation, this)
         transformAll(marker)
         for (exp <- marker.getTodo.take(1)) {
           out = true
           val (ttps, substs) = transformation.applyToNode(exp, this)
+          var allAdded = Set[TTP]()
+          var ttpsToAdd = ttps
+          while (!ttpsToAdd.isEmpty) {
+            val head = ttpsToAdd.head
+            if (!currentState.ttps.contains(head)) {
+              allAdded += head
+              head match {
+                case TTPDef(x) => {
+                  val syms = readingNodes(x)
+                  val newttps = syms.filter(IR.findDefinition(_).isDefined).map(IR.findOrCreateDefinition(_)).map(fatten(_))
+                  ttpsToAdd ++= newttps
+                }
+                case TTP(x, IR.SimpleFatIfThenElse(cond, thenList, elseList)) => {
+                  val allSyms = (List(cond) ++ ((thenList ++ elseList).map { case IR.Block(x) => x })).flatMap { case Def(x) => Some(x) case _ => None }
+                  val newttps = allSyms.filter(IR.findDefinition(_).isDefined).map(IR.findOrCreateDefinition(_)).map(fatten(_))
+                  ttpsToAdd ++= newttps
+                }
+                case x => println("did not match " + x + " while looking for dependencies")
+              }
+            }
+            ttpsToAdd = ttpsToAdd.tail
+          }
+          val isPull = false && transformation.toString.contains("Pull")
           if (!isPull) {
             System.out.println("Applying " + transformation + " to node " + exp)
-            if (!ttps.isEmpty) {
-              println(printDef(exp) + " => " + printDef(ttps.head))
-            }
+            println(printDef(exp) + " created new definitions: " + (allAdded).map(printDef).mkString(", "))
             println
           }
-          val newState = new TransformationState(currentState.ttps ++ ttps, currentState.results)
+          val newState = new TransformationState(currentState.ttps ++ allAdded, currentState.results)
           val subst = new SubstTransformer()
           subst.subst ++= substs
           currentState = transformAll(subst, newState)
         }
         out
       }
-      currentState.printAll
+      //      currentState.printAll()
       out
     }
 
@@ -111,9 +131,11 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
   }
 
   class TransformationState(val ttps: List[TTP], val results: List[Exp[Any]]) {
-    def printAll = {
-      //	    println("Printing all ttps for the current state")
-      //	    ttps.foreach(println)
+    def printAll(s: String = null) = {
+      if (s != null)
+        println("###################### " + s + " ######################")
+      println("Printing all ttps for the current state")
+      ttps.foreach(println)
     }
   }
 
@@ -123,14 +145,11 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
 
     def applyToNode(inExp: Exp[_], transformer: Transformer): (List[TTP], List[(Exp[_], Exp[_])]) = {
       val out = doTransformation(inExp);
-      // get dependencies
-      val readers = transformer.readingNodes(out)
-      // find all new Defs
-      var newDef = out
       // make TTP's from defs
-      val ttps = List(newDef).map(IR.findOrCreateDefinition(_)).map(fatten)
+      val outTp = IR.findOrCreateDefinition(out)
+      val ttps = List(fatten(outTp))
       // return ttps and substitutions
-      val substs = List((inExp, IR.findOrCreateDefinition(out).sym))
+      val substs = List((inExp, outTp.sym))
       (ttps, substs)
     }
     def doTransformation(inExp: Exp[_]): Def[_]
@@ -317,12 +336,11 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
             case ti @ TypeInfo(name, fields) => {
               val elems = for ((childName, node) <- node.children)
                 yield (childName, build(path + "." + childName, readFromSym));
-              // TODO: sort the map in the elems, either here or on code generation
               IR.toAtom2(IR.SimpleStruct(name :: Nil, elems.toMap)(ti.m))(ti.m, FakeSourceContext())
             }
             case fi @ FieldInfo(name, niceType, position) => {
-//              val newSym = IR.field(readFromSym, name)(fi.m)
-              val newSym = IR.toAtom2(IR.Field(readFromSym, name, fi.m))(fi.m, FakeSourceContext())
+              val newSym = IR.field(readFromSym, name)(fi.m)
+              //              val newSym = IR.toAtom2(IR.Field(readFromSym, name, fi.m))(fi.m, FakeSourceContext())
               if (node.children.isEmpty) {
                 newSym
               } else {

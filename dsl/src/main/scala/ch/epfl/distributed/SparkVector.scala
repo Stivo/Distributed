@@ -23,6 +23,11 @@ trait SparkVectorOpsExp extends VectorOpsExp {
     def getType = manifest[Vector[(K, V)]]
   }
 
+  //  override def vector_map[A: Manifest, B: Manifest](vector: Exp[Vector[A]], f: Exp[A] => Exp[B]) = vector match {
+  //    case Def(vm @ VectorMap(in, f2)) => VectorMap(vector, f2.andThen(f))(mtype(vm.mA), manifest[B]) 
+  //    case _ => super.vector_map(vector, f)
+  //  }
+
   override def syms(e: Any): List[Sym[Any]] = e match {
     case red: VectorReduceByKey[_, _] => syms(red.in, red.closure)
     case _ => super.syms(e)
@@ -161,9 +166,13 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       var state = new TransformationState(currentScope0In, result0)
       val transformer = new Transformer(state)
       val pullDeps = new PullSparkDependenciesTransformation()
+      transformer.doTransformation(pullDeps, 500)
 
+      // TODO investigate
+      //      transformer.currentState.printAll("Before map merge")
       // perform spark optimizations
-      //       transformer.doTransformation(new MapMergeTransformation, 500)
+      //      transformer.doTransformation(new MapMergeTransformation, 500)
+      //      transformer.currentState.printAll("After map merge")
       //      transformer.doTransformation(new ReduceByKeyTransformation, 500)
       transformer.doTransformation(pullDeps, 500)
 
@@ -171,25 +180,26 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       transformer.doTransformation(pullDeps, 500)
       var oneFound = false
       do {
-          oneFound = false
-	      // perform field usage analysis
-	      val analyzer = new Analyzer(transformer.currentState, typeHandler)
-	      analyzer.makeFieldAnalysis
-	      var goOn = true
-	      analyzer.ordered.foreach {
-	        case _ if !goOn =>
-	        case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed") && !SimpleType.unapply(v.getClosureTypes._2).isDefined => {
-	          oneFound = true
-	          v.metaInfos += (("narrowed", true))
-	          transformer.doTransformation(new MapNarrowTransformationNew(SomeDef.unapply(v.closure).get.asInstanceOf[Lambda[_, _]], v.successorFieldReads.toList, typeHandler), 50)
-	          transformer.doTransformation(pullDeps, 500)
-	          transformer.doTransformation(new FieldOnStructReadTransformation, 500)
-	          goOn = false
-	        }
-	        case _ =>
-	      }
-	      transformer.doTransformation(pullDeps, 500)
-      } while(oneFound)
+        oneFound = false
+        // perform field usage analysis
+        val analyzer = new Analyzer(transformer.currentState, typeHandler)
+        analyzer.makeFieldAnalysis
+        var goOn = true
+        analyzer.ordered.foreach {
+          case _ if !goOn =>
+          case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed") && !SimpleType.unapply(v.getClosureTypes._2).isDefined => {
+            oneFound = true
+            v.metaInfos += (("narrowed", true))
+            // transformer.currentState.printAll("Before narrowing")
+            transformer.doTransformation(new MapNarrowTransformationNew(SomeDef.unapply(v.closure).get.asInstanceOf[Lambda[_, _]], v.successorFieldReads.toList, typeHandler), 50)
+            transformer.doTransformation(pullDeps, 500)
+            // transformer.currentState.printAll("After narrowing")
+            transformer.doTransformation(new FieldOnStructReadTransformation, 500)
+            goOn = false
+          }
+          case _ =>
+        }
+      } while (oneFound)
       transformer.doTransformation(new TypeTransformations(typeHandler), 500)
       transformer.doTransformation(pullDeps, 500)
       //      transformer.currentState.ttps.foreach(println)
@@ -235,19 +245,12 @@ package spark.examples;
 import scala.math.random
 import spark._
 import SparkContext._
+import com.esotericsoftware.kryo.Kryo
 
 object %s {
         def main(sparkInputArgs: Array[String]) {
-/*  TODO: add this
     System.setProperty("spark.serializer", "spark.KryoSerializer")
     System.setProperty("spark.kryo.registrator", "spark.examples.Registrator")
-	class Registrator extends KryoRegistrator {
-	  def registerClasses(kryo: Kryo) {
-	    kryo.register(classOf[LogEntry_2])
-	    kryo.register(classOf[LogEntry])
-	  }
-	}
-*/
 
     		val sc = new SparkContext(sparkInputArgs(0), "%s")
         """.format(className, className))
@@ -255,9 +258,15 @@ object %s {
     emitBlock(y)(stream)
 
     stream.println("}")
+    stream.println("}")
     stream.println("// Types that are used in this program")
     stream.println(types.values.toList.sorted.mkString("\n"))
-    stream.println("}")
+
+    stream.println("""class Registrator extends KryoRegistrator {
+        def registerClasses(kryo: Kryo) {
+        %s
+  }
+}""".format(types.keys.toList.sorted.map("kryo.register(classOf[" + _ + "])").mkString("\n")))
     stream.println("/*****************************************\n" +
       "  End of Spark Code                  \n" +
       "*******************************************/")

@@ -50,7 +50,8 @@ trait Matchers extends AbstractScalaGenVector {
   def printDef(x: Any) = {
     x match {
       case SomeDef(x) => "some def " + x
-      case _ => "not a def"
+      case Block(x) => "Block " + x
+      case _ => "not a def" + x
     }
   }
 

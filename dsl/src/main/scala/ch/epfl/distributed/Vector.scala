@@ -43,8 +43,10 @@ trait VectorBaseExp extends VectorBase
   with ImplicitOpsExp with NumericOpsExp with OrderingOpsExp with StringOpsExp
   with BooleanOpsExp with PrimitiveOpsExp with MiscOpsExp with TupleOpsExp
   with MathOpsExp with CastingOpsExp with ObjectOpsExp with ArrayOpsExp with RangeOpsExp
-  with StructExp with StructExpOpt with FatExpressions with LoopsFatExp with IfThenElseFatExp
-  with StringAndNumberOpsExp with StructFatExpOptCommon with ListOpsExp
+  with StructExp with StructExpOpt
+  with StructFatExp with StructFatExpOptCommon
+  with FatExpressions with LoopsFatExp with IfThenElseFatExp
+  with StringAndNumberOpsExp with ListOpsExp
 
 trait VectorBaseCodeGenPkg extends ScalaGenDSLOps
   with SimplifyTransform with ScalaGenIfThenElseFat
@@ -52,7 +54,8 @@ trait VectorBaseCodeGenPkg extends ScalaGenDSLOps
   with ScalaGenImplicitOps with ScalaGenNumericOps with ScalaGenOrderingOps with ScalaGenStringOps
   with ScalaGenBooleanOps with ScalaGenPrimitiveOps with ScalaGenMiscOps with ScalaGenTupleOps
   with ScalaGenMathOps with ScalaGenCastingOps with ScalaGenObjectOps with ScalaGenArrayOps with ScalaGenRangeOps
-  with ScalaGenFatStruct with GenericFatCodegen
+  //with ScalaGenFatStruct
+  with ScalaGenStruct with GenericFatCodegen
   with StringAndNumberOpsCodeGen with ScalaGenListOps { val IR: VectorOpsExp }
 
 trait VectorOps extends VectorBase {
@@ -60,7 +63,6 @@ trait VectorOps extends VectorBase {
 
   object Vector {
     def apply(file: Rep[String]) = vector_new[String](file)
-
   }
 
   implicit def repVecToVecOps[A: Manifest](vector: Rep[Vector[A]]) = new vecOpsCls(vector)
@@ -111,7 +113,6 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   trait VectorNode {
     val directFieldReads = mutable.HashSet[FieldRead]()
     val successorFieldReads = mutable.HashSet[FieldRead]()
-    def allFieldReads = directFieldReads ++ successorFieldReads
     val metaInfos = mutable.Map[String, Any]()
   }
 
@@ -234,27 +235,34 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   override def vector_reduce[K: Manifest, V: Manifest](vector: Exp[Vector[(K, Iterable[V])]], f: (Exp[V], Exp[V]) => Exp[V]) = VectorReduce(vector, f)
   override def vector_groupByKey[K: Manifest, V: Manifest](vector: Exp[Vector[(K, V)]]) = VectorGroupByKey(vector)
 
-  def copyMetaInfo[A <: VectorNode](from : VectorNode, to : A) = {to.metaInfos ++= from.metaInfos; to}
-  
-  override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = (e match {
-    case o @ ObjectCreation(name, fields) => toAtom(ObjectCreation(name, fields.mapValues(f(_)))(o.mA))(o.mA)
-    case flat @ VectorFlatten(list) => toAtom(VectorFlatten(f(list))(flat.mA))
-    case vm @ NewVector(vector) => toAtom(NewVector(f(vector))(vm.mA))(mtype(vm.mA))
-    case vm @ VectorMap(vector, func) => toAtom(
-      copyMetaInfo(vm, new { override val overrideClosure = Some(f(vm.closure)) } with VectorMap(f(vector), f(func))(vm.mA, vm.mB))
-    )(vm.getTypes._2)
-    case vf @ VectorFilter(vector, func) => toAtom(
-      new { override val overrideClosure = Some(f(vf.closure)) } with VectorFilter(f(vector), f(func))(vf.mA)
-    )(mtype(manifest[A]))
-    case vfm @ VectorFlatMap(vector, func) => toAtom(VectorFlatMap(f(vector), f(func))(vfm.mA, vfm.mB))(mtype(manifest[A]))
-    case gbk @ VectorGroupByKey(vector) => toAtom(VectorGroupByKey(f(vector))(gbk.mKey, gbk.mValue))(mtype(manifest[A]))
-    case v @ VectorReduce(vector, func) => toAtom(VectorReduce(f(vector), f(func))(v.mKey, v.mValue))(mtype(manifest[A]))
-    case vs @ VectorSave(vector, path) => toAtom(VectorSave(f(vector), f(path))(vs.mA))
-    case Reflect(vs @ VectorSave(vector, path), u, es) => reflectMirrored(Reflect(VectorSave(f(vector), f(path))(vs.mA), mapOver(f, u), f(es)))
-    case Reify(x, u, es) => toAtom(Reify(f(x), mapOver(f, u), f(es)))(mtype(manifest[A]))
-    case _ => super.mirror(e, f)
-  }).asInstanceOf[Exp[A]]
+  def copyMetaInfo[A <: VectorNode](from: VectorNode, to: A) = { to.metaInfos ++= from.metaInfos; to }
 
+  override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = {
+    var out = e match {
+
+      case o @ ObjectCreation(name, fields) => toAtom(ObjectCreation(name, fields.mapValues(f(_)))(o.mA))(o.mA)
+      case flat @ VectorFlatten(list) => toAtom(VectorFlatten(f(list))(flat.mA))
+      case vm @ NewVector(vector) => toAtom(NewVector(f(vector))(vm.mA))(mtype(vm.mA))
+      case vm @ VectorMap(vector, func) => toAtom(
+        new { override val overrideClosure = Some(f(vm.closure)) } with VectorMap(f(vector), f(func))(vm.mA, vm.mB)
+      )(vm.getTypes._2)
+      case vf @ VectorFilter(vector, func) => toAtom(
+        new { override val overrideClosure = Some(f(vf.closure)) } with VectorFilter(f(vector), f(func))(vf.mA)
+      )(mtype(manifest[A]))
+      case vfm @ VectorFlatMap(vector, func) => toAtom(VectorFlatMap(f(vector), f(func))(vfm.mA, vfm.mB))(mtype(manifest[A]))
+      case gbk @ VectorGroupByKey(vector) => toAtom(VectorGroupByKey(f(vector))(gbk.mKey, gbk.mValue))(mtype(manifest[A]))
+      case v @ VectorReduce(vector, func) => toAtom(VectorReduce(f(vector), f(func))(v.mKey, v.mValue))(mtype(manifest[A]))
+      case vs @ VectorSave(vector, path) => toAtom(VectorSave(f(vector), f(path))(vs.mA))
+      case Reflect(vs @ VectorSave(vector, path), u, es) => reflectMirrored(Reflect(VectorSave(f(vector), f(path))(vs.mA), mapOver(f, u), f(es)))
+      case Reify(x, u, es) => toAtom(Reify(f(x), mapOver(f, u), f(es)))(mtype(manifest[A]))
+      case _ => super.mirror(e, f)
+    }
+    (e, out) match {
+      case (x: VectorNode, Def(y: VectorNode)) => copyMetaInfo(x, y)
+      case _ =>
+    }
+    out.asInstanceOf[Exp[A]]
+  }
   override def syms(e: Any): List[Sym[Any]] = e match {
     case s: ClosureNode[_, _] => syms(s.in, s.closure)
     case s: Closure2Node[_, _, _] => syms(s.in, s.closure)
@@ -382,7 +390,6 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
     }.toMap
 
     def getTypeAt(path: String, m: Manifest[Any]): PartInfo[_] = {
-      // TODO: This should work for expressions which are nested
       val pathParts = path.split("\\.").drop(1).toList
       var typeNow: Any = m
       pathParts match {
@@ -398,7 +405,7 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
         case x: FieldInfo[_] => x
         case _ => throw new RuntimeException("could not use result type " + typeNow + " for " + path + " in " + m)
       }
-      def restOfPath(path : List[String], partInfo : PartInfo[_]) : PartInfo[_] = {
+      def restOfPath(path: List[String], partInfo: PartInfo[_]): PartInfo[_] = {
         path match {
           case Nil => partInfo
           case x :: rest => restOfPath(rest, partInfo.asInstanceOf[FieldInfo[_]].getType.getField(x).get)
