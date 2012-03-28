@@ -3,6 +3,7 @@ Problems:
 Problem with innerscope:
 - InnerScope gets changed in focusExactScopeFat. 
 The old one is used later and the new symbols are not found in the old scope.
+In FatTraversal.scala, the "Trouble" message appears.
 
 Tuples
 - How can tuples be reduced? Tuples are case classes with fields.
@@ -32,12 +33,12 @@ An ugly hack, meaning that tuples will always use all their fields
 
 Decisions to take:
 - Tuples
-- VectorReduceByKey: Only used by spark, so put it in vector or not? If not, VectorAnalysis needs a spark subtrait.
+- VectorReduceByKey: Only used by spark, so put it in vector or not? If not, VectorAnalysis needs a spark subtrait. Cache is another example.
 
 
 TODO List:
-- FlatMap analysis: How should that work? Will only kill unneeded fields, not unneeded code.
-- Insert VectorMap narrowing nodes on edges
+- FlatMap analysis: How should that work? Will only kill unneeded fields, not unneeded code. In that case, it's better to not do it.
+- Insert VectorMap narrowing nodes on edges. How to detect if this helps?
 - Get Spark build running (wait for 0.12 sbt?)
 - Cache node for spark
 - merge filters
@@ -46,6 +47,7 @@ TODO List:
 	- Field analysis & narrowing
 	- Transformers & dependency pulling 
 	- Tests that check if the generated code compiles.
+- Compile external source files, like delite
 
 Easy, low priority tasks:
 - Add Tuple3, 4 etc

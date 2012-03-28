@@ -40,7 +40,10 @@ trait SparkVectorOpsExp extends VectorOpsExp {
 
   override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = {
     (e match {
-      case v @ VectorReduceByKey(vector, func) => toAtom(VectorReduceByKey(f(vector), f(func))(v.mKey, v.mValue))
+      case v @ VectorReduceByKey(vector, func) => toAtom(
+        new { override val overrideClosure = Some(f(v.closure)) } with VectorReduceByKey(f(vector), f(func))(v.mKey, v.mValue)
+      )(mtype(manifest[A]))
+
       case _ => super.mirror(e, f)
     }).asInstanceOf[Exp[A]]
   }

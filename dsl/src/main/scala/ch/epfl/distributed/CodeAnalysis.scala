@@ -95,8 +95,28 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
       fields.flatMap(n => pathToInput(n, getNodesInClosure(v).head)).toSet
     }
 
+    import typeHandler._
+    def visitAll(path: String, m: Manifest[_]) = {
+      val reads = new mutable.HashSet[String]()
+      val typ = typeHandler.getTypeAt(path, m)
+
+      def recurse(path: String, typ: PartInfo[_]) {
+        reads += path
+        typ match {
+          case TypeInfo(name, fields) => fields.foreach(x => recurse(path + "." + x.name, x))
+          case FieldInfo(name, typ, pos) if typeHandler.typeInfos2.contains(typ) =>
+            typeHandler.typeInfos2(typ).fields.foreach(x => recurse(path + "." + x.name, x))
+          case _ =>
+        }
+      }
+      recurse(path, typ)
+      reads.map(FieldRead).toSet
+    }
+
     def computeFieldReads(node: VectorNode): Set[FieldRead] = {
       val out: Set[FieldRead] = node match {
+        case NewVector(_) => Set()
+
         case v @ VectorFilter(in, func) => analyzeFunction(v) ++ node.successorFieldReads
 
         case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed")
@@ -153,7 +173,7 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
           ((v.successorFieldReads.map(_.getPath).map {
             case "input" :: "_2" :: "iterable" :: x => "input" :: "_2" :: x
             case x => x
-          }.map(_.mkString("."))) ++ Set("input._1")).map(FieldRead).toSet
+          }.map(_.mkString(".")))).map(FieldRead).toSet ++ visitAll("input._1", v.mInType)
 
         case v @ VectorFlatten(inputs) =>
           // just pass on the successor field reads
@@ -163,25 +183,12 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
           if (SimpleType.unapply(v.mA).isDefined) {
             Set()
           } else {
-            import typeHandler._
             // traverse all subtypes, mark all fields as read
-            val typ = typeHandler.getTypeAt("input", v.mA)
-            val reads = new mutable.HashSet[String]()
-            def visitAll(path: String, typ: PartInfo[_]) {
-              reads += path
-              typ match {
-                case TypeInfo(name, fields) => fields.foreach(x => visitAll(path + "." + x.name, x))
-                case FieldInfo(name, typ, pos) if typeHandler.typeInfos2.contains(typ) =>
-                  typeHandler.typeInfos2(typ).fields.foreach(x => visitAll(path + "." + x.name, x))
-                case _ =>
-              }
-            }
-            visitAll("input", typ)
-            reads.map(FieldRead).toSet
+            visitAll("input", v.mA)
           }
         }
 
-        case NewVector(_) => Set()
+        case v @ VectorFlatMap(in, func) => analyzeFunction(v)
 
         case x => throw new RuntimeException("Need to implement field analysis for " + x)
         //Set[FieldRead]()

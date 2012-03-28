@@ -85,8 +85,8 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
             }
             ttpsToAdd = ttpsToAdd.tail
           }
-          val isPull = false && transformation.toString.contains("Pull")
-          if (!isPull) {
+          val isPull = transformation.toString.contains("Pull")
+          if (!allAdded.isEmpty && !isPull) {
             System.out.println("Applying " + transformation + " to node " + exp)
             println(printDef(exp) + " created new definitions: " + (allAdded).map(printDef).mkString(", "))
             println
