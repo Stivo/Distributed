@@ -13,7 +13,16 @@ trait SparkProgram extends VectorOpsExp with VectorImplOps with SparkVectorOpsEx
 
 }
 
-trait SparkVectorOpsExp extends VectorOpsExp {
+trait SparkVectorOps extends VectorOps {
+  implicit def repVecToSparkVecOps[A: Manifest](vector: Rep[Vector[A]]) = new vecSparkOpsCls(vector)
+  class vecSparkOpsCls[A: Manifest](vector: Rep[Vector[A]]) {
+    def cache = vector_cache(vector)
+  }
+  
+  def vector_cache[A : Manifest](vector : Rep[Vector[A]]) : Rep[Vector[A]]
+}
+
+trait SparkVectorOpsExp extends VectorOpsExp with SparkVectorOps {
   case class VectorReduceByKey[K: Manifest, V: Manifest](in: Exp[Vector[(K, V)]], func: (Exp[V], Exp[V]) => Exp[V])
       extends Def[Vector[(K, V)]] with Closure2Node[V, V, V]
       with PreservingTypeComputation[Vector[(K, V)]] {
@@ -22,6 +31,13 @@ trait SparkVectorOpsExp extends VectorOpsExp {
     def getClosureTypes = ((manifest[V], manifest[V]), manifest[V])
     def getType = manifest[Vector[(K, V)]]
   }
+  
+  case class VectorCache[A: Manifest](in: Exp[Vector[A]]) extends Def[Vector[A]] with PreservingTypeComputation[Vector[A]] {
+    val mA = manifest[A]
+    def getType = manifest[Vector[A]]
+  }
+  
+  override def vector_cache[A : Manifest](in : Rep[Vector[A]]) = VectorCache[A](in)
 
   //  override def vector_map[A: Manifest, B: Manifest](vector: Exp[Vector[A]], f: Exp[A] => Exp[B]) = vector match {
   //    case Def(vm @ VectorMap(in, f2)) => VectorMap(vector, f2.andThen(f))(mtype(vm.mA), manifest[B]) 
@@ -30,11 +46,13 @@ trait SparkVectorOpsExp extends VectorOpsExp {
 
   override def syms(e: Any): List[Sym[Any]] = e match {
     case red: VectorReduceByKey[_, _] => syms(red.in, red.closure)
+    case v : VectorCache[_] => syms(v.in)
     case _ => super.syms(e)
   }
 
   override def symsFreq(e: Any): List[(Sym[Any], Double)] = e match {
     case red: VectorReduceByKey[_, _] => freqHot(red.closure) ++ freqNormal(red.in)
+    case v : VectorCache[_] => freqNormal(v.in)
     case _ => super.symsFreq(e)
   }
 
@@ -43,7 +61,7 @@ trait SparkVectorOpsExp extends VectorOpsExp {
       case v @ VectorReduceByKey(vector, func) => toAtom(
         new { override val overrideClosure = Some(f(v.closure)) } with VectorReduceByKey(f(vector), f(func))(v.mKey, v.mValue)
       )(mtype(manifest[A]))
-
+      case v @ VectorCache(in) => toAtom(VectorCache(f(in))(v.mA))(mtype(v.getType))
       case _ => super.mirror(e, f)
     })
     (e, out) match {
@@ -101,6 +119,7 @@ trait SparkVectorAnalysis extends VectorAnalysis {
     ComputationNode,
     VectorNode,
     VectorReduceByKey,
+    VectorCache,
     GetArgs
   }
   import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
@@ -111,9 +130,9 @@ trait SparkVectorAnalysis extends VectorAnalysis {
 
   class SparkAnalyzer(state: TransformationState, typeHandler: TypeHandler) extends Analyzer(state, typeHandler) {
 
-    //TODO add cache node here
     override def isNarrowBeforeCandidate(x: VectorNode) = x match {
-      case VectorReduceByKey(x, func) => true
+      case VectorReduceByKey(_, _) => true
+      case VectorCache(_) => true
       case _ => false
     }
 
@@ -130,7 +149,9 @@ trait SparkVectorAnalysis extends VectorAnalysis {
         val part3 = visitAll("input._1", v.getTypes._1.typeArguments(0))
         (part1 ++ part2 ++ part3).toSet
       }
-      // TODO cache node case (simple typepreserving, but anyway)
+      
+      case v@VectorCache(in) => node.successorFieldReads.toSet
+      
       case _ => super.computeFieldReads(node)
     }
   }
@@ -156,7 +177,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
   }
   import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
-  import IR.{ VectorReduceByKey }
+  import IR.{ VectorReduceByKey, VectorCache }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
   def makeTypeFor(name: String, fields: Iterable[String]) = {
@@ -212,6 +233,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "%s.groupByKey".format(quote(vector)))
       case red @ VectorReduce(vector, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(vector), handleClosure(red.closure)))
       case red @ VectorReduceByKey(vector, f) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(vector), handleClosure(red.closure)))
+      case v @ VectorCache(vector) => emitValDef(sym, "%s.cache()".format(quote(vector)))
       case GetArgs() => emitValDef(sym, "sparkInputArgs.drop(1); // First argument is for spark context")
       case _ => super.emitNode(sym, rhs)
     }
@@ -269,7 +291,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
         } while (oneFound)
       }
       if (insertNarrowingMaps) {
-        //inserting narrowing vectormaps where analyzer sais it should 
+        //inserting narrowing vectormaps where analyzer says it should 
         do {
           oneFound = false
           val analyzer = newAnalyzer(transformer.currentState, typeHandler)

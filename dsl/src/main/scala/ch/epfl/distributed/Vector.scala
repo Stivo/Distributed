@@ -58,7 +58,7 @@ trait VectorOps extends VectorBase {
     def filter(f: Rep[A] => Rep[Boolean]) = vector_filter(vector, f)
     def save(path: Rep[String]) = vector_save(vector, path)
     def ++(vector2: Rep[Vector[A]]) = vector_++(vector, vector2)
-    //    def cache = vector_cache(vector)
+    
   }
 
   implicit def repVecToVecIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[Vector[(K, Iterable[V])]]) = new vecIterableTupleOpsCls(x)
@@ -78,7 +78,6 @@ trait VectorOps extends VectorBase {
   def vector_map[A: Manifest, B: Manifest](vector: Rep[Vector[A]], f: Rep[A] => Rep[B]): Rep[Vector[B]]
   def vector_flatMap[A: Manifest, B: Manifest](vector: Rep[Vector[A]], f: Rep[A] => Rep[Iterable[B]]): Rep[Vector[B]]
   def vector_filter[A: Manifest](vector: Rep[Vector[A]], f: Rep[A] => Rep[Boolean]): Rep[Vector[A]]
-  //  def vector_cache[A: Manifest](vector: Rep[Vector[A]]): Rep[Vector[A]]
   def vector_save[A: Manifest](vector: Rep[Vector[A]], path: Rep[String]): Rep[Unit]
   def vector_++[A: Manifest](vector1: Rep[Vector[A]], vector2: Rep[Vector[A]]): Rep[Vector[A]]
   def vector_reduce[K: Manifest, V: Manifest](vector: Rep[Vector[(K, Iterable[V])]], f: (Rep[V], Rep[V]) => Rep[V]): Rep[Vector[(K, V)]]
@@ -132,6 +131,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
 
   trait ComputationNode extends VectorNode {
     def getTypes: (Manifest[_], Manifest[_])
+    def getElementTypes : (Manifest[_], Manifest[_]) = (getTypes._1.typeArguments(0), getTypes._2.typeArguments(0))
   }
 
   trait ComputationNodeTyped[A, B] extends ComputationNode {

@@ -58,14 +58,18 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
 
     lazy val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
 
-    lazy val narrowBeforeCandidates: Iterable[VectorNode] = nodes.filter(isNarrowBeforeCandidate)
+    lazy val narrowBeforeCandidates: Iterable[ComputationNode] = nodes.filter(isNarrowBeforeCandidate)
+     //   Nodes which need narrowing should have their types defined
+    	.map(_.asInstanceOf[ComputationNode])
 
     def isNarrowBeforeCandidate(x: VectorNode) = x match {
       case VectorGroupByKey(x) => true
       case _ => false
     }
 
-    lazy val narrowBefore: Iterable[VectorNode] = narrowBeforeCandidates.filter(!_.metaInfos.contains("insertedNarrower"))
+    lazy val narrowBefore: Iterable[ComputationNode] = narrowBeforeCandidates
+    		.filter(!_.metaInfos.contains("insertedNarrower"))
+    		.filter(x => !isSimpleType(x.getElementTypes._1))
 
     def getNodesForSymbol(x: Sym[_]) = {
       def getInputs(x: Sym[_]) = {

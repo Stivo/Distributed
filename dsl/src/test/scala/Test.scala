@@ -24,7 +24,7 @@ trait ComplexStructExp extends ComplexBase with StructExp with PrimitiveOps {
   def infix_abs(c: Rep[Complex]): Rep[Double] = field[Double](c, "abs")
 }
 
-trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps {
+trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps with SparkVectorOps {
 
   def nested(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
@@ -74,7 +74,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps {
 
   def simple(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
-    words1.filter(_.matches("\\d+")).map(_.toInt).map(_ + 3)
+    words1.filter(_.matches("\\d+")).map(_.toInt).map(_ + 3).cache
       .save(getArgs(1))
     //)(0)
     unit(())
@@ -148,7 +148,7 @@ class TestVectors extends Suite {
       val sw = new StringWriter()
       var pw = new PrintWriter(sw)
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.wordCount, "g", pw)
+      codegen.emitSource(dsl.simple, "g", pw)
 
       pw.flush
       //      println(sw.toString)
