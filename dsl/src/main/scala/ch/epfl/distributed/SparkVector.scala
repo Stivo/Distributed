@@ -169,7 +169,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       var result0 = result0B.map(getBlockResultFull)
       var state = new TransformationState(currentScope0In, result0)
       val transformer = new Transformer(state)
-      val pullDeps = new PullSparkDependenciesTransformation()
+      var pullDeps = new PullSparkDependenciesTransformation()
       transformer.doTransformation(pullDeps, 500)
 
       // TODO investigate
@@ -180,6 +180,8 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       //      transformer.doTransformation(new ReduceByKeyTransformation, 500)
 
       transformer.doTransformation(pullDeps, 500)
+      
+      // replace maps with narrower ones
       var oneFound = false
       do {
         oneFound = false
@@ -204,6 +206,25 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
           case _ =>
         }
       } while (oneFound)
+      // inserting narrowing vectormaps where analyzer sais it should 
+      do {
+        oneFound = false
+        val analyzer = new Analyzer(transformer.currentState, typeHandler)
+        analyzer.makeFieldAnalysis
+        for (x <- analyzer.narrowBefore.take(1)) {
+          pullDeps = new PullSparkDependenciesTransformation
+          x.metaInfos += "insertedNarrower" -> true
+          val inserter = new InsertMapNarrowTransformation(analyzer.getInputs(x).head, x.directFieldReads.toList)
+          transformer.doTransformation(inserter, 1)
+          transformer.doTransformation(pullDeps, 500)
+          val analyzer2 = new Analyzer(transformer.currentState, typeHandler)
+          analyzer2.makeFieldAnalysis
+          transformer.doTransformation(new MapNarrowTransformationNew(inserter.lastOut, typeHandler), 2)
+          transformer.doTransformation(pullDeps, 500)
+          oneFound = true
+        }
+      } while (oneFound)
+      transformer.doTransformation(pullDeps, 500)
       transformer.doTransformation(new TypeTransformations(typeHandler), 500)
       transformer.doTransformation(pullDeps, 500)
       val out = new FileOutputStream("test.dot")

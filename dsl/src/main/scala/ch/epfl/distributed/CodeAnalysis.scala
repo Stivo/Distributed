@@ -28,33 +28,35 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
   class Analyzer(state: TransformationState, typeHandler: TypeHandler) {
-    val nodes = state.ttps.flatMap {
+    lazy val nodes = state.ttps.flatMap {
       _ match {
         case TTPDef(x: VectorNode) => Some(x)
         case TTPDef(Reflect(x: VectorNode, _, _)) => Some(x)
         case _ => None
       }
     }
-    val lambdas = state.ttps.flatMap {
+    lazy val lambdas = state.ttps.flatMap {
       _ match {
         case TTPDef(l @ Lambda(f, x, y)) => Some(l)
         case _ => None
       }
     }
-    val lambda2s = state.ttps.flatMap {
+    lazy val lambda2s = state.ttps.flatMap {
       _ match {
         case TTPDef(l @ IR.Lambda2(f, x1, x2, y)) => Some(l)
         case _ => None
       }
     }
-    val saves = nodes.filter { case v: VectorSave[_] => true; case _ => false }
+    lazy val saves = nodes.filter { case v: VectorSave[_] => true; case _ => false }
 
     def getInputs(x: VectorNode) = {
       val syms = IR.syms(x)
       syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.rhs match { case x: VectorNode => Some(x) case _ => None } }
     }
 
-    val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
+    lazy val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
+
+    lazy val narrowBefore = ordered.flatMap { case v @ VectorGroupByKey(_) if !v.metaInfos.contains("insertedNarrower") => Some(v) case _ => None }
 
     def getNodesForSymbol(x: Sym[_]) = {
       def getInputs(x: Sym[_]) = {

@@ -104,7 +104,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps {
   def findLogEntry(x: Rep[Unit]) = {
     val words = Vector("words1")
     //    words.map(_.contains(" ")).save("lines with more than one word")
-    val wordsTupled = words.map(x => (x, LogEntry(Random.nextLong(), Random.nextDouble, x)))
+    val wordsTupled = words.map(x => (x, LogEntry(Random.nextLong(), Random.nextDouble, x))).filter(_._2.timestamp > 0)
     val wordsGrouped = wordsTupled.groupByKey
     val counted = wordsGrouped.reduce((x, y) => if (x.request > y.request) x else y)
     counted.map(x => x._2.url)
@@ -148,7 +148,7 @@ class TestVectors extends Suite {
       val sw = new StringWriter()
       var pw = new PrintWriter(sw)
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.logEntry, "g", pw)
+      codegen.emitSource(dsl.findLogEntry, "g", pw)
 
       pw.flush
       //      println(sw.toString)

@@ -32,22 +32,26 @@ OR:
 An ugly hack, meaning that tuples will always use all their fields
 
 Decisions to take:
-- Tuples
+- Tuples => Unimportant for now, leave as is
 - VectorReduceByKey: Only used by spark, so put it in vector or not? If not, VectorAnalysis needs a spark subtrait. Cache is another example.
 
 
 TODO List:
-- FlatMap analysis: How should that work? Will only kill unneeded fields, not unneeded code. In that case, it's better to not do it.
-- Insert VectorMap narrowing nodes on edges. How to detect if this helps?
-- Get Spark build running (wait for 0.12 sbt?)
+- Refine finding of locations for inserting narrowing vectormaps
+- Allow optimizations to be turned off and on
+- Find benchmarks and implement them
 - Cache node for spark
-- merge filters
 - Implement Join2
 - Unit Tests. 
 	- Field analysis & narrowing
 	- Transformers & dependency pulling 
 	- Tests that check if the generated code compiles.
 - Compile external source files, like delite
+- Scoobi support
+
+Would be nice:
+- merge filters
+- Get Spark build running (wait for 0.12 sbt?)
 
 Easy, low priority tasks:
 - Add Tuple3, 4 etc

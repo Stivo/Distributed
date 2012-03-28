@@ -17,7 +17,8 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
     VectorFlatten,
     VectorGroupByKey,
     VectorReduce,
-    ComputationNode
+    ComputationNode,
+    VectorNode
   }
   import IR.{ TTP, TP, SubstTransformer, ThinDef }
   import IR.{ findDefinition }
@@ -140,8 +141,17 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
   }
 
   trait Transformation {
-
     def appliesToNode(inExp: Exp[_], t: Transformer): Boolean
+
+    def applyToNode(inExp: Exp[_], transformer: Transformer): (List[TTP], List[(Exp[_], Exp[_])])
+
+    override def toString =
+      this.getClass.getSimpleName.replaceAll("Transformation", "")
+        .split("(?=[A-Z])").mkString(" ")
+
+  }
+
+  trait StandardTransformation extends Transformation {
 
     def applyToNode(inExp: Exp[_], transformer: Transformer): (List[TTP], List[(Exp[_], Exp[_])]) = {
       val out = doTransformation(inExp);
@@ -152,59 +162,12 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
       val substs = List((inExp, outTp.sym))
       (ttps, substs)
     }
+
     def doTransformation(inExp: Exp[_]): Def[_]
 
-    override def toString =
-      this.getClass.getSimpleName.replaceAll("Transformation", "")
-        .split("(?=[A-Z])").mkString(" ")
-
   }
 
-  class SinkFlattenTransformation extends SimpleTransformation {
-    def doTransformationPure(inExp: Exp[_]) = inExp match {
-      case Def(vm @ VectorMap(Def(vf @ VectorFlatten(list)), func)) => {
-        val mappers = list.map { x =>
-          val mapper = new VectorMap(x, func)
-          val newDef = IR.toAtom2(mapper)
-          newDef
-        }
-        new VectorFlatten(mappers)
-      }
-      case _ => null
-    }
-
-  }
-
-  class MergeFlattenTransformation extends Transformation {
-    def appliesToNode(inExp: Exp[_], t: Transformer): Boolean = inExp match {
-      case Def(VectorFlatten(list)) => {
-        list.find { case Def(VectorFlatten(list2)) => true case _ => false }.isDefined
-      }
-      case _ => false
-    }
-
-    override def applyToNode(inExp: Exp[_], transformer: Transformer): (List[TTP], List[(Exp[_], Exp[_])]) = {
-      inExp match {
-        case Def(lower @ VectorFlatten(list)) =>
-          val flat2 = list.find { case Def(VectorFlatten(list2)) => true case _ => false }.get
-          flat2 match {
-            case d @ Def(upper @ VectorFlatten(list2)) =>
-              val out = new VectorFlatten(list.filterNot(_ == d) ++ list2)
-              var newDefs = List(out)
-              val ttps = newDefs.map(IR.findOrCreateDefinition(_)).map(fatten)
-              return (ttps, List((inExp, IR.findOrCreateDefinition(out).sym), (d, IR.findOrCreateDefinition(out).sym)))
-          }
-      }
-      throw new RuntimeException("Bug in merge flatten")
-    }
-
-    final def doTransformation(inExp: Exp[_]) = {
-      throw new RuntimeException("Should not be called directly")
-    }
-
-  }
-
-  trait SimpleTransformation extends Transformation {
+  trait SimpleTransformation extends StandardTransformation {
     override def appliesToNode(inExp: Exp[_], t: Transformer): Boolean = {
       doTransformationPure(inExp) != null
     }
@@ -233,6 +196,46 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
     }
   }
 
+  class MergeFlattenTransformation extends Transformation {
+    def appliesToNode(inExp: Exp[_], t: Transformer): Boolean = inExp match {
+      case Def(VectorFlatten(list)) => {
+        list.find { case Def(VectorFlatten(list2)) => true case _ => false }.isDefined
+      }
+      case _ => false
+    }
+
+    override def applyToNode(inExp: Exp[_], transformer: Transformer): (List[TTP], List[(Exp[_], Exp[_])]) = {
+      inExp match {
+        case Def(lower @ VectorFlatten(list)) =>
+          val flat2 = list.find { case Def(VectorFlatten(list2)) => true case _ => false }.get
+          flat2 match {
+            case d @ Def(upper @ VectorFlatten(list2)) =>
+              val out = new VectorFlatten(list.filterNot(_ == d) ++ list2)
+              var newDefs = List(out)
+              val ttps = newDefs.map(IR.findOrCreateDefinition(_)).map(fatten)
+              return (ttps, List((inExp, IR.findOrCreateDefinition(out).sym), (d, IR.findOrCreateDefinition(out).sym)))
+          }
+      }
+      throw new RuntimeException("Bug in merge flatten")
+    }
+
+  }
+
+  class SinkFlattenTransformation extends SimpleTransformation {
+    def doTransformationPure(inExp: Exp[_]) = inExp match {
+      case Def(vm @ VectorMap(Def(vf @ VectorFlatten(list)), func)) => {
+        val mappers = list.map { x =>
+          val mapper = new VectorMap(x, func)
+          val newDef = IR.toAtom2(mapper)
+          newDef
+        }
+        new VectorFlatten(mappers)
+      }
+      case _ => null
+    }
+
+  }
+
   class MapMergeTransformation extends SimpleSingleConsumerTransformation {
 
     def doTransformationPure(inExp: Exp[_]) = inExp match {
@@ -243,7 +246,7 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
     }
   }
 
-  class PullDependenciesTransformation extends Transformation {
+  class PullDependenciesTransformation extends StandardTransformation {
 
     var _doneNodes = Set[Any]()
 
@@ -292,6 +295,11 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
   //	class FilterMergeTransformation extends ComposePredicateBooleanOpsExp with FilterMergeTransformationHack 
 
   class MapNarrowTransformationNew(target: IR.Lambda[_, _], fieldReads: List[FieldRead], typeHandler: TypeHandler) extends SimpleTransformation {
+    def this(target: VectorNode with ClosureNode[_, _], typeHandler: TypeHandler) = this(
+      target.closure match {
+        case Def(l @ IR.Lambda(_, _, _)) => l
+      }, target.successorFieldReads.toList, typeHandler)
+
     def doTransformationPure(inExp: Exp[_]) = inExp match {
       case Def(vm @ IR.Lambda(f, x, IR.Block(y))) if vm == target => {
         val fields = fieldReads.map(_.path)
@@ -361,6 +369,20 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
     }
   }
 
+  class InsertMapNarrowTransformation(target: VectorNode, fields: List[FieldRead]) extends SimpleTransformation {
+    var lastOut: VectorMap[_, _] = null
+    def doTransformationPure(inExp: Exp[_]) = inExp match {
+      case Def(x: ComputationNode) if target == x => {
+        val typ = (x.getTypes._2.typeArguments(0))
+        val out = VectorMap(inExp.asInstanceOf[Exp[Vector[Any]]], { x: IR.Rep[_] => x })(IR.mtype(typ), IR.mtype(typ))
+        lastOut = out
+        out
+      }
+      case _ => null
+    }
+
+  }
+
   class FieldOnStructReadTransformation extends Transformation {
 
     def appliesToNode(inExp: Exp[_], t: Transformer): Boolean = inExp match {
@@ -375,7 +397,6 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
       }
       case _ => throw new RuntimeException("should not be called if appliesToNode returns false")
     }
-    def doTransformation(inExp: Exp[_]): Def[_] = { throw new RuntimeException("should not be called") }
   }
 
   class TypeTransformations(val typeHandler: TypeHandler) extends SimpleTransformation {
