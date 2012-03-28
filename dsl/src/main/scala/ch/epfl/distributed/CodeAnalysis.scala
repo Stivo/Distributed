@@ -6,7 +6,7 @@ import scala.collection.mutable
 import java.util.regex.Pattern
 import scala.util.Random
 
-trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matchers {
+trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations with Matchers {
 
   val IR: VectorOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -26,6 +26,8 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
   import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
   import IR.{ ClosureNode, Closure2Node, freqHot, freqNormal, Lambda, Lambda2 }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
+
+  def newAnalyzer(state: TransformationState, typeHandlerForUse: TypeHandler = typeHandler) = new Analyzer(state, typeHandlerForUse)
 
   class Analyzer(state: TransformationState, typeHandler: TypeHandler) {
     lazy val nodes = state.ttps.flatMap {
@@ -56,7 +58,14 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
 
     lazy val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
 
-    lazy val narrowBefore = ordered.flatMap { case v @ VectorGroupByKey(_) if !v.metaInfos.contains("insertedNarrower") => Some(v) case _ => None }
+    lazy val narrowBeforeCandidates: Iterable[VectorNode] = nodes.filter(isNarrowBeforeCandidate)
+
+    def isNarrowBeforeCandidate(x: VectorNode) = x match {
+      case VectorGroupByKey(x) => true
+      case _ => false
+    }
+
+    lazy val narrowBefore: Iterable[VectorNode] = narrowBeforeCandidates.filter(!_.metaInfos.contains("insertedNarrower"))
 
     def getNodesForSymbol(x: Sym[_]) = {
       def getInputs(x: Sym[_]) = {
@@ -130,10 +139,7 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
           val id = "id_" + Random.nextString(20)
           v.metaInfos(id) = true
           // create narrowing transformation for this map
-          var ll: IR.Lambda[_, _] = v.closure match {
-            case Def(l @ IR.Lambda(_, _, _)) => l
-          }
-          val narrowMapTransformation = new MapNarrowTransformationNew(ll, node.successorFieldReads.toList, typeHandler)
+          val narrowMapTransformation = new MapNarrowTransformationNew(v, typeHandler)
           transformer.transformations = List(narrowMapTransformation)
           // run transformation
           if (!transformer.doOneTransformation) {
@@ -144,7 +150,7 @@ trait VectorAnalysis extends ScalaGenVector with VectorTransformations with Matc
           transformer.doTransformation(new FieldOnStructReadTransformation, 500)
           transformer.doTransformation(pullDeps, 500)
           // analyze field reads of the new function
-          val a2 = new Analyzer(transformer.currentState, typeHandler)
+          val a2 = newAnalyzer(transformer.currentState, typeHandler)
           val candidates = transformer.currentState.ttps.flatMap {
             case TTPDef(vm @ VectorMap(_, _)) if (vm.metaInfos.contains(id)) => Some(vm)
             case _ => None

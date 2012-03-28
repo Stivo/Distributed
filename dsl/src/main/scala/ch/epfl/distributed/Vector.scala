@@ -285,86 +285,7 @@ trait VectorImplOps extends VectorOps with FunctionsExp {
 
 trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
   val IR: VectorOpsExp
-}
-
-trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
-  val IR: VectorOpsExp
-  import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
-  import IR.{
-    NewVector,
-    VectorSave,
-    VectorMap,
-    VectorFilter,
-    VectorFlatMap,
-    VectorFlatten,
-    VectorGroupByKey,
-    VectorReduce,
-    ComputationNode,
-    VectorNode,
-    GetArgs
-  }
-  import IR.{ SimpleStruct }
-  import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
-  import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
-  import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
-
-  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
-    case nv @ NewVector(filename) => emitValDef(sym, "New vector created from %s with type %s".format(filename, nv.mA))
-    case vs @ VectorSave(vector, filename) => stream.println("Saving vector %s (of type %s) to %s".format(vector, vs.mA, filename))
-    case vm @ VectorMap(vector, function) => emitValDef(sym, "mapping vector %s with function %s, type %s => %s".format(vector, quote(vm.closure), vm.mA, vm.mB))
-    case vf @ VectorFilter(vector, function) => emitValDef(sym, "filtering vector %s with function %s".format(vector, function))
-    case vm @ VectorFlatMap(vector, function) => emitValDef(sym, "flat mapping vector %s with function %s".format(vector, function))
-    case vm @ VectorFlatten(v1) => emitValDef(sym, "flattening vectors %s".format(v1))
-    case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "grouping vector by key")
-    case red @ VectorReduce(vector, f) => emitValDef(sym, "reducing vector")
-    case GetArgs() => emitValDef(sym, "getting the arguments")
-    case IR.Lambda(_, _, _) if inlineClosures =>
-    case IR.Lambda2(_, _, _, _) if inlineClosures =>
-    case _ => super.emitNode(sym, rhs)
-  }
-
-  var typeHandler: TypeHandler = null
-
-  def hasVectorNodes(ttps: List[TTP]) = !ttps.flatMap { TTPDef.unapply }.flatMap { case x: VectorNode => Some(x) case _ => None }.isEmpty
-
-  override def fattenAll(e: List[TP[Any]]): List[TTP] = {
-    val out = super.fattenAll(e)
-    if (!typeHandler.isInstanceOf[TypeHandler] || hasVectorNodes(out)) {
-      typeHandler = new TypeHandler(out)
-    }
-    out
-  }
-
-  def writeClosure(closure: Exp[_]) = {
-    val sw = new StringWriter()
-    val pw = new PrintWriter(sw)
-    closure match {
-      case Def(Lambda(fun, x, y)) => {
-        pw.println("{ %s => ".format(quote(x)))
-        emitBlock(y)(pw)
-        pw.println(quote(getBlockResult(y)))
-        pw.print("}")
-      }
-      case Def(Lambda2(fun, x1, x2, y)) => {
-        pw.println("{ (%s, %s) => ".format(quote(x1), quote(x2)))
-        emitBlock(y)(pw)
-        pw.println(quote(getBlockResult(y)))
-        pw.print("}")
-      }
-    }
-    pw.flush
-    sw.toString
-  }
-
-  def inlineClosures = false
-
-  def handleClosure(closure: Exp[_]) = {
-    if (inlineClosures) {
-      writeClosure(closure)
-    } else {
-      quote(closure)
-    }
-  }
+  import IR.{ TTP, ThinDef, SimpleStruct }
 
   class TypeHandler(ttps: List[TTP]) {
     trait PartInfo[A] {
@@ -433,6 +354,87 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers {
       restOfPath(pathParts.drop(1), out)
     }
 
+  }
+
+  var typeHandler: TypeHandler = null
+
+}
+
+trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTransformations with VectorAnalysis {
+  val IR: VectorOpsExp
+  import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
+  import IR.{
+    NewVector,
+    VectorSave,
+    VectorMap,
+    VectorFilter,
+    VectorFlatMap,
+    VectorFlatten,
+    VectorGroupByKey,
+    VectorReduce,
+    ComputationNode,
+    VectorNode,
+    GetArgs
+  }
+  import IR.{ SimpleStruct }
+  import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
+  import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
+  import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
+
+  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
+    case nv @ NewVector(filename) => emitValDef(sym, "New vector created from %s with type %s".format(filename, nv.mA))
+    case vs @ VectorSave(vector, filename) => stream.println("Saving vector %s (of type %s) to %s".format(vector, vs.mA, filename))
+    case vm @ VectorMap(vector, function) => emitValDef(sym, "mapping vector %s with function %s, type %s => %s".format(vector, quote(vm.closure), vm.mA, vm.mB))
+    case vf @ VectorFilter(vector, function) => emitValDef(sym, "filtering vector %s with function %s".format(vector, function))
+    case vm @ VectorFlatMap(vector, function) => emitValDef(sym, "flat mapping vector %s with function %s".format(vector, function))
+    case vm @ VectorFlatten(v1) => emitValDef(sym, "flattening vectors %s".format(v1))
+    case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "grouping vector by key")
+    case red @ VectorReduce(vector, f) => emitValDef(sym, "reducing vector")
+    case GetArgs() => emitValDef(sym, "getting the arguments")
+    case IR.Lambda(_, _, _) if inlineClosures =>
+    case IR.Lambda2(_, _, _, _) if inlineClosures =>
+    case _ => super.emitNode(sym, rhs)
+  }
+
+  def hasVectorNodes(ttps: List[TTP]) = !ttps.flatMap { TTPDef.unapply }.flatMap { case x: VectorNode => Some(x) case _ => None }.isEmpty
+
+  override def fattenAll(e: List[TP[Any]]): List[TTP] = {
+    val out = super.fattenAll(e)
+    if (!typeHandler.isInstanceOf[TypeHandler] || hasVectorNodes(out)) {
+      typeHandler = new TypeHandler(out)
+    }
+    out
+  }
+
+  def writeClosure(closure: Exp[_]) = {
+    val sw = new StringWriter()
+    val pw = new PrintWriter(sw)
+    closure match {
+      case Def(Lambda(fun, x, y)) => {
+        pw.println("{ %s => ".format(quote(x)))
+        emitBlock(y)(pw)
+        pw.println(quote(getBlockResult(y)))
+        pw.print("}")
+      }
+      case Def(Lambda2(fun, x1, x2, y)) => {
+        pw.println("{ (%s, %s) => ".format(quote(x1), quote(x2)))
+        emitBlock(y)(pw)
+        pw.println(quote(getBlockResult(y)))
+        pw.print("}")
+      }
+    }
+    pw.flush
+    sw.toString
+  }
+
+  def inlineClosures = false
+
+  def handleClosure(closure: Exp[_]) = {
+    if (inlineClosures) {
+      writeClosure(closure)
+    } else {
+      quote(closure)
+    }
   }
 
 }

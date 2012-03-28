@@ -39,13 +39,18 @@ trait SparkVectorOpsExp extends VectorOpsExp {
   }
 
   override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = {
-    (e match {
+    val out = (e match {
       case v @ VectorReduceByKey(vector, func) => toAtom(
         new { override val overrideClosure = Some(f(v.closure)) } with VectorReduceByKey(f(vector), f(func))(v.mKey, v.mValue)
       )(mtype(manifest[A]))
 
       case _ => super.mirror(e, f)
-    }).asInstanceOf[Exp[A]]
+    })
+    (e, out) match {
+      case (x: VectorNode, Def(y: VectorNode)) => copyMetaInfo(x, y)
+      case _ =>
+    }
+    out.asInstanceOf[Exp[A]]
   }
 }
 
@@ -81,7 +86,58 @@ trait SparkTransformations extends VectorTransformations {
 
 }
 
-trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransformations with SparkTransformations with Matchers with VectorAnalysis {
+trait SparkVectorAnalysis extends VectorAnalysis {
+  val IR: SparkVectorOpsExp
+  import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
+  import IR.{
+    NewVector,
+    VectorSave,
+    VectorMap,
+    VectorFilter,
+    VectorFlatMap,
+    VectorFlatten,
+    VectorGroupByKey,
+    VectorReduce,
+    ComputationNode,
+    VectorNode,
+    VectorReduceByKey,
+    GetArgs
+  }
+  import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
+  import IR.{ ClosureNode, Closure2Node, freqHot, freqNormal, Lambda, Lambda2 }
+  import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
+
+  override def newAnalyzer(state: TransformationState, typeHandlerForUse: TypeHandler = typeHandler) = new SparkAnalyzer(state, typeHandlerForUse)
+
+  class SparkAnalyzer(state: TransformationState, typeHandler: TypeHandler) extends Analyzer(state, typeHandler) {
+
+    //TODO add cache node here
+    override def isNarrowBeforeCandidate(x: VectorNode) = x match {
+      case VectorReduceByKey(x, func) => true
+      case _ => false
+    }
+
+    override def computeFieldReads(node: VectorNode): Set[FieldRead] = node match {
+      case v @ VectorReduceByKey(in, func) => {
+        // analyze function
+        // convert the analyzed accesses to accesses of input._2
+        val part1 = (analyzeFunction(v) ++ Set(FieldRead("input")))
+          .map(_.path.drop(5))
+          .map(x => "input._2" + x)
+          .map(FieldRead)
+        // add the accesses from successors
+        val part2 = v.successorFieldReads
+        val part3 = visitAll("input._1", v.getTypes._1.typeArguments(0))
+        (part1 ++ part2 ++ part3).toSet
+      }
+      // TODO cache node case (simple typepreserving, but anyway)
+      case _ => super.computeFieldReads(node)
+    }
+  }
+
+}
+
+trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransformations with SparkTransformations with Matchers with SparkVectorAnalysis {
 
   val IR: SparkVectorOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -163,6 +219,9 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     out
   }
 
+  var narrowExistingMaps = true
+  var insertNarrowingMaps = true
+
   override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
     if (hasVectorNodes(currentScope0In)) {
       // set up transformer
@@ -176,64 +235,67 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       //      transformer.currentState.printAll("Before map merge")
       // perform spark optimizations
       transformer.doTransformation(new MapMergeTransformation, 500)
-      //      transformer.currentState.printAll("After map merge")
-      //      transformer.doTransformation(new ReduceByKeyTransformation, 500)
-
       transformer.doTransformation(pullDeps, 500)
-      
+      //      transformer.currentState.printAll("After map merge")
+      transformer.doTransformation(new ReduceByKeyTransformation, 500)
+      //pullDeps = new PullSparkDependenciesTransformation()
+      transformer.doTransformation(pullDeps, 500)
+
       // replace maps with narrower ones
       var oneFound = false
-      do {
-        oneFound = false
-        // perform field usage analysis
-        val analyzer = new Analyzer(transformer.currentState, typeHandler)
-        analyzer.makeFieldAnalysis
-        var goOn = true
-        analyzer.ordered.foreach {
-          case _ if !goOn =>
-          case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed")
-            && !SimpleType.unapply(v.getClosureTypes._2).isDefined
-            && analyzer.hasObjectCreationInClosure(v) => {
-            oneFound = true
-            v.metaInfos += (("narrowed", true))
-            // transformer.currentState.printAll("Before narrowing")
-            transformer.doTransformation(new MapNarrowTransformationNew(SomeDef.unapply(v.closure).get.asInstanceOf[Lambda[_, _]], v.successorFieldReads.toList, typeHandler), 50)
-            transformer.doTransformation(pullDeps, 500)
-            // transformer.currentState.printAll("After narrowing")
-            transformer.doTransformation(new FieldOnStructReadTransformation, 500)
-            goOn = false
+      if (narrowExistingMaps) {
+        do {
+          oneFound = false
+          // perform field usage analysis
+          val analyzer = newAnalyzer(transformer.currentState, typeHandler)
+          analyzer.makeFieldAnalysis
+          var goOn = true
+          analyzer.ordered.foreach {
+            case _ if !goOn =>
+            case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed")
+              && !SimpleType.unapply(v.getClosureTypes._2).isDefined
+              && analyzer.hasObjectCreationInClosure(v) => {
+              oneFound = true
+              v.metaInfos += (("narrowed", true))
+              // transformer.currentState.printAll("Before narrowing")
+              transformer.doTransformation(new MapNarrowTransformationNew(v, typeHandler), 50)
+              transformer.doTransformation(pullDeps, 500)
+              // transformer.currentState.printAll("After narrowing")
+              transformer.doTransformation(new FieldOnStructReadTransformation, 500)
+              goOn = false
+            }
+            case _ =>
           }
-          case _ =>
-        }
-      } while (oneFound)
-      // inserting narrowing vectormaps where analyzer sais it should 
-      do {
-        oneFound = false
-        val analyzer = new Analyzer(transformer.currentState, typeHandler)
-        analyzer.makeFieldAnalysis
-        for (x <- analyzer.narrowBefore.take(1)) {
-          pullDeps = new PullSparkDependenciesTransformation
-          x.metaInfos += "insertedNarrower" -> true
-          val inserter = new InsertMapNarrowTransformation(analyzer.getInputs(x).head, x.directFieldReads.toList)
-          transformer.doTransformation(inserter, 1)
-          transformer.doTransformation(pullDeps, 500)
-          val analyzer2 = new Analyzer(transformer.currentState, typeHandler)
-          analyzer2.makeFieldAnalysis
-          transformer.doTransformation(new MapNarrowTransformationNew(inserter.lastOut, typeHandler), 2)
-          transformer.doTransformation(pullDeps, 500)
-          oneFound = true
-        }
-      } while (oneFound)
+        } while (oneFound)
+      }
+      if (insertNarrowingMaps) {
+        //inserting narrowing vectormaps where analyzer sais it should 
+        do {
+          oneFound = false
+          val analyzer = newAnalyzer(transformer.currentState, typeHandler)
+          analyzer.makeFieldAnalysis
+          for (x <- analyzer.narrowBefore.take(1)) {
+            pullDeps = new PullSparkDependenciesTransformation
+            x.metaInfos += "insertedNarrower" -> true
+            val inserter = new InsertMapNarrowTransformation(analyzer.getInputs(x).head, x.directFieldReads.toList)
+            transformer.doTransformation(inserter, 1)
+            transformer.doTransformation(pullDeps, 500)
+            val analyzer2 = newAnalyzer(transformer.currentState, typeHandler)
+            analyzer2.makeFieldAnalysis
+            transformer.doTransformation(new MapNarrowTransformationNew(inserter.lastOut, typeHandler), 2)
+            transformer.doTransformation(pullDeps, 500)
+            oneFound = true
+          }
+        } while (oneFound)
+      }
       transformer.doTransformation(pullDeps, 500)
       transformer.doTransformation(new TypeTransformations(typeHandler), 500)
       transformer.doTransformation(pullDeps, 500)
       val out = new FileOutputStream("test.dot")
-      val analyzer = new Analyzer(transformer.currentState, typeHandler)
+      val analyzer = newAnalyzer(transformer.currentState, typeHandler)
       analyzer.makeFieldAnalysis
       out.write(analyzer.exportToGraph.getBytes)
       out.close
-      //      transformer.currentState.ttps.foreach(println)
-      // insert vectormaps and replace creation of structs with narrower types
 
       state = transformer.currentState
       val currentScope0 = state.ttps

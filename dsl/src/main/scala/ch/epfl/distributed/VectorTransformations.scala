@@ -4,7 +4,7 @@ import scala.virtualization.lms.common.ScalaGenBase
 import scala.virtualization.lms.common.BooleanOps
 import scala.collection.mutable
 
-trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matchers {
+trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector with Matchers {
 
   val IR: VectorOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const }
@@ -147,7 +147,7 @@ trait VectorTransformations extends ScalaGenBase with ScalaGenVector with Matche
 
     override def toString =
       this.getClass.getSimpleName.replaceAll("Transformation", "")
-        .split("(?=[A-Z])").mkString(" ")
+        .split("(?=[A-Z])").mkString(" ").trim
 
   }
 

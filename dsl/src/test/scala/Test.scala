@@ -148,7 +148,7 @@ class TestVectors extends Suite {
       val sw = new StringWriter()
       var pw = new PrintWriter(sw)
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.findLogEntry, "g", pw)
+      codegen.emitSource(dsl.wordCount, "g", pw)
 
       pw.flush
       //      println(sw.toString)
