@@ -32,23 +32,17 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
 
   class Analyzer(state: TransformationState, typeHandler: TypeHandler) {
     lazy val nodes = state.ttps.flatMap {
-      _ match {
         case TTPDef(x: VectorNode) => Some(x)
         case TTPDef(Reflect(x: VectorNode, _, _)) => Some(x)
         case _ => None
-      }
     }
     lazy val lambdas = state.ttps.flatMap {
-      _ match {
         case TTPDef(l @ Lambda(f, x, y)) => Some(l)
         case _ => None
-      }
     }
     lazy val lambda2s = state.ttps.flatMap {
-      _ match {
         case TTPDef(l @ IR.Lambda2(f, x1, x2, y)) => Some(l)
         case _ => None
-      }
     }
     lazy val saves = nodes.filter { case v: VectorSave[_] => true; case _ => false }
 
@@ -237,7 +231,7 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
           val reads = computeFieldReads(node)
           node.directFieldReads ++= reads
           getInputs(node).foreach { _.successorFieldReads ++= reads }
-          println("Computed field reads for " + node + " got " + reads)
+//          println("Computed field reads for " + node + " got " + reads)
       }
     }
 

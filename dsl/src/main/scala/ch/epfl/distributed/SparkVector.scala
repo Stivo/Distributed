@@ -206,8 +206,6 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
 
   val types = mutable.Map[String, String]()
 
-  override val inlineClosures = false
-
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = {
     val out = rhs match {
       case IR.Field(tuple, x, tp) => emitValDef(sym, "%s.%s".format(quote(tuple), x))
@@ -242,6 +240,8 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     //    println(sym+" "+rhs)
     out
   }
+  
+  override val inlineClosures = false
 
   var narrowExistingMaps = true
   var insertNarrowingMaps = true
@@ -347,7 +347,8 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       state = transformer.currentState
       val currentScope0 = state.ttps
       result0 = state.results
-
+      // hack: should maybe not add all nodes here, but seems to work, as we are in the top scope
+      innerScope ++= IR.globalDefs.filter(!innerScope.contains(_))
       super.focusExactScopeFat(currentScope0)(result0.map(IR.Block(_)))(body)
     } else {
       super.focusExactScopeFat(currentScope0In)(result0B)(body)
