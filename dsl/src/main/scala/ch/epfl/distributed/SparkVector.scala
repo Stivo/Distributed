@@ -18,8 +18,8 @@ trait SparkVectorOps extends VectorOps {
   class vecSparkOpsCls[A: Manifest](vector: Rep[Vector[A]]) {
     def cache = vector_cache(vector)
   }
-  
-  def vector_cache[A : Manifest](vector : Rep[Vector[A]]) : Rep[Vector[A]]
+
+  def vector_cache[A: Manifest](vector: Rep[Vector[A]]): Rep[Vector[A]]
 }
 
 trait SparkVectorOpsExp extends VectorOpsExp with SparkVectorOps {
@@ -31,13 +31,13 @@ trait SparkVectorOpsExp extends VectorOpsExp with SparkVectorOps {
     def getClosureTypes = ((manifest[V], manifest[V]), manifest[V])
     def getType = manifest[Vector[(K, V)]]
   }
-  
+
   case class VectorCache[A: Manifest](in: Exp[Vector[A]]) extends Def[Vector[A]] with PreservingTypeComputation[Vector[A]] {
     val mA = manifest[A]
     def getType = manifest[Vector[A]]
   }
-  
-  override def vector_cache[A : Manifest](in : Rep[Vector[A]]) = VectorCache[A](in)
+
+  override def vector_cache[A: Manifest](in: Rep[Vector[A]]) = VectorCache[A](in)
 
   //  override def vector_map[A: Manifest, B: Manifest](vector: Exp[Vector[A]], f: Exp[A] => Exp[B]) = vector match {
   //    case Def(vm @ VectorMap(in, f2)) => VectorMap(vector, f2.andThen(f))(mtype(vm.mA), manifest[B]) 
@@ -46,13 +46,13 @@ trait SparkVectorOpsExp extends VectorOpsExp with SparkVectorOps {
 
   override def syms(e: Any): List[Sym[Any]] = e match {
     case red: VectorReduceByKey[_, _] => syms(red.in, red.closure)
-    case v : VectorCache[_] => syms(v.in)
+    case v: VectorCache[_] => syms(v.in)
     case _ => super.syms(e)
   }
 
   override def symsFreq(e: Any): List[(Sym[Any], Double)] = e match {
     case red: VectorReduceByKey[_, _] => freqHot(red.closure) ++ freqNormal(red.in)
-    case v : VectorCache[_] => freqNormal(v.in)
+    case v: VectorCache[_] => freqNormal(v.in)
     case _ => super.symsFreq(e)
   }
 
@@ -133,7 +133,7 @@ trait SparkVectorAnalysis extends VectorAnalysis {
     override def isNarrowBeforeCandidate(x: VectorNode) = x match {
       case VectorReduceByKey(_, _) => true
       case VectorCache(_) => true
-      case _ => false
+      case x => super.isNarrowBeforeCandidate(x)
     }
 
     override def computeFieldReads(node: VectorNode): Set[FieldRead] = node match {
@@ -149,9 +149,9 @@ trait SparkVectorAnalysis extends VectorAnalysis {
         val part3 = visitAll("input._1", v.getTypes._1.typeArguments(0))
         (part1 ++ part2 ++ part3).toSet
       }
-      
-      case v@VectorCache(in) => node.successorFieldReads.toSet
-      
+
+      case v @ VectorCache(in) => node.successorFieldReads.toSet
+
       case _ => super.computeFieldReads(node)
     }
   }
@@ -170,6 +170,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     VectorFlatMap,
     VectorFlatten,
     VectorGroupByKey,
+    VectorJoin,
     VectorReduce,
     ComputationNode,
     VectorNode,
@@ -231,6 +232,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
         emitValDef(sym, out)
       }
       case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "%s.groupByKey".format(quote(vector)))
+      case v @ VectorJoin(left, right) => emitValDef(sym, "%s.join(%s)".format(quote(left), quote(right)))
       case red @ VectorReduce(vector, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(vector), handleClosure(red.closure)))
       case red @ VectorReduceByKey(vector, f) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(vector), handleClosure(red.closure)))
       case v @ VectorCache(vector) => emitValDef(sym, "%s.cache()".format(quote(vector)))
@@ -243,6 +245,17 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
 
   var narrowExistingMaps = true
   var insertNarrowingMaps = true
+  var reduceByKey = true
+  var mapMerge = true
+
+  var allOff = false
+  if (allOff) {
+    narrowExistingMaps = false
+    insertNarrowingMaps = false
+    reduceByKey = false
+    mapMerge = false
+
+  }
 
   override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
     if (hasVectorNodes(currentScope0In)) {
@@ -253,16 +266,18 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
       var pullDeps = new PullSparkDependenciesTransformation()
       transformer.doTransformation(pullDeps, 500)
 
-      // TODO investigate
-      //      transformer.currentState.printAll("Before map merge")
       // perform spark optimizations
-      transformer.doTransformation(new MapMergeTransformation, 500)
-      transformer.doTransformation(pullDeps, 500)
-      //      transformer.currentState.printAll("After map merge")
-      transformer.doTransformation(new ReduceByKeyTransformation, 500)
-      //pullDeps = new PullSparkDependenciesTransformation()
-      transformer.doTransformation(pullDeps, 500)
-
+      if (mapMerge) {
+        //      transformer.currentState.printAll("Before map merge")
+        transformer.doTransformation(new MapMergeTransformation, 500)
+        transformer.doTransformation(pullDeps, 500)
+        //      transformer.currentState.printAll("After map merge")
+      }
+      if (reduceByKey) {
+        transformer.doTransformation(new ReduceByKeyTransformation, 500)
+        //pullDeps = new PullSparkDependenciesTransformation()
+        transformer.doTransformation(pullDeps, 500)
+      }
       // replace maps with narrower ones
       var oneFound = false
       if (narrowExistingMaps) {
@@ -296,17 +311,27 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
           oneFound = false
           val analyzer = newAnalyzer(transformer.currentState, typeHandler)
           analyzer.makeFieldAnalysis
-          for (x <- analyzer.narrowBefore.take(1)) {
-            pullDeps = new PullSparkDependenciesTransformation
-            x.metaInfos += "insertedNarrower" -> true
-            val inserter = new InsertMapNarrowTransformation(analyzer.getInputs(x).head, x.directFieldReads.toList)
-            transformer.doTransformation(inserter, 1)
-            transformer.doTransformation(pullDeps, 500)
-            val analyzer2 = newAnalyzer(transformer.currentState, typeHandler)
-            analyzer2.makeFieldAnalysis
-            transformer.doTransformation(new MapNarrowTransformationNew(inserter.lastOut, typeHandler), 2)
-            transformer.doTransformation(pullDeps, 500)
-            oneFound = true
+          for (x <- analyzer.narrowBefore) {
+            if (!oneFound) {
+              pullDeps = new PullSparkDependenciesTransformation
+              val increase = x.metaInfos.getOrElse("insertedNarrowers", 0).asInstanceOf[Int]
+
+              analyzer.getInputs(x).foreach { input =>
+                x.metaInfos("insertedNarrowers") = 1 + increase
+                val inserter = new InsertMapNarrowTransformation(input, x.directFieldReads.toList)
+                transformer.doTransformation(inserter, 1)
+                inserter.lastOut match {
+                  case None =>
+                  case Some(narrowThis) =>
+                    transformer.doTransformation(pullDeps, 500)
+                    val analyzer2 = newAnalyzer(transformer.currentState, typeHandler)
+                    analyzer2.makeFieldAnalysis
+                    transformer.doTransformation(new MapNarrowTransformationNew(narrowThis, typeHandler), 2)
+                    transformer.doTransformation(pullDeps, 500)
+                    oneFound = true
+                }
+              }
+            }
           }
         } while (oneFound)
       }

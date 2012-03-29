@@ -62,7 +62,7 @@ trait Matchers extends AbstractScalaGenVector {
       case _ => None
     }
   }
-  
-  def isSimpleType(x : Manifest[_]) = SimpleType.unapply(x).isDefined
+
+  def isSimpleType(x: Manifest[_]) = SimpleType.unapply(x).isDefined
 
 }

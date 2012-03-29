@@ -18,6 +18,7 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
     VectorFlatMap,
     VectorFlatten,
     VectorGroupByKey,
+    VectorJoin,
     VectorReduce,
     ComputationNode,
     VectorNode,
@@ -58,18 +59,23 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
 
     lazy val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
 
-    lazy val narrowBeforeCandidates: Iterable[ComputationNode] = nodes.filter(isNarrowBeforeCandidate)
-     //   Nodes which need narrowing should have their types defined
-    	.map(_.asInstanceOf[ComputationNode])
+    lazy val narrowBeforeCandidates: Iterable[VectorNode] = nodes.filter(isNarrowBeforeCandidate)
 
     def isNarrowBeforeCandidate(x: VectorNode) = x match {
       case VectorGroupByKey(x) => true
-      case _ => false
+      case VectorJoin(x, y) => true
+      case x => false
     }
 
-    lazy val narrowBefore: Iterable[ComputationNode] = narrowBeforeCandidates
-    		.filter(!_.metaInfos.contains("insertedNarrower"))
-    		.filter(x => !isSimpleType(x.getElementTypes._1))
+    lazy val narrowBefore: Iterable[VectorNode] = narrowBeforeCandidates
+      .filter { x =>
+        getInputs(x).size != x.metaInfos.getOrElse("insertedNarrowers", 0)
+      }
+      .filter {
+        case x: ComputationNode => !isSimpleType(x.getElementTypes._1)
+        case VectorJoin(l, r) => true
+        case _ => throw new RuntimeException("Add narrow before candidate here or in subclass")
+      }
 
     def getNodesForSymbol(x: Sym[_]) = {
       def getInputs(x: Sym[_]) = {
@@ -166,6 +172,17 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
 
         case v @ VectorMap(in, func) => analyzeFunction(v)
 
+        case v @ VectorJoin(Def(left: VectorNode), Def(right: VectorNode)) =>
+          def fieldRead(x: List[String]) = FieldRead("input." + x.mkString("."))
+          val reads = v.successorFieldReads.map(_.getPath.drop(1)).map {
+            case "_2" :: "_1" :: x => List(left) -> fieldRead("_2" :: x)
+            case "_2" :: "_2" :: x => List(right) -> fieldRead("_2" :: x)
+            case "_1" :: x => List(left, right) -> fieldRead("_1" :: x)
+            case x => Nil -> null
+          }
+          reads.foreach { case (targets, read) => targets.foreach { _.successorFieldReads += read } }
+          visitAll("input._1", v.mIn1)
+
         case v @ VectorReduce(in, func) =>
           // analyze function
           // convert the analyzed accesses to accesses of input._2.iterable
@@ -243,15 +260,23 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
       }
     }
 
+    var addComments = true
+
     def exportToGraph = {
       val buf = Buffer[String]()
       buf += "digraph g {"
       for (node <- nodes) {
-        buf += """%s [label="%s(%s)"];""".format(getIdForNode(node), node.toString.takeWhile(_ != '('), getIdForNode(node))
+        var comment = ""
+        if (addComments && !node.metaInfos.isEmpty) {
+          comment += "\\n" + node.metaInfos
+        }
+        buf += """%s [label="%s(%s)%s"];"""
+          .format(getIdForNode(node), node.toString.takeWhile(_ != '('), getIdForNode(node),
+            comment)
       }
-      for (node <- nodes; input <- getInputs(node)) {
-        buf += """%s -> %s [label="%s"]; """.format(getIdForNode(input), getIdForNode(node),
-          node.directFieldReads.map(_.path).toList.sortBy(x => x).mkString(","))
+      for (node <- nodes; input1 <- getInputs(node)) {
+        buf += """%s -> %s [label="%s"]; """.format(getIdForNode(input1), getIdForNode(node),
+          input1.successorFieldReads.map(_.path).toList.sortBy(x => x).mkString(","))
       }
       buf += "}"
       buf.mkString("\n")

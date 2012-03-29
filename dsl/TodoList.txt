@@ -33,28 +33,41 @@ An ugly hack, meaning that tuples will always use all their fields
 
 Decisions to take:
 - Tuples => Unimportant for now, leave as is
-- VectorReduceByKey: Only used by spark, so put it in vector or not? If not, VectorAnalysis needs a spark subtrait. Cache is another example.
-
 
 TODO List:
-- Refine finding of locations for inserting narrowing vectormaps
-- Allow optimizations to be turned off and on
-- Find benchmarks and implement them
-- Cache node for spark
-- Implement Join2
+- Refine finding of locations for inserting narrowing vectormaps.
+	- Check all nodes which preserve types but do not want a narrowing themselves (flatten, filter, not cache).
+	- If the input is a map, don't insert one. The map has either been narrowed or doesn't need it.
+	- If the input is a filter, check if the filter adds field reads. Continue looking for inputs.
+	- If the input is a flatmap, insert one? FlatMaps are not handled by our scheme.
+	- if its GBK or reduce????? => GBK wants a narrower itself, abort. Reduce may add field reads, but also changes types.
+	- if its flatten? Go on, until a stop node is found on each one. Maybe insert narrowing before flatten instead of after, if only one type changes.
+- Allow optimizations to be turned off and on (very easy with the transformers)
+- Find benchmarks and implement them => Flushes out bugs.
+- Saving of nested tuples does not return all elements yet within
 - Unit Tests. 
 	- Field analysis & narrowing
 	- Transformers & dependency pulling 
 	- Tests that check if the generated code compiles.
 - Compile external source files, like delite
 - Scoobi support
+	- How to add implicit vals to scope without generating them before the rest? implicit val EmployeeFmt = mkCaseWireFormat(Employee, Employee.unapply _)
+	- What about subtypes of them?
+- ReduceToOne
 
 Would be nice:
 - merge filters
 - Get Spark build running (wait for 0.12 sbt?)
+- Convert this file to markdown?
+
 
 Easy, low priority tasks:
 - Add Tuple3, 4 etc
 - Extend String class with more methods (startsWith, endsWith, contains etc)
 - Spark reduce by key optimization: Allow if all readers of group by key are reduces
 - Refactor field reads to use a list as representation instead of the string
+- Make list of all keys in use in the metaInfos of a VectorNode 
+
+To ask tiark:
+- Problem with innerscope? Needs simple test case.
+- Compile external source files? => Investigate self first.

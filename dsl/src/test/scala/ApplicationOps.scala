@@ -38,7 +38,6 @@ trait LogEntryOpsExp extends LogEntryOps with StructExp with EffectExp with Base
   def logentry_request(__x: Rep[LogEntry]) = field[Long](__x, "request")
   def logentry_timestamp(__x: Rep[LogEntry]) = field[Double](__x, "timestamp")
   def logentry_url(__x: Rep[LogEntry]) = field[String](__x, "url")
-
 }
 
 trait N1Ops extends Base with Variables with OverloadHack with N2Ops {
@@ -70,7 +69,6 @@ trait N1OpsExp extends N1Ops with StructExp with EffectExp with BaseFatExp {
   def n1_n2(__x: Rep[N1]) = field[N2](__x, "n2")
   def n1_n1id(__x: Rep[N1]) = field[String](__x, "n1id")
   def n1_n1Junk(__x: Rep[N1]) = field[Int](__x, "n1Junk")
-
 }
 
 trait N2Ops extends Base with Variables with OverloadHack {
@@ -99,8 +97,72 @@ trait N2OpsExp extends N2Ops with StructExp with EffectExp with BaseFatExp {
   def n2_obj_new(n2id: Exp[String], n2junk: Exp[Int]) = struct[N2]("N2" :: Nil, Map("n2id" -> n2id, "n2junk" -> n2junk))
   def n2_n2id(__x: Rep[N2]) = field[String](__x, "n2id")
   def n2_n2junk(__x: Rep[N2]) = field[Int](__x, "n2junk")
-
 }
 
-trait ApplicationOps extends LogEntryOps with N1Ops with N2Ops
-trait ApplicationOpsExp extends LogEntryOpsExp with N1OpsExp with N2OpsExp
+trait UserOps extends Base with Variables with OverloadHack {
+
+  class User
+
+  object User {
+    def apply(userId: Rep[Int], name: Rep[String], age: Rep[Int]) = user_obj_new(userId, name, age)
+  }
+
+  implicit def repUserToUserOps(x: Rep[User]) = new userOpsCls(x)
+  class userOpsCls(__x: Rep[User]) {
+    def userId = user_userId(__x)
+    def name = user_name(__x)
+    def age = user_age(__x)
+  }
+
+  //object defs
+  def user_obj_new(userId: Rep[Int], name: Rep[String], age: Rep[Int]): Rep[User]
+
+  //class defs
+  def user_userId(__x: Rep[User]): Rep[Int]
+  def user_name(__x: Rep[User]): Rep[String]
+  def user_age(__x: Rep[User]): Rep[Int]
+}
+
+trait UserOpsExp extends UserOps with StructExp with EffectExp with BaseFatExp {
+  def user_obj_new(userId: Exp[Int], name: Exp[String], age: Exp[Int]) = struct[User]("User" :: Nil, Map("userId" -> userId, "name" -> name, "age" -> age))
+  def user_userId(__x: Rep[User]) = field[Int](__x, "userId")
+  def user_name(__x: Rep[User]) = field[String](__x, "name")
+  def user_age(__x: Rep[User]) = field[Int](__x, "age")
+}
+
+trait AddressOps extends Base with Variables with OverloadHack {
+
+  class Address
+
+  object Address {
+    def apply(userId: Rep[Int], street: Rep[String], zip: Rep[Int], city: Rep[String]) = address_obj_new(userId, street, zip, city)
+  }
+
+  implicit def repAddressToAddressOps(x: Rep[Address]) = new addressOpsCls(x)
+  class addressOpsCls(__x: Rep[Address]) {
+    def userId = address_userId(__x)
+    def street = address_street(__x)
+    def zip = address_zip(__x)
+    def city = address_city(__x)
+  }
+
+  //object defs
+  def address_obj_new(userId: Rep[Int], street: Rep[String], zip: Rep[Int], city: Rep[String]): Rep[Address]
+
+  //class defs
+  def address_userId(__x: Rep[Address]): Rep[Int]
+  def address_street(__x: Rep[Address]): Rep[String]
+  def address_zip(__x: Rep[Address]): Rep[Int]
+  def address_city(__x: Rep[Address]): Rep[String]
+}
+
+trait AddressOpsExp extends AddressOps with StructExp with EffectExp with BaseFatExp {
+  def address_obj_new(userId: Exp[Int], street: Exp[String], zip: Exp[Int], city: Exp[String]) = struct[Address]("Address" :: Nil, Map("userId" -> userId, "street" -> street, "zip" -> zip, "city" -> city))
+  def address_userId(__x: Rep[Address]) = field[Int](__x, "userId")
+  def address_street(__x: Rep[Address]) = field[String](__x, "street")
+  def address_zip(__x: Rep[Address]) = field[Int](__x, "zip")
+  def address_city(__x: Rep[Address]) = field[String](__x, "city")
+}
+
+trait ApplicationOps extends LogEntryOps with N1Ops with N2Ops with UserOps with AddressOps
+trait ApplicationOpsExp extends LogEntryOpsExp with N1OpsExp with N2OpsExp with UserOpsExp with AddressOpsExp

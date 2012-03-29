@@ -58,7 +58,7 @@ trait VectorOps extends VectorBase {
     def filter(f: Rep[A] => Rep[Boolean]) = vector_filter(vector, f)
     def save(path: Rep[String]) = vector_save(vector, path)
     def ++(vector2: Rep[Vector[A]]) = vector_++(vector, vector2)
-    
+
   }
 
   implicit def repVecToVecIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[Vector[(K, Iterable[V])]]) = new vecIterableTupleOpsCls(x)
@@ -69,6 +69,7 @@ trait VectorOps extends VectorBase {
   implicit def repVecToVecTupleOps[K: Manifest, V: Manifest](x: Rep[Vector[(K, V)]]) = new vecTupleOpsCls(x)
   class vecTupleOpsCls[K: Manifest, V: Manifest](x: Rep[Vector[(K, V)]]) {
     def groupByKey = vector_groupByKey[K, V](x)
+    def join[V2: Manifest](right: Rep[Vector[(K, V2)]]) = vector_join(x, right)
   }
 
   def get_args(): Rep[Array[String]]
@@ -81,6 +82,7 @@ trait VectorOps extends VectorBase {
   def vector_save[A: Manifest](vector: Rep[Vector[A]], path: Rep[String]): Rep[Unit]
   def vector_++[A: Manifest](vector1: Rep[Vector[A]], vector2: Rep[Vector[A]]): Rep[Vector[A]]
   def vector_reduce[K: Manifest, V: Manifest](vector: Rep[Vector[(K, Iterable[V])]], f: (Rep[V], Rep[V]) => Rep[V]): Rep[Vector[(K, V)]]
+  def vector_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[Vector[(K, V1)]], right: Rep[Vector[(K, V2)]]): Rep[Vector[(K, (V1, V2))]]
   def vector_groupByKey[K: Manifest, V: Manifest](vector: Rep[Vector[(K, V)]]): Rep[Vector[(K, Iterable[V])]]
 }
 
@@ -131,7 +133,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
 
   trait ComputationNode extends VectorNode {
     def getTypes: (Manifest[_], Manifest[_])
-    def getElementTypes : (Manifest[_], Manifest[_]) = (getTypes._1.typeArguments(0), getTypes._2.typeArguments(0))
+    def getElementTypes: (Manifest[_], Manifest[_]) = (getTypes._1.typeArguments(0), getTypes._2.typeArguments(0))
   }
 
   trait ComputationNodeTyped[A, B] extends ComputationNode {
@@ -199,6 +201,14 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     def getTypes = (manifest[Vector[(K, Iterable[V])]], manifest[Vector[(K, V)]])
   }
 
+  case class VectorJoin[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[Vector[(K, V1)]], right: Exp[Vector[(K, V2)]])
+      extends Def[Vector[(K, (V1, V2))]] with VectorNode {
+    def mK = manifest[K]
+    def mV1 = manifest[V1]
+    def mV2 = manifest[V2]
+    def mIn1 = manifest[(K, V1)]
+  }
+
   case class VectorSave[A: Manifest](vectors: Exp[Vector[A]], path: Exp[String]) extends Def[Unit]
       with ComputationNodeTyped[Vector[A], Nothing] {
     val mA = manifest[A]
@@ -224,6 +234,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   }
   override def vector_++[A: Manifest](vector1: Rep[Vector[A]], vector2: Rep[Vector[A]]) = VectorFlatten(immutable.List(vector1, vector2))
   override def vector_reduce[K: Manifest, V: Manifest](vector: Exp[Vector[(K, Iterable[V])]], f: (Exp[V], Exp[V]) => Exp[V]) = VectorReduce(vector, f)
+  override def vector_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[Vector[(K, V1)]], right: Rep[Vector[(K, V2)]]): Rep[Vector[(K, (V1, V2))]] = VectorJoin(left, right)
   override def vector_groupByKey[K: Manifest, V: Manifest](vector: Exp[Vector[(K, V)]]) = VectorGroupByKey(vector)
 
   def copyMetaInfo[A <: VectorNode](from: VectorNode, to: A) = { to.metaInfos ++= from.metaInfos; to }
@@ -243,6 +254,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
         new { override val overrideClosure = Some(f(vfm.closure)) } with VectorFlatMap(f(vector), f(func))(vfm.mA, vfm.mB)
       )(mtype(manifest[A]))
       case gbk @ VectorGroupByKey(vector) => toAtom(VectorGroupByKey(f(vector))(gbk.mKey, gbk.mValue))(mtype(manifest[A]))
+      case v @ VectorJoin(left, right) => toAtom(VectorJoin(f(left), f(right))(v.mK, v.mV1, v.mV2))(mtype(manifest[A]))
       case v @ VectorReduce(vector, func) => toAtom(
         new { override val overrideClosure = Some(f(v.closure)) } with VectorReduce(f(vector), f(func))(v.mKey, v.mValue)
       )(mtype(manifest[A]))
@@ -264,6 +276,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     case NewVector(arg) => syms(arg)
     case VectorSave(vec, path) => syms(vec, path)
     case ObjectCreation(_, fields) => syms(fields)
+    case VectorJoin(left, right) => syms(left, right)
     case _ => super.syms(e)
   }
 
@@ -274,6 +287,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     case NewVector(arg) => freqNormal(arg)
     case VectorSave(vec, path) => freqNormal(vec, path)
     case ObjectCreation(_, fields) => freqNormal(fields)
+    case VectorJoin(left, right) => freqNormal(left, right)
     case _ => super.symsFreq(e)
   }
 
@@ -335,14 +349,19 @@ trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
       pathParts match {
         case Nil =>
         case x :: _ if remappings.contains(m) => typeNow = typeInfos2(remappings(m)).getField(x).get
-        case "_1" :: Nil => typeNow = m.typeArguments(0)
-        case "_2" :: Nil => typeNow = m.typeArguments(1)
+        case "_1" :: _ => typeNow = m.typeArguments(0)
+        case "_2" :: _ => typeNow = m.typeArguments(1)
         case _ => throw new RuntimeException("did not find type for " + path + " in " + m)
       }
       val out: PartInfo[_] = typeNow match {
         case x: TypeInfo[_] => x
         case x: Manifest[_] if remappings.contains(m) => typeInfos2(remappings(m))
         case x: FieldInfo[_] => x
+        case x: Manifest[(_, _)] => {
+          val f1 = new FieldInfo("_1", cleanUpType(x.typeArguments(0)), 0)(x.typeArguments(0))
+          val f2 = new FieldInfo("_2", cleanUpType(x.typeArguments(1)), 1)(x.typeArguments(1))
+          new TypeInfo("tuple2s", f1 :: f2 :: Nil)
+        }
         case _ => throw new RuntimeException("could not use result type " + typeNow + " for " + path + " in " + m)
       }
       def restOfPath(path: List[String], partInfo: PartInfo[_]): PartInfo[_] = {
@@ -374,6 +393,7 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
     VectorReduce,
     ComputationNode,
     VectorNode,
+    VectorJoin,
     GetArgs
   }
   import IR.{ SimpleStruct }
@@ -389,6 +409,7 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
     case vm @ VectorFlatMap(vector, function) => emitValDef(sym, "flat mapping vector %s with function %s".format(vector, function))
     case vm @ VectorFlatten(v1) => emitValDef(sym, "flattening vectors %s".format(v1))
     case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "grouping vector by key")
+    case gbk @ VectorJoin(left, right) => emitValDef(sym, "Joining %s with %s".format(left, right))
     case red @ VectorReduce(vector, f) => emitValDef(sym, "reducing vector")
     case GetArgs() => emitValDef(sym, "getting the arguments")
     case IR.Lambda(_, _, _) if inlineClosures =>

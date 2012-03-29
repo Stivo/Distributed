@@ -26,6 +26,20 @@ trait ComplexStructExp extends ComplexBase with StructExp with PrimitiveOps {
 
 trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps with SparkVectorOps {
 
+  def join(x: Rep[Unit]) = {
+     val users = Vector(getArgs(0))
+     .map(x => User(25, x, 35))
+     .map(x => (x.userId, x))
+     .filter(_._2.age == 35)
+     val addresses = Vector(getArgs(1))
+     .map(x => Address(25, x, 1003, "Lsn"))
+     .map(x => (x.userId, x))
+     .filter(_._2.street!="fff")
+     val joined = users.join(addresses)
+     joined.map{ x => string_plus(x._2._1.name, x._2._2.city)}
+     .save(getArgs(2))
+  }
+  
   def nested(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
     words1
@@ -148,7 +162,7 @@ class TestVectors extends Suite {
       val sw = new StringWriter()
       var pw = new PrintWriter(sw)
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.simple, "g", pw)
+      codegen.emitSource(dsl.join, "g", pw)
 
       pw.flush
       //      println(sw.toString)

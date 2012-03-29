@@ -370,12 +370,15 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
   }
 
   class InsertMapNarrowTransformation(target: VectorNode, fields: List[FieldRead]) extends SimpleTransformation {
-    var lastOut: VectorMap[_, _] = null
+    var lastOut: Option[VectorMap[_, _]] = None
     def doTransformationPure(inExp: Exp[_]) = inExp match {
+      case Def(x: VectorNode) if x.metaInfos.contains("narrowed") => null
       case Def(x: ComputationNode) if target == x => {
         val typ = (x.getTypes._2.typeArguments(0))
         val out = VectorMap(inExp.asInstanceOf[Exp[Vector[Any]]], { x: IR.Rep[_] => x })(IR.mtype(typ), IR.mtype(typ))
-        lastOut = out
+        lastOut = Some(out)
+        out.metaInfos("narrower") = true
+        out.metaInfos("narrowed") = true
         out
       }
       case _ => null
