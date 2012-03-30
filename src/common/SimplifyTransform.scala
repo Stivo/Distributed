@@ -8,10 +8,14 @@ trait SimplifyTransform extends internal.FatTraversal {
   import IR._
   
   def transformOne[A](s: Sym[A], x: Def[A], t: SubstTransformer): Exp[A] = {
-    // nodes that are target in a replacement should not be changed
-    val withThisTarget = t.subst.filter(x => x._1.ne(x._2)).filter(_._2 == s)
-    if (!withThisTarget.isEmpty) return s
     if (t.subst.contains(s)) return t(s)
+    
+    // do not try to execute a substitution (x -> y) if:
+    // - the target equals y
+    // - the target y reads from x
+    val withThisTarget = t.subst.filter(x => x._1.ne(x._2)).filter(_._2 == s)
+    if (withThisTarget.map(subst => syms(x).contains(subst._1)).fold(false)(_ || _)) return s
+    
     implicit val m: Manifest[A] = s.Type.asInstanceOf[Manifest[A]]
 
     //if (!syms(x).exists(t.subst contains _)) return s   //<---- should be safe to prune but test fails (??)
