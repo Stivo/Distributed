@@ -27,6 +27,10 @@ object HelloBuild extends Build {
                             settings = Project.defaultSettings)
 			.dependsOn(lmsproj)
 
+   lazy val scoobi = Project(id = "scoobi",
+                            base = file("scoobi"),
+                            settings = Project.defaultSettings ++ formatSourceSettings) 
+
    val dotGen = TaskKey[Unit]("dotgen", "Runs the dot generation")
    val helloTask = dotGen := {
 	 "bash updateDot.sh" .run

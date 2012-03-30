@@ -27,30 +27,31 @@ trait ComplexStructExp extends ComplexBase with StructExp with PrimitiveOps {
 trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps with SparkVectorOps {
 
   def join(x: Rep[Unit]) = {
-     val users = Vector(getArgs(0))
-     .map(x => User(25, x, 35))
-     .map(x => (x.userId, x))
-     .filter(_._2.age == 35)
-     val addresses = Vector(getArgs(1))
-     .map(x => Address(25, x, 1003, "Lsn"))
-     .map(x => (x.userId, x))
-     .filter(_._2.street!="fff")
-     val joined = users.join(addresses)
-     joined.map{ x => string_plus(x._2._1.name, x._2._2.city)}
-     .save(getArgs(2))
+    val users = Vector(getArgs(0))
+      .map(x => User(25, x, 35))
+      .map(x => (x.userId, x))
+      .filter(_._2.age == 35)
+    val addresses = Vector(getArgs(1))
+      .map(x => Address(25, x, 1003, "Lsn"))
+      .map(x => (x.userId, x))
+      .filter(_._2.street != "fff")
+    val joined = users.join(addresses)
+    joined.map { x => string_plus(x._2._1.name, x._2._2.city) }
+      .save(getArgs(2))
   }
-  
+
   def nested(x: Rep[Unit]) = {
     val words1 = Vector(getArgs(0))
     words1
       .map(x => N2(x, 558))
       //    .map(x => N2(x.n2id, 238))
-      .map(x => if (x.n2id != "asdf") N1(x, x.n2id, 38) else N1(x, x.n2id+1, 355))
+      .map(x => if (x.n2id != "asdf") N1(x, x.n2id, 38) else N1(x, x.n2id + 1, 355))
       //      .map(x => if (x.matches("asdf")) N2(x, 5) else N2(x, 7))
-//      .map(x => N1(x, x.n2id, 38))
-      .filter(_.n1Junk == 38)
-      //            .filter(_.n2.n2id=="asdf")
-      //      .filter(_.n1Junk != 30)
+      //            .map(x => N1(x, x.n2id, 38))
+      //      .filter(_.n1Junk == 38)
+      //            .filter(_.n2id=="asdf")
+      .filter(_.n1Junk != 30)
+      //            .map(_.n2id)
       .map(_.n2)
       .save(getArgs(1))
   }
@@ -98,7 +99,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
     val words1 = Vector(getArgs(0))
     words1.map { x => (x, unit(1)) }
       .filter(!_._1.matches("asdf"))
-      .map(_._1)
+      .map(_._2)
       .save(getArgs(1))
     //)(0)
     unit(())
@@ -153,7 +154,34 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
 
 class TestVectors extends Suite {
 
-  def testVectors {
+  //  def testSpark {
+  //    try {
+  //      println("-- begin")
+  //
+  //      val dsl = new VectorsProg with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp
+  //
+  //      val sw = new StringWriter()
+  //      var pw = new PrintWriter(sw)
+  //      val codegen = new SparkGenVector { val IR: dsl.type = dsl }
+  //      codegen.emitSource(dsl.nested, "g", pw)
+  //
+  //      pw.flush
+  //      //      println(sw.toString)
+  //
+  //      val dest = "spark/src/main/scala/generated/SparkGenerated.scala"
+  //      val fw = new FileWriter(dest)
+  //      fw.write(sw.toString)
+  //      fw.close
+  //
+  //      println("-- end")
+  //    } catch {
+  //      case e =>
+  //        e.printStackTrace
+  //        println(e.getMessage)
+  //    }
+  //  }
+
+  def testScoobi {
     try {
       println("-- begin")
 
@@ -161,13 +189,12 @@ class TestVectors extends Suite {
 
       val sw = new StringWriter()
       var pw = new PrintWriter(sw)
-      val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.nested, "g", pw)
+      val codegen = new ScoobiGenVector { val IR: dsl.type = dsl }
+      codegen.emitSource(dsl.join, "g", pw)
 
       pw.flush
       //      println(sw.toString)
-
-      val dest = "spark/src/main/scala/generated/SparkGenerated.scala"
+      val dest = "scoobi/src/main/scala/ScoobiGenerated.scala"
       val fw = new FileWriter(dest)
       fw.write(sw.toString)
       fw.close

@@ -430,17 +430,18 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
   def writeClosure(closure: Exp[_]) = {
     val sw = new StringWriter()
     val pw = new PrintWriter(sw)
+    def remapHere(x: Manifest[_]) = if (typesInInlinedClosures) ": " + remap(x) else ""
     closure match {
       case Def(Lambda(fun, x, y)) => {
-        pw.println("{ %s => ".format(quote(x)))
+        pw.println("{ %s %s => ".format(quote(x), remapHere(x.Type)))
         emitBlock(y)(pw)
-        pw.println(quote(getBlockResult(y)))
+        pw.println("%s %s".format(quote(getBlockResult(y)), remapHere(y.Type)))
         pw.print("}")
       }
       case Def(Lambda2(fun, x1, x2, y)) => {
-        pw.println("{ (%s, %s) => ".format(quote(x1), quote(x2)))
+        pw.println("{ (%s %s, %s %s) => ".format(quote(x1), remapHere(x1.Type), quote(x2), remapHere(x2.Type)))
         emitBlock(y)(pw)
-        pw.println(quote(getBlockResult(y)))
+        pw.println("%s %s".format(quote(getBlockResult(y)), remapHere(y.Type)))
         pw.print("}")
       }
     }
@@ -450,12 +451,126 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
 
   def inlineClosures = false
 
+  def typesInInlinedClosures = false
+
   def handleClosure(closure: Exp[_]) = {
     if (inlineClosures) {
       writeClosure(closure)
     } else {
       quote(closure)
     }
+  }
+
+  var narrowExistingMaps = true
+  var insertNarrowingMaps = true
+  var mapMerge = true
+
+  def newPullDeps = new PullDependenciesTransformation()
+
+  def mapNarrowing(transformer: Transformer) {
+    // replace maps with narrower ones
+    var oneFound = false
+    var pullDeps = newPullDeps
+    if (narrowExistingMaps) {
+      do {
+        oneFound = false
+        // perform field usage analysis
+        val analyzer = newAnalyzer(transformer.currentState, typeHandler)
+        analyzer.makeFieldAnalysis
+        var goOn = true
+        analyzer.ordered.foreach {
+          case _ if !goOn =>
+          case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed")
+            && !SimpleType.unapply(v.getClosureTypes._2).isDefined
+            && analyzer.hasObjectCreationInClosure(v) => {
+            oneFound = true
+            v.metaInfos += (("narrowed", true))
+            // transformer.currentState.printAll("Before narrowing")
+            transformer.doTransformation(new MapNarrowTransformationNew(v, typeHandler), 50)
+            transformer.doTransformation(pullDeps, 500)
+            // transformer.currentState.printAll("After narrowing")
+            transformer.doTransformation(new FieldOnStructReadTransformation, 500)
+            goOn = false
+          }
+          case _ =>
+        }
+      } while (oneFound)
+    }
+
+  }
+
+  def insertNarrowingMaps(transformer: Transformer) {
+    var oneFound = false
+    var pullDeps = newPullDeps
+    if (insertNarrowingMaps) {
+      //inserting narrowing vectormaps where analyzer says it should 
+      do {
+        oneFound = false
+        val analyzer = newAnalyzer(transformer.currentState, typeHandler)
+        analyzer.makeFieldAnalysis
+        for (x <- analyzer.narrowBefore) {
+          if (!oneFound) {
+            pullDeps = newPullDeps
+            val increase = x.metaInfos.getOrElse("insertedNarrowers", 0).asInstanceOf[Int]
+
+            analyzer.getInputs(x).foreach { input =>
+              x.metaInfos("insertedNarrowers") = 1 + increase
+              val inserter = new InsertMapNarrowTransformation(input, x.directFieldReads.toList)
+              transformer.doTransformation(inserter, 1)
+              inserter.lastOut match {
+                case None =>
+                case Some(narrowThis) =>
+                  transformer.doTransformation(pullDeps, 500)
+                  val analyzer2 = newAnalyzer(transformer.currentState, typeHandler)
+                  analyzer2.makeFieldAnalysis
+                  transformer.doTransformation(new MapNarrowTransformationNew(narrowThis, typeHandler), 2)
+                  transformer.doTransformation(pullDeps, 500)
+                  oneFound = true
+              }
+            }
+          }
+        }
+      } while (oneFound)
+    }
+
+  }
+
+  def transformTree(state: TransformationState): TransformationState = state
+
+  override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
+    // only do our optimizations in top scope
+    if (hasVectorNodes(currentScope0In)) {
+      // set up state
+      var result0 = result0B.map(getBlockResultFull)
+      var state = new TransformationState(currentScope0In, result0)
+
+      // transform the tree (backend specific)
+      state = transformTree(state)
+
+      // return optimized tree to 
+      val currentScope0 = state.ttps
+      result0 = state.results
+      // hack: should maybe not add all nodes here, but seems to work, as we are in the top scope
+      innerScope ++= IR.globalDefs.filter(!innerScope.contains(_))
+      super.focusExactScopeFat(currentScope0)(result0.map(IR.Block(_)))(body)
+    } else {
+      super.focusExactScopeFat(currentScope0In)(result0B)(body)
+    }
+  }
+
+  def mapNarrowingAndInsert(transformer: Transformer) {
+    mapNarrowing(transformer)
+    insertNarrowingMaps(transformer)
+  }
+
+  def writeGraphToFile(transformer: Transformer, name: String, comments: Boolean = true) {
+    val out = new FileOutputStream(name)
+    val analyzer = newAnalyzer(transformer.currentState, typeHandler)
+    analyzer.makeFieldAnalysis
+    analyzer.addComments = comments
+    out.write(analyzer.exportToGraph.getBytes)
+    out.close
+
   }
 
 }
