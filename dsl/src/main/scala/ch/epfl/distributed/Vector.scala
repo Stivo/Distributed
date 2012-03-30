@@ -272,7 +272,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   override def syms(e: Any): List[Sym[Any]] = e match {
     case s: ClosureNode[_, _] => syms(s.in, s.closure)
     case s: Closure2Node[_, _, _] => syms(s.in, s.closure)
-    case VectorFlatten(x) => syms(x) ++ super.syms(e)
+    case VectorFlatten(x) => syms(x)
     case NewVector(arg) => syms(arg)
     case VectorSave(vec, path) => syms(vec, path)
     case ObjectCreation(_, fields) => syms(fields)

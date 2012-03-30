@@ -1,10 +1,5 @@
 Problems:
 
-Problem with innerscope:
-- InnerScope gets changed in focusExactScopeFat. 
-The old one is used later and the new symbols are not found in the old scope.
-In FatTraversal.scala, the "Trouble" message appears.
-
 Tuples
 - How can tuples be reduced? Tuples are case classes with fields.
 Would have to generate classes that extend them and implement special
@@ -42,17 +37,14 @@ TODO List:
 	- If the input is a flatmap, insert one? FlatMaps are not handled by our scheme.
 	- if its GBK or reduce????? => GBK wants a narrower itself, abort. Reduce may add field reads, but also changes types.
 	- if its flatten? Go on, until a stop node is found on each one. Maybe insert narrowing before flatten instead of after, if only one type changes.
-- Allow optimizations to be turned off and on (very easy with the transformers)
 - Find benchmarks and implement them => Flushes out bugs.
 - Saving of nested tuples does not return all elements yet within
+	- creates problem in other cases as well
 - Unit Tests. 
 	- Field analysis & narrowing
 	- Transformers & dependency pulling 
 	- Tests that check if the generated code compiles.
 - Compile external source files, like delite
-- Scoobi support
-	- How to add implicit vals to scope without generating them before the rest? implicit val EmployeeFmt = mkCaseWireFormat(Employee, Employee.unapply _)
-	- What about subtypes of them?
 - ReduceToOne
 
 Would be nice:
@@ -69,5 +61,4 @@ Easy, low priority tasks:
 - Make list of all keys in use in the metaInfos of a VectorNode 
 
 To ask tiark:
-- Problem with innerscope? Needs simple test case.
 - Compile external source files? => Investigate self first.
