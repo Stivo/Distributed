@@ -45,7 +45,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
     words1
       .map(x => N2(x, 558))
       //    .map(x => N2(x.n2id, 238))
-      .map(x => if (x.n2id != "asdf") N1(x, x.n2id, 38) else N1(x, x.n2id + 1, 355))
+      .map(x => if (x.n2id != "asdf") N1(x, x.n2id, 38) else N1(x, x.n2id + "1", 355))
       //      .map(x => if (x.matches("asdf")) N2(x, 5) else N2(x, 7))
       //            .map(x => N1(x, x.n2id, 38))
       //      .filter(_.n1Junk == 38)
@@ -154,32 +154,32 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
 
 class TestVectors extends Suite {
 
-  //  def testSpark {
-  //    try {
-  //      println("-- begin")
-  //
-  //      val dsl = new VectorsProg with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp
-  //
-  //      val sw = new StringWriter()
-  //      var pw = new PrintWriter(sw)
-  //      val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-  //      codegen.emitSource(dsl.nested, "g", pw)
-  //
-  //      pw.flush
-  //      //      println(sw.toString)
-  //
-  //      val dest = "spark/src/main/scala/generated/SparkGenerated.scala"
-  //      val fw = new FileWriter(dest)
-  //      fw.write(sw.toString)
-  //      fw.close
-  //
-  //      println("-- end")
-  //    } catch {
-  //      case e =>
-  //        e.printStackTrace
-  //        println(e.getMessage)
-  //    }
-  //  }
+  def testSpark {
+    try {
+      println("-- begin")
+
+      val dsl = new VectorsProg with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp
+
+      val sw = new StringWriter()
+      var pw = new PrintWriter(sw)
+      val codegen = new SparkGenVector { val IR: dsl.type = dsl }
+      codegen.emitSource(dsl.join, "g", pw)
+
+      pw.flush
+      //      println(sw.toString)
+
+      val dest = "spark/src/main/scala/generated/SparkGenerated.scala"
+      val fw = new FileWriter(dest)
+      fw.write(sw.toString)
+      fw.close
+
+      println("-- end")
+    } catch {
+      case e =>
+        e.printStackTrace
+        println(e.getMessage)
+    }
+  }
 
   def testScoobi {
     try {

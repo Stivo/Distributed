@@ -241,7 +241,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     out
   }
 
-  override val inlineClosures = false
+  override val inlineClosures = true
 
   var reduceByKey = true
 

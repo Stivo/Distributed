@@ -299,7 +299,7 @@ trait VectorImplOps extends VectorOps with FunctionsExp {
 
 trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
   val IR: VectorOpsExp
-  import IR.{ TTP, ThinDef, SimpleStruct }
+  import IR.{ TTP, ThinDef, SimpleStruct, Def, Phi, Sym, Exp }
 
   class TypeHandler(ttps: List[TTP]) {
     trait PartInfo[A] {
@@ -331,15 +331,25 @@ trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
       remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
       out
     }
+    // Phi's do not have the correct type.
+    def getType(s: Exp[_]) = s match {
+      case Def(Phi(_, _, _, _, x)) => x.Type
+      case x => x.Type
+    }
     val typeInfos = objectCreations.map {
       s =>
-        (s.tag.mkString("_"), s.elems.mapValues(x => cleanUpType(x.Type)))
+        (s.tag.mkString("_"), s.elems.mapValues(x => cleanUpType(getType(x))))
     }.toMap
     val typeInfos2 = objectCreations.map {
       s =>
         var i = -1
         val name = s.tag.mkString("_")
-        (name, new TypeInfo(name, s.elems.map { x => i += 1; new FieldInfo(x._1, cleanUpType(x._2.Type), i)(x._2.Type) }.toList)(s.m))
+        val fields = s.elems.map { x =>
+          i += 1;
+          val typ = x._2.Type
+          new FieldInfo(x._1, cleanUpType(typ), i)(typ)
+        }.toList
+        (name, new TypeInfo(name, fields)(s.m))
     }.toMap
 
     def getTypeAt(path: String, mIn: Manifest[_]): PartInfo[_] = {
