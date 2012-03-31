@@ -26,7 +26,7 @@ trait VectorBase extends Base with LiftAll
 trait VectorBaseExp extends VectorBase
   with DSLOpsExp with BlockExp
   with EqualExp with IfThenElseExp with VariablesExp with WhileExp with FunctionsExp
-  with ImplicitOpsExp with NumericOpsExp with OrderingOpsExp with StringOpsExp
+  with ImplicitOpsExp with NumericOpsExp with OrderingOpsExp with StringOpsExp with StringOpsExpOpt
   with BooleanOpsExp with PrimitiveOpsExp with MiscOpsExp with StructTupleOpsExp
   with MathOpsExp with CastingOpsExp with ObjectOpsExp with ArrayOpsExp with RangeOpsExp
   with StructExp with StructExpOpt
@@ -58,7 +58,6 @@ trait VectorOps extends VectorBase {
     def filter(f: Rep[A] => Rep[Boolean]) = vector_filter(vector, f)
     def save(path: Rep[String]) = vector_save(vector, path)
     def ++(vector2: Rep[Vector[A]]) = vector_++(vector, vector2)
-
   }
 
   implicit def repVecToVecIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[Vector[(K, Iterable[V])]]) = new vecIterableTupleOpsCls(x)

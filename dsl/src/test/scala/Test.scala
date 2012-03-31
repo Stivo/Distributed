@@ -26,6 +26,17 @@ trait ComplexStructExp extends ComplexBase with StructExp with PrimitiveOps {
 
 trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps with SparkVectorOps {
 
+  def strings(x: Rep[Unit]) = {
+    val s = getArgs(0)
+    val sc = unit("asdf")
+    println(sc.length)
+    println(s.length)
+    println(s.trim.trim)
+
+    println(sc.contains("as"))
+    println(unit("asdf").split("s"))
+  }
+
   def join(x: Rep[Unit]) = {
     val users = Vector(getArgs(0))
       .map(x => User(25, x, 35))
@@ -36,7 +47,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
       .map(x => (x.userId, x))
       .filter(_._2.street != "fff")
     val joined = users.join(addresses)
-    joined.map { x => string_plus(x._2._1.name, x._2._2.city) }
+    joined.map { x => x._2._1.name + " " + x._2._2.city }
       .save(getArgs(2))
   }
 

@@ -53,7 +53,7 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
 
     lazy val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
 
-    lazy val narrowBeforeCandidates: Iterable[VectorNode] = nodes.filter(isNarrowBeforeCandidate)
+    lazy val narrowBeforeCandidates: Iterable[VectorNode] = ordered.filter(isNarrowBeforeCandidate)
 
     def isNarrowBeforeCandidate(x: VectorNode) = x match {
       case VectorGroupByKey(x) => true

@@ -16,24 +16,34 @@ trait StringAndNumberOps extends PrimitiveOps with StringOps with OverloadHack {
   //  
   //  def string_toLong(s : Rep[String])(implicit ctx: SourceContext) : Rep[Long]
   //  def long_modulo( l : Rep[Long], mod : Rep[Long])(implicit ctx: SourceContext) : Rep[Long]
+  implicit def repStringToStringOps(s: Rep[String]) = new stringOpsCls(s)
+  class stringOpsCls(s: Rep[String]) {
+    def +(other: Rep[Any]) = string_plus(s, other)
+  }
 
-  def infix_matches(s: Rep[String], regex: Rep[String]) = string_matches(s, regex)
-  def string_matches(s: Rep[String], regex: Rep[String])(implicit ctx: SourceContext): Rep[Boolean]
-  //  def string_split(s: Rep[String], separators: Rep[String], limit : Rep[Int])(implicit ctx: SourceContext): Rep[Array[String]]
 }
 
 trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with StringOpsExp {
 
   case class StringPattern(regex: Exp[String]) extends Def[java.util.regex.Pattern]
-  //     case class StringSplit(s: Exp[String], pattern : Exp[java.util.regex.Pattern], limit : Exp[Int]) extends Def[Array[String]]
-  case class StringMatches(string: Exp[String], pattern: Exp[java.util.regex.Pattern]) extends Def[Boolean]
+  case class StringSplitPattern(s: Exp[String], pattern: Exp[java.util.regex.Pattern], limit: Exp[Int]) extends Def[Array[String]]
+  case class StringMatchesPattern(string: Exp[String], pattern: Exp[java.util.regex.Pattern]) extends Def[Boolean]
 
   //  case class StringToLong(s : Exp[String]) extends Def[Long]
   //  case class LongModulo(l : Exp[Long], mod : Exp[Long]) extends Def[Long]
   //  
   //  override def string_toLong(s : Rep[String])(implicit ctx: SourceContext) = StringToLong(s) 
   //  override def long_modulo( l : Exp[Long], mod : Exp[Long])(implicit ctx: SourceContext) = LongModulo(l, mod)
-  override def string_matches(s: Exp[String], regex: Exp[String])(implicit ctx: SourceContext) = StringMatches(s, StringPattern(regex))
+  override def string_split(s: Rep[String], separators: Rep[String], limit: Rep[Int]) = StringSplitPattern(s, StringPattern(separators), limit)
+  override def string_matches(s: Exp[String], regex: Exp[String]) = StringMatchesPattern(s, StringPattern(regex))
+
+  override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = (e match {
+    case StringPattern(regex) => StringPattern(f(regex))
+    case StringSplitPattern(s, pat, l) => StringSplitPattern(f(s), f(pat), f(l))
+    case StringMatchesPattern(s, pat) => StringMatchesPattern(f(s), f(pat))
+    case _ => super.mirror(e, f)
+  }).asInstanceOf[Exp[A]]
+
 }
 
 trait StringAndNumberOpsCodeGen extends ScalaCodegen {
@@ -48,9 +58,9 @@ trait StringAndNumberOpsCodeGen extends ScalaCodegen {
   //  }
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
-    // case StringSplit(s, pattern, limit) => emitValDef(sym, "%s.split(%s, %s)".format(quote(pattern), quote(s), quote(limit)))
+    case StringSplitPattern(s, pattern, limit) => emitValDef(sym, "%s.split(%s, %s)".format(quote(pattern), quote(s), quote(limit)))
     case StringPattern(s) => emitValDef(sym, "java.util.regex.Pattern.compile(%s)".format(quote(s)))
-    case StringMatches(s, pattern) => emitValDef(sym, "%s.matcher(%s).matches()".format(quote(pattern), quote(s)))
+    case StringMatchesPattern(s, pattern) => emitValDef(sym, "%s.matcher(%s).matches()".format(quote(pattern), quote(s)))
     case _ => super.emitNode(sym, rhs)(stream)
   }
 
