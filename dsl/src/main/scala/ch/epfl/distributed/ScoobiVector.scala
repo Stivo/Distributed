@@ -184,6 +184,7 @@ import com.nicta.scoobi.Scoobi._
 import com.nicta.scoobi.io.text._
 import com.nicta.scoobi.{DList, WireFormat, Grouping}
 import com.nicta.scoobi.lib.Join._
+import ch.epfl.distributed.datastruct._
    
 object %s {
    def mkAbstractWireFormat1[T, A <: T: Manifest: WireFormat](): WireFormat[T] = new WireFormat[T] {
@@ -203,6 +204,10 @@ object %s {
         
   def main(scoobiInputArgsScoobi: Array[String]) = withHadoopArgs(scoobiInputArgsScoobi) { scoobiInputArgs =>
         import WireFormat.{ mkAbstractWireFormat, mkCaseWireFormat }
+        implicit val wireFormat_date = mkAbstractWireFormat[Date, SimpleDate, DateTime]
+        implicit val wireFormat_simpledate = mkCaseWireFormat(SimpleDate, SimpleDate.unapply _)
+        implicit val wireFormat_datetime = mkCaseWireFormat(DateTime, DateTime.unapply _)
+
         ###wireFormats###
         """.format(className, className))
 

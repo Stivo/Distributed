@@ -157,13 +157,14 @@ def liftClass(impls_dir, fname, fileOut):
     l = l + " object " + clazz + " {\n"
     l = l + " def apply(" + repify(fields, types) + ") = " + lclazz + "_obj_new(" + listify(fields) + ")\n"
     fieldParsers = parsify(fields, types)
+    retType = " : Rep[%s] " % clazz
     if fieldParsers is not None:
-	    l += """def parse(input: Rep[String], sep: Rep[String]) = fromArray(input.split(sep))
+	    l += """def parse(input: Rep[String], sep: Rep[String]) %s = fromArray(input.split(sep))
 
-def fromArray(input: Rep[Array[String]]) = {
+def fromArray(input: Rep[Array[String]]) %s = {
 	%s(%s)
 	}
-""" % (clazz, fieldParsers)
+""" % (retType, retType, clazz, fieldParsers)
     l = l + " }\n\n"
 
     l = l + " implicit def rep" + clazz + "To" + clazz + "Ops(x: Rep[" + clazz +"]) = new " + lclazz + "OpsCls(x)\n"

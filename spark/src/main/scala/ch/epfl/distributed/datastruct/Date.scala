@@ -1,4 +1,4 @@
-package ch.epfl.distributed
+package ch.epfl.distributed.datastruct
 
 object Date {
   def apply(year: Int, month: Int, day: Int): Date = new SimpleDate(year, month, day)
