@@ -270,7 +270,7 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
       }
       for (node <- nodes; input1 <- getInputs(node)) {
         buf += """%s -> %s [label="%s"]; """.format(getIdForNode(input1), getIdForNode(node),
-          input1.successorFieldReads.map(_.path).toList.sortBy(x => x).mkString(","))
+          node.directFieldReads.map(_.path).toList.sortBy(x => x).mkString(","))
       }
       buf += "}"
       buf.mkString("\n")

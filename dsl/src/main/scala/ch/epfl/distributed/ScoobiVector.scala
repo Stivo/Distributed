@@ -97,7 +97,7 @@ trait ScoobiGenVector extends ScalaGenBase with ScalaGenVector with VectorTransf
   override val inlineClosures = true
   override val typesInInlinedClosures = true
 
-  var allOff = false
+  val allOff = false
   if (allOff) {
     narrowExistingMaps = false
     insertNarrowingMaps = false

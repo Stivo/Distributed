@@ -40,6 +40,43 @@ trait LogEntryOpsExp extends LogEntryOps with StructExp with EffectExp with Base
   def logentry_url(__x: Rep[LogEntry]) = field[String](__x, "url")
 }
 
+trait PageCountEntryOps extends Base with Variables with OverloadHack {
+
+  class PageCountEntry
+
+  object PageCountEntry {
+    def apply(language: Rep[String], project: Rep[String], site: Rep[String], number: Rep[Long], size: Rep[Long]) = pagecountentry_obj_new(language, project, site, number, size)
+  }
+
+  implicit def repPageCountEntryToPageCountEntryOps(x: Rep[PageCountEntry]) = new pagecountentryOpsCls(x)
+  class pagecountentryOpsCls(__x: Rep[PageCountEntry]) {
+    def language = pagecountentry_language(__x)
+    def project = pagecountentry_project(__x)
+    def site = pagecountentry_site(__x)
+    def number = pagecountentry_number(__x)
+    def size = pagecountentry_size(__x)
+  }
+
+  //object defs
+  def pagecountentry_obj_new(language: Rep[String], project: Rep[String], site: Rep[String], number: Rep[Long], size: Rep[Long]): Rep[PageCountEntry]
+
+  //class defs
+  def pagecountentry_language(__x: Rep[PageCountEntry]): Rep[String]
+  def pagecountentry_project(__x: Rep[PageCountEntry]): Rep[String]
+  def pagecountentry_site(__x: Rep[PageCountEntry]): Rep[String]
+  def pagecountentry_number(__x: Rep[PageCountEntry]): Rep[Long]
+  def pagecountentry_size(__x: Rep[PageCountEntry]): Rep[Long]
+}
+
+trait PageCountEntryOpsExp extends PageCountEntryOps with StructExp with EffectExp with BaseFatExp {
+  def pagecountentry_obj_new(language: Exp[String], project: Exp[String], site: Exp[String], number: Exp[Long], size: Exp[Long]) = struct[PageCountEntry]("PageCountEntry" :: Nil, Map("language" -> language, "project" -> project, "site" -> site, "number" -> number, "size" -> size))
+  def pagecountentry_language(__x: Rep[PageCountEntry]) = field[String](__x, "language")
+  def pagecountentry_project(__x: Rep[PageCountEntry]) = field[String](__x, "project")
+  def pagecountentry_site(__x: Rep[PageCountEntry]) = field[String](__x, "site")
+  def pagecountentry_number(__x: Rep[PageCountEntry]) = field[Long](__x, "number")
+  def pagecountentry_size(__x: Rep[PageCountEntry]) = field[Long](__x, "size")
+}
+
 trait N1Ops extends Base with Variables with OverloadHack with N2Ops {
 
   class N1
@@ -64,7 +101,7 @@ trait N1Ops extends Base with Variables with OverloadHack with N2Ops {
   def n1_n1Junk(__x: Rep[N1]): Rep[Int]
 }
 
-trait N1OpsExp extends N1Ops with StructExp with EffectExp with BaseFatExp {
+trait N1OpsExp extends N1Ops with StructExp with EffectExp with BaseFatExp with N2Ops {
   def n1_obj_new(n2: Exp[N2], n1id: Exp[String], n1Junk: Exp[Int]) = struct[N1]("N1" :: Nil, Map("n2" -> n2, "n1id" -> n1id, "n1Junk" -> n1Junk))
   def n1_n2(__x: Rep[N1]) = field[N2](__x, "n2")
   def n1_n1id(__x: Rep[N1]) = field[String](__x, "n1id")
@@ -164,5 +201,5 @@ trait AddressOpsExp extends AddressOps with StructExp with EffectExp with BaseFa
   def address_city(__x: Rep[Address]) = field[String](__x, "city")
 }
 
-trait ApplicationOps extends LogEntryOps with N1Ops with N2Ops with UserOps with AddressOps
-trait ApplicationOpsExp extends LogEntryOpsExp with N1OpsExp with N2OpsExp with UserOpsExp with AddressOpsExp
+trait ApplicationOps extends LogEntryOps with PageCountEntryOps with N1Ops with N2Ops with UserOps with AddressOps
+trait ApplicationOpsExp extends LogEntryOpsExp with PageCountEntryOpsExp with N1OpsExp with N2OpsExp with UserOpsExp with AddressOpsExp
