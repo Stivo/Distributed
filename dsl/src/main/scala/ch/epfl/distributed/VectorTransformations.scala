@@ -73,7 +73,8 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
               head match {
                 case TTPDef(x) => {
                   val syms = readingNodes(x)
-                  val newttps = syms.filter(IR.findDefinition(_).isDefined).map(IR.findOrCreateDefinition(_)).map(fatten(_))
+                  val newttps = syms.filter(IR.findDefinition(_).isDefined).map(IR.findOrCreateDefinition(_)).filter(_.sym.id > 3).map(fatten(_))
+                  println("Adding ttps " + newttps)
                   ttpsToAdd ++= newttps
                 }
                 case TTP(x, IR.SimpleFatIfThenElse(cond, thenList, elseList)) => {
@@ -86,7 +87,7 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
             }
             ttpsToAdd = ttpsToAdd.tail
           }
-          val isPull = transformation.toString.contains("Pull")
+          val isPull = false && transformation.toString.contains("Pull")
           if (!allAdded.isEmpty && !isPull) {
             System.out.println("Applying " + transformation + " to node " + exp)
             println(printDef(exp) + " created new definitions: " + (allAdded).map(printDef).mkString(", "))
