@@ -16,14 +16,14 @@ import java.util.regex.Pattern
 
 trait Vector[+A]
 
-trait VectorBase extends Base with LiftAll
+trait VectorBase extends Base with LiftAll with ScalaOpsPkg
   with Equal with IfThenElse with Variables with While with Functions
   with ImplicitOps with NumericOps with OrderingOps with StringOps
   with BooleanOps with PrimitiveOps with MiscOps with TupleOps
   with MathOps with CastingOps with ObjectOps with ArrayOps
   with StringAndNumberOps with ListOps
 
-trait VectorBaseExp extends VectorBase
+trait VectorBaseExp extends VectorBase with ScalaOpsPkgExp
   with DSLOpsExp with BlockExp
   with EqualExp with IfThenElseExp with VariablesExp with WhileExp with FunctionsExp
   with ImplicitOpsExp with NumericOpsExp with OrderingOpsExp with StringOpsExp with StringOpsExpOpt
@@ -34,7 +34,7 @@ trait VectorBaseExp extends VectorBase
   with FatExpressions with LoopsFatExp with IfThenElseFatExp
   with StringAndNumberOpsExp with ListOpsExp
 
-trait VectorBaseCodeGenPkg extends ScalaGenDSLOps
+trait VectorBaseCodeGenPkg extends ScalaGenDSLOps with ScalaCodeGenPkg
   with SimplifyTransform with ScalaGenIfThenElseFat
   with ScalaGenEqual with ScalaGenIfThenElse with ScalaGenVariables with ScalaGenWhile with ScalaGenFunctions
   with ScalaGenImplicitOps with ScalaGenNumericOps with ScalaGenOrderingOps with ScalaGenStringOps
@@ -50,6 +50,8 @@ trait VectorOps extends VectorBase {
   object Vector {
     def apply(file: Rep[String]) = vector_new[String](file)
   }
+
+  implicit def varVecToVecOps[A: Manifest](vector: Var[Vector[A]]) = new vecOpsCls(readVar(vector))
 
   implicit def repVecToVecOps[A: Manifest](vector: Rep[Vector[A]]) = new vecOpsCls(vector)
   class vecOpsCls[A: Manifest](vector: Rep[Vector[A]]) {
@@ -240,6 +242,7 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
 
   override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = {
     var out = e match {
+      case w @ Reflect(While(cond, body), u, es) => reflectMirrored(Reflect(While(f(cond), f(body)), mapOver(f, u), f(es)))
       case o @ ObjectCreation(name, fields) => toAtom(ObjectCreation(name, fields.mapValues(f(_)))(o.mA))(o.mA)
       case flat @ VectorFlatten(list) => toAtom(VectorFlatten(f(list))(flat.mA))
       case vm @ NewVector(vector) => toAtom(NewVector(f(vector))(vm.mA))(mtype(vm.mA))
@@ -387,6 +390,9 @@ trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
 
   var typeHandler: TypeHandler = null
 
+  override def emitVarDef(sym: Sym[IR.Variable[Any]], rhs: String)(implicit stream: PrintWriter): Unit = {
+    stream.println("var " + quote(sym) + " = " + rhs)
+  }
 }
 
 trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTransformations with VectorAnalysis {

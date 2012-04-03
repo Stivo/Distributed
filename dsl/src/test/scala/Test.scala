@@ -3,7 +3,7 @@ import java.io.StringWriter
 import java.io.FileWriter
 import ch.epfl.distributed._
 import org.scalatest._
-import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps }
+import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps, LiftScala }
 import scala.util.Random
 import scala.collection.mutable
 import java.io.File
@@ -26,7 +26,19 @@ trait ComplexStructExp extends ComplexBase with StructExp with PrimitiveOps {
   def infix_abs(c: Rep[Complex]): Rep[Double] = field[Double](c, "abs")
 }
 
-trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps with SparkVectorOps {
+trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps with SparkVectorOps with LiftScala {
+
+  def iterate(x: Rep[Unit]) = {
+    var x = Vector("asdf")
+    var y = 0
+    while (y < 5) {
+      x = x.map(_ + y)
+      y = y + 1
+      unit(())
+    }
+    println(y)
+    x.save("write")
+  }
 
   def strings(x: Rep[Unit]) = {
     val s = getArgs(0)
