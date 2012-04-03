@@ -45,13 +45,13 @@ trait SparkVectorOpsExp extends VectorOpsExp with SparkVectorOps {
   //  }
 
   override def syms(e: Any): List[Sym[Any]] = e match {
-    case red: VectorReduceByKey[_, _] => syms(red.in, red.closure)
+    // VectorReduceBykey is a closure2node, handled by superclass
     case v: VectorCache[_] => syms(v.in)
     case _ => super.syms(e)
   }
 
   override def symsFreq(e: Any): List[(Sym[Any], Double)] = e match {
-    case red: VectorReduceByKey[_, _] => freqHot(red.closure) ++ freqNormal(red.in)
+    // VectorReduceBykey is a closure2node, handled by superclass
     case v: VectorCache[_] => freqNormal(v.in)
     case _ => super.symsFreq(e)
   }
@@ -245,7 +245,7 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
 
   var reduceByKey = true
 
-  var allOff = false
+  val allOff = false
   if (allOff) {
     narrowExistingMaps = false
     insertNarrowingMaps = false
@@ -329,10 +329,10 @@ import com.esotericsoftware.kryo.Kryo
 object %s {
         def main(sparkInputArgs: Array[String]) {
     System.setProperty("spark.serializer", "spark.KryoSerializer")
-    System.setProperty("spark.kryo.registrator", "spark.examples.Registrator")
+    System.setProperty("spark.kryo.registrator", "spark.examples.Registrator_%s")
 
     		val sc = new SparkContext(sparkInputArgs(0), "%s")
-        """.format(className, className))
+        """.format(className, className, className))
 
     emitBlock(y)(stream)
 
@@ -341,11 +341,11 @@ object %s {
     stream.println("// Types that are used in this program")
     stream.println(types.values.toList.sorted.mkString("\n"))
 
-    stream.println("""class Registrator extends KryoRegistrator {
+    stream.println("""class Registrator_%s extends KryoRegistrator {
         def registerClasses(kryo: Kryo) {
         %s
   }
-}""".format(types.keys.toList.sorted.map("kryo.register(classOf[" + _ + "])").mkString("\n")))
+}""".format(className, types.keys.toList.sorted.map("kryo.register(classOf[" + _ + "])").mkString("\n")))
     stream.println("/*****************************************\n" +
       "  End of Spark Code                  \n" +
       "*******************************************/")

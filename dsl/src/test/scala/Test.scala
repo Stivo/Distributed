@@ -5,6 +5,8 @@ import ch.epfl.distributed._
 import org.scalatest._
 import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps }
 import scala.util.Random
+import scala.collection.mutable
+import java.io.File
 
 trait ComplexBase extends Base {
 
@@ -163,7 +165,44 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
 
 }
 
-class TestVectors extends Suite {
+trait CodeGenerator {
+
+  val pairs = mutable.HashMap[PrintWriter, StringWriter]()
+
+  def setUpPrintWriter() = {
+    val sw = new StringWriter()
+    var pw = new PrintWriter(sw)
+    pairs += pw -> sw
+    pw
+  }
+
+  def writeToProject(pw: PrintWriter, projName: String, filename: String) {
+    writeToFile(pw, "%s/src/main/scala/generated/%s.scala".format(projName, filename))
+  }
+
+  def writeToFile(pw: PrintWriter, dest: String) {
+    val x = new File(dest.reverse.dropWhile(_ != '/').reverse)
+    x.mkdirs
+    println(x + " " + dest)
+    val fw = new FileWriter(dest)
+    fw.write(getContent(pw))
+    fw.close
+  }
+
+  def getContent(pw: PrintWriter) = {
+    pw.flush
+    val sw = pairs(pw)
+    sw.toString
+  }
+
+  def release(pw: PrintWriter) {
+    pairs -= pw
+    pw.close
+  }
+
+}
+
+class TestVectors extends Suite with CodeGenerator {
 
   def testSpark {
     try {
@@ -171,19 +210,12 @@ class TestVectors extends Suite {
 
       val dsl = new VectorsProg with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp
 
-      val sw = new StringWriter()
-      var pw = new PrintWriter(sw)
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.join, "g", pw)
+      val pw = setUpPrintWriter
+      codegen.emitSource(dsl.iterate, "g", pw)
 
-      pw.flush
-      //      println(sw.toString)
-
-      val dest = "spark/src/main/scala/generated/SparkGenerated.scala"
-      val fw = new FileWriter(dest)
-      fw.write(sw.toString)
-      fw.close
-
+      writeToProject(pw, "spark", "SparkGenerated")
+      release(pw)
       println("-- end")
     } catch {
       case e =>
@@ -198,18 +230,12 @@ class TestVectors extends Suite {
 
       val dsl = new VectorsProg with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp
 
-      val sw = new StringWriter()
-      var pw = new PrintWriter(sw)
+      val pw = setUpPrintWriter
       val codegen = new ScoobiGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.join, "g", pw)
+      codegen.emitSource(dsl.iterate, "g", pw)
 
-      pw.flush
-      //      println(sw.toString)
-      val dest = "scoobi/src/main/scala/ScoobiGenerated.scala"
-      val fw = new FileWriter(dest)
-      fw.write(sw.toString)
-      fw.close
-
+      writeToProject(pw, "scoobi", "ScoobiGenerated")
+      release(pw)
       println("-- end")
     } catch {
       case e =>

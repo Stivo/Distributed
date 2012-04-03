@@ -280,8 +280,9 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
   }
 
   override def symsFreq(e: Any): List[(Sym[Any], Double)] = e match {
-    case s: ClosureNode[_, _] => freqHot(s.closure) ++ freqNormal(s.in)
-    case s: Closure2Node[_, _, _] => freqHot(s.closure) ++ freqNormal(s.in)
+    // TODO: ++ does not work anymore, because it is defined in ListOps
+    case s: ClosureNode[_, _] => freqHot(s.closure, s.in) //++ freqNormal(s.in)
+    case s: Closure2Node[_, _, _] => freqHot(s.closure, s.in) //++ freqNormal(s.in)
     case VectorFlatten(x) => freqNormal(x)
     case NewVector(arg) => freqNormal(arg)
     case VectorSave(vec, path) => freqNormal(vec, path)
@@ -557,10 +558,11 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
       state = transformTree(state)
 
       // return optimized tree to 
-      val currentScope0 = state.ttps
+      var currentScope0 = state.ttps
       result0 = state.results
       // hack: should maybe not add all nodes here, but seems to work, as we are in the top scope
       innerScope ++= IR.globalDefs.filter(!innerScope.contains(_))
+      currentScope0 = getFatSchedule(currentScope0)(result0)
       super.focusExactScopeFat(currentScope0)(result0.map(IR.Block(_)))(body)
     } else {
       super.focusExactScopeFat(currentScope0In)(result0B)(body)

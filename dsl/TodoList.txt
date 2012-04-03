@@ -45,7 +45,22 @@ TODO List:
 	- Transformers & dependency pulling 
 	- Tests that check if the generated code compiles.
 - Compile external source files, like delite
-- ReduceToOne
+- move filter before join (if dependant on key or one value) or group and reduce (if dependant on key)
+
+Other functions:
+- ReduceToOne: Both scoobi and spark have this, easy for hadoop
+- cogroup: Spark calls this x1.groupWith(x2), scoobi calls it coGroup(l1, l2)
+- distinct: scoobi has this, spark doesnt.
+
+iterative constructs with VectorNode inside:
+- Would enable many spark benchmarks
+- Would enable pagerank, one of the most important ones
+- would need some var in main body
+sum or avg on iterables:
+- TPCH usually need this.
+- maybe can provide sum or avg and let LMS fuse the loops
+=> Would need a small collection library. List, iterable with map, filter, fold
+=> Would need analysis, map, fold etc for iterable
 
 Would be nice:
 - merge filters
@@ -55,10 +70,10 @@ Would be nice:
 
 Easy, low priority tasks:
 - Add Tuple3, 4 etc
-- Extend String class with more methods (startsWith, endsWith, contains etc)
+- Extend String class with more methods (indexOf, takeWhile)
 - Spark reduce by key optimization: Allow if all readers of group by key are reduces
 - Refactor field reads to use a list as representation instead of the string
-- Make list of all keys in use in the metaInfos of a VectorNode 
+- Make list of all metaInfos keys (narrowed, narrower etc) of a VectorNode 
 
 To ask tiark:
 - Compile external source files? => Investigate self first.
