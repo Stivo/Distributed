@@ -36,24 +36,37 @@ trait ScoobiGenVector extends ScalaGenBase with ScalaGenVector with VectorTransf
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
   def makeTypeFor(name: String, fields: Iterable[String]) = {
+    // fields is a sorted list of the field names
+    // typeInfo is the type with all fields and all infos
+    val typeInfo = typeHandler.typeInfos2(name)
+    // this is just a set to have contains
     val fieldsSet = fields.toSet
-    val fieldsInType = typeHandler.typeInfos.getOrElse(name, Map[String, String]())
-    val fieldIndexes = fieldsInType.keys.toList
-    val indexesHere = fields.map(fieldIndexes.indexOf(_))
+    val fieldsInType = typeInfo.fields
+    val fieldsHere = typeInfo.fields.filter(x => fieldsSet.contains(x.name))
     if (!types.contains(name)) {
-      types(name) = "trait %s {\n%s\n}".format(name,
+      types(name) = "trait %s extends Serializable {\n%s\n} ".format(name,
         fieldsInType.map {
-          case (name, typ) =>
+          fi =>
             """def %s : %s = throw new RuntimeException("Should not try to access %s here, internal error")"""
-              .format(name, typ, name)
+              .format(fi.name, fi.niceName, fi.name)
         }.mkString("\n"))
     }
-    val typeName = name + ((List("") ++ indexesHere).mkString("_"))
+    val typeName = name + ((List("") ++ fieldsHere.map(_.position + "")).mkString("_"))
     if (!types.contains(typeName)) {
-      val args = fieldsInType.filterKeys(fieldsSet.contains(_)).map { case (name, typ) => "override val %s : %s".format(name, typ) }.mkString(", ")
+      val args = fieldsHere.map { fi => "override val %s : %s".format(fi.name, fi.niceName) }.mkString(", ")
       types(typeName) = """case class %s(%s) extends %s {
-   override def toString() = "%s("+%s+")"
-    }""".format(typeName, args, name, name, fieldsInType.keys.map(x => if (fieldsSet.contains(x)) x else "\"\"").mkString("""+","+"""))
+   override def toString() = {
+        val sb = new StringBuilder()
+        sb.append("%s(")
+        %s
+        sb.append(")")
+        sb.toString()
+   }
+}""".format(typeName, args, name, name,
+        fieldsInType
+          .map(x => if (fieldsSet.contains(x.name)) x.name else "")
+          .map(x => """%s sb.append(",")""".format(if (x.isEmpty) "" else "sb.append(%s); ".format(x)))
+          .mkString(";\n"))
     }
     typeName
   }

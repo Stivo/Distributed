@@ -5,6 +5,7 @@
  */
 
 import java.io.PrintWriter
+import scala.collection.immutable.ListMap
 import scala.virtualization.lms.common.ScalaGenFat
 import scala.virtualization.lms.util.OverloadHack
 import scala.virtualization.lms.common.{ Base, StructExp, EffectExp, BaseFatExp, Variables, StringOps, ArrayOps }
@@ -47,7 +48,7 @@ trait PartSupplierOps extends Base with Variables with OverloadHack with ParserO
 }
 
 trait PartSupplierOpsExp extends PartSupplierOps with StructExp with EffectExp with BaseFatExp {
-  def partsupplier_obj_new(ps_partkey: Exp[Int], ps_suppkey: Exp[Int], ps_availqty: Exp[Int], ps_supplycost: Exp[Double], ps_comment: Exp[String]) = struct[PartSupplier]("PartSupplier" :: Nil, Map("ps_partkey" -> ps_partkey, "ps_suppkey" -> ps_suppkey, "ps_availqty" -> ps_availqty, "ps_supplycost" -> ps_supplycost, "ps_comment" -> ps_comment))
+  def partsupplier_obj_new(ps_partkey: Exp[Int], ps_suppkey: Exp[Int], ps_availqty: Exp[Int], ps_supplycost: Exp[Double], ps_comment: Exp[String]) = struct[PartSupplier]("PartSupplier" :: Nil, ListMap("ps_partkey" -> ps_partkey, "ps_suppkey" -> ps_suppkey, "ps_availqty" -> ps_availqty, "ps_supplycost" -> ps_supplycost, "ps_comment" -> ps_comment))
   def partsupplier_ps_partkey(__x: Rep[PartSupplier]) = field[Int](__x, "ps_partkey")
   def partsupplier_ps_suppkey(__x: Rep[PartSupplier]) = field[Int](__x, "ps_suppkey")
   def partsupplier_ps_availqty(__x: Rep[PartSupplier]) = field[Int](__x, "ps_availqty")
@@ -85,7 +86,7 @@ trait LogEntryOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait LogEntryOpsExp extends LogEntryOps with StructExp with EffectExp with BaseFatExp {
-  def logentry_obj_new(request: Exp[Long], timestamp: Exp[Double], url: Exp[String]) = struct[LogEntry]("LogEntry" :: Nil, Map("request" -> request, "timestamp" -> timestamp, "url" -> url))
+  def logentry_obj_new(request: Exp[Long], timestamp: Exp[Double], url: Exp[String]) = struct[LogEntry]("LogEntry" :: Nil, ListMap("request" -> request, "timestamp" -> timestamp, "url" -> url))
   def logentry_request(__x: Rep[LogEntry]) = field[Long](__x, "request")
   def logentry_timestamp(__x: Rep[LogEntry]) = field[Double](__x, "timestamp")
   def logentry_url(__x: Rep[LogEntry]) = field[String](__x, "url")
@@ -125,7 +126,7 @@ trait PageCountEntryOps extends Base with Variables with OverloadHack with Parse
 }
 
 trait PageCountEntryOpsExp extends PageCountEntryOps with StructExp with EffectExp with BaseFatExp {
-  def pagecountentry_obj_new(language: Exp[String], project: Exp[String], site: Exp[String], number: Exp[Long], size: Exp[Long]) = struct[PageCountEntry]("PageCountEntry" :: Nil, Map("language" -> language, "project" -> project, "site" -> site, "number" -> number, "size" -> size))
+  def pagecountentry_obj_new(language: Exp[String], project: Exp[String], site: Exp[String], number: Exp[Long], size: Exp[Long]) = struct[PageCountEntry]("PageCountEntry" :: Nil, ListMap("language" -> language, "project" -> project, "site" -> site, "number" -> number, "size" -> size))
   def pagecountentry_language(__x: Rep[PageCountEntry]) = field[String](__x, "language")
   def pagecountentry_project(__x: Rep[PageCountEntry]) = field[String](__x, "project")
   def pagecountentry_site(__x: Rep[PageCountEntry]) = field[String](__x, "site")
@@ -175,7 +176,7 @@ trait PartOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait PartOpsExp extends PartOps with StructExp with EffectExp with BaseFatExp {
-  def part_obj_new(p_partkey: Exp[Int], p_name: Exp[String], p_mfgr: Exp[String], p_brand: Exp[String], p_type: Exp[String], p_size: Exp[Int], p_container: Exp[String], p_retailprice: Exp[Double], p_comment: Exp[String]) = struct[Part]("Part" :: Nil, Map("p_partkey" -> p_partkey, "p_name" -> p_name, "p_mfgr" -> p_mfgr, "p_brand" -> p_brand, "p_type" -> p_type, "p_size" -> p_size, "p_container" -> p_container, "p_retailprice" -> p_retailprice, "p_comment" -> p_comment))
+  def part_obj_new(p_partkey: Exp[Int], p_name: Exp[String], p_mfgr: Exp[String], p_brand: Exp[String], p_type: Exp[String], p_size: Exp[Int], p_container: Exp[String], p_retailprice: Exp[Double], p_comment: Exp[String]) = struct[Part]("Part" :: Nil, ListMap("p_partkey" -> p_partkey, "p_name" -> p_name, "p_mfgr" -> p_mfgr, "p_brand" -> p_brand, "p_type" -> p_type, "p_size" -> p_size, "p_container" -> p_container, "p_retailprice" -> p_retailprice, "p_comment" -> p_comment))
   def part_p_partkey(__x: Rep[Part]) = field[Int](__x, "p_partkey")
   def part_p_name(__x: Rep[Part]) = field[String](__x, "p_name")
   def part_p_mfgr(__x: Rep[Part]) = field[String](__x, "p_mfgr")
@@ -212,7 +213,7 @@ trait N1Ops extends Base with Variables with OverloadHack with ParserOps with N2
 }
 
 trait N1OpsExp extends N1Ops with StructExp with EffectExp with BaseFatExp {
-  def n1_obj_new(n2: Exp[N2], n1id: Exp[String], n1Junk: Exp[Int]) = struct[N1]("N1" :: Nil, Map("n2" -> n2, "n1id" -> n1id, "n1Junk" -> n1Junk))
+  def n1_obj_new(n2: Exp[N2], n1id: Exp[String], n1Junk: Exp[Int]) = struct[N1]("N1" :: Nil, ListMap("n2" -> n2, "n1id" -> n1id, "n1Junk" -> n1Junk))
   def n1_n2(__x: Rep[N1]) = field[N2](__x, "n2")
   def n1_n1id(__x: Rep[N1]) = field[String](__x, "n1id")
   def n1_n1Junk(__x: Rep[N1]) = field[Int](__x, "n1Junk")
@@ -248,7 +249,7 @@ trait RegionOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait RegionOpsExp extends RegionOps with StructExp with EffectExp with BaseFatExp {
-  def region_obj_new(r_regionkey: Exp[Int], r_name: Exp[String], r_comment: Exp[String]) = struct[Region]("Region" :: Nil, Map("r_regionkey" -> r_regionkey, "r_name" -> r_name, "r_comment" -> r_comment))
+  def region_obj_new(r_regionkey: Exp[Int], r_name: Exp[String], r_comment: Exp[String]) = struct[Region]("Region" :: Nil, ListMap("r_regionkey" -> r_regionkey, "r_name" -> r_name, "r_comment" -> r_comment))
   def region_r_regionkey(__x: Rep[Region]) = field[Int](__x, "r_regionkey")
   def region_r_name(__x: Rep[Region]) = field[String](__x, "r_name")
   def region_r_comment(__x: Rep[Region]) = field[String](__x, "r_comment")
@@ -294,7 +295,7 @@ trait CustomerOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait CustomerOpsExp extends CustomerOps with StructExp with EffectExp with BaseFatExp {
-  def customer_obj_new(c_custkey: Exp[Int], c_name: Exp[String], c_address: Exp[String], c_nationkey: Exp[Int], c_phone: Exp[String], c_acctbal: Exp[Double], c_mktsegment: Exp[String], c_comment: Exp[String]) = struct[Customer]("Customer" :: Nil, Map("c_custkey" -> c_custkey, "c_name" -> c_name, "c_address" -> c_address, "c_nationkey" -> c_nationkey, "c_phone" -> c_phone, "c_acctbal" -> c_acctbal, "c_mktsegment" -> c_mktsegment, "c_comment" -> c_comment))
+  def customer_obj_new(c_custkey: Exp[Int], c_name: Exp[String], c_address: Exp[String], c_nationkey: Exp[Int], c_phone: Exp[String], c_acctbal: Exp[Double], c_mktsegment: Exp[String], c_comment: Exp[String]) = struct[Customer]("Customer" :: Nil, ListMap("c_custkey" -> c_custkey, "c_name" -> c_name, "c_address" -> c_address, "c_nationkey" -> c_nationkey, "c_phone" -> c_phone, "c_acctbal" -> c_acctbal, "c_mktsegment" -> c_mktsegment, "c_comment" -> c_comment))
   def customer_c_custkey(__x: Rep[Customer]) = field[Int](__x, "c_custkey")
   def customer_c_name(__x: Rep[Customer]) = field[String](__x, "c_name")
   def customer_c_address(__x: Rep[Customer]) = field[String](__x, "c_address")
@@ -347,7 +348,7 @@ trait OrderOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait OrderOpsExp extends OrderOps with StructExp with EffectExp with BaseFatExp {
-  def order_obj_new(o_orderkey: Exp[Int], o_custkey: Exp[Int], o_orderstatus: Exp[Char], o_totalprice: Exp[Double], o_orderdate: Exp[Date], o_orderpriority: Exp[String], o_clerk: Exp[String], o_shippriority: Exp[Int], o_comment: Exp[String]) = struct[Order]("Order" :: Nil, Map("o_orderkey" -> o_orderkey, "o_custkey" -> o_custkey, "o_orderstatus" -> o_orderstatus, "o_totalprice" -> o_totalprice, "o_orderdate" -> o_orderdate, "o_orderpriority" -> o_orderpriority, "o_clerk" -> o_clerk, "o_shippriority" -> o_shippriority, "o_comment" -> o_comment))
+  def order_obj_new(o_orderkey: Exp[Int], o_custkey: Exp[Int], o_orderstatus: Exp[Char], o_totalprice: Exp[Double], o_orderdate: Exp[Date], o_orderpriority: Exp[String], o_clerk: Exp[String], o_shippriority: Exp[Int], o_comment: Exp[String]) = struct[Order]("Order" :: Nil, ListMap("o_orderkey" -> o_orderkey, "o_custkey" -> o_custkey, "o_orderstatus" -> o_orderstatus, "o_totalprice" -> o_totalprice, "o_orderdate" -> o_orderdate, "o_orderpriority" -> o_orderpriority, "o_clerk" -> o_clerk, "o_shippriority" -> o_shippriority, "o_comment" -> o_comment))
   def order_o_orderkey(__x: Rep[Order]) = field[Int](__x, "o_orderkey")
   def order_o_custkey(__x: Rep[Order]) = field[Int](__x, "o_custkey")
   def order_o_orderstatus(__x: Rep[Order]) = field[Char](__x, "o_orderstatus")
@@ -397,7 +398,7 @@ trait SupplierOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait SupplierOpsExp extends SupplierOps with StructExp with EffectExp with BaseFatExp {
-  def supplier_obj_new(s_suppkey: Exp[Int], s_name: Exp[String], s_address: Exp[String], s_nationkey: Exp[Int], s_phone: Exp[String], s_acctbal: Exp[Double], s_comment: Exp[String]) = struct[Supplier]("Supplier" :: Nil, Map("s_suppkey" -> s_suppkey, "s_name" -> s_name, "s_address" -> s_address, "s_nationkey" -> s_nationkey, "s_phone" -> s_phone, "s_acctbal" -> s_acctbal, "s_comment" -> s_comment))
+  def supplier_obj_new(s_suppkey: Exp[Int], s_name: Exp[String], s_address: Exp[String], s_nationkey: Exp[Int], s_phone: Exp[String], s_acctbal: Exp[Double], s_comment: Exp[String]) = struct[Supplier]("Supplier" :: Nil, ListMap("s_suppkey" -> s_suppkey, "s_name" -> s_name, "s_address" -> s_address, "s_nationkey" -> s_nationkey, "s_phone" -> s_phone, "s_acctbal" -> s_acctbal, "s_comment" -> s_comment))
   def supplier_s_suppkey(__x: Rep[Supplier]) = field[Int](__x, "s_suppkey")
   def supplier_s_name(__x: Rep[Supplier]) = field[String](__x, "s_name")
   def supplier_s_address(__x: Rep[Supplier]) = field[String](__x, "s_address")
@@ -439,7 +440,7 @@ trait NationOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait NationOpsExp extends NationOps with StructExp with EffectExp with BaseFatExp {
-  def nation_obj_new(n_nationkey: Exp[Int], n_name: Exp[String], n_regionkey: Exp[Int], n_comment: Exp[String]) = struct[Nation]("Nation" :: Nil, Map("n_nationkey" -> n_nationkey, "n_name" -> n_name, "n_regionkey" -> n_regionkey, "n_comment" -> n_comment))
+  def nation_obj_new(n_nationkey: Exp[Int], n_name: Exp[String], n_regionkey: Exp[Int], n_comment: Exp[String]) = struct[Nation]("Nation" :: Nil, ListMap("n_nationkey" -> n_nationkey, "n_name" -> n_name, "n_regionkey" -> n_regionkey, "n_comment" -> n_comment))
   def nation_n_nationkey(__x: Rep[Nation]) = field[Int](__x, "n_nationkey")
   def nation_n_name(__x: Rep[Nation]) = field[String](__x, "n_name")
   def nation_n_regionkey(__x: Rep[Nation]) = field[Int](__x, "n_regionkey")
@@ -502,7 +503,7 @@ trait LineItemOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait LineItemOpsExp extends LineItemOps with StructExp with EffectExp with BaseFatExp {
-  def lineitem_obj_new(l_orderkey: Exp[Int], l_partkey: Exp[Int], l_suppkey: Exp[Int], l_linenumber: Exp[Int], l_quantity: Exp[Double], l_extendedprice: Exp[Double], l_discount: Exp[Double], l_tax: Exp[Double], l_returnflag: Exp[Char], l_linestatus: Exp[Char], l_shipdate: Exp[Date], l_commitdate: Exp[Date], l_receiptdate: Exp[Date], l_shipinstruct: Exp[String], l_shipmode: Exp[String], l_comment: Exp[String]) = struct[LineItem]("LineItem" :: Nil, Map("l_orderkey" -> l_orderkey, "l_partkey" -> l_partkey, "l_suppkey" -> l_suppkey, "l_linenumber" -> l_linenumber, "l_quantity" -> l_quantity, "l_extendedprice" -> l_extendedprice, "l_discount" -> l_discount, "l_tax" -> l_tax, "l_returnflag" -> l_returnflag, "l_linestatus" -> l_linestatus, "l_shipdate" -> l_shipdate, "l_commitdate" -> l_commitdate, "l_receiptdate" -> l_receiptdate, "l_shipinstruct" -> l_shipinstruct, "l_shipmode" -> l_shipmode, "l_comment" -> l_comment))
+  def lineitem_obj_new(l_orderkey: Exp[Int], l_partkey: Exp[Int], l_suppkey: Exp[Int], l_linenumber: Exp[Int], l_quantity: Exp[Double], l_extendedprice: Exp[Double], l_discount: Exp[Double], l_tax: Exp[Double], l_returnflag: Exp[Char], l_linestatus: Exp[Char], l_shipdate: Exp[Date], l_commitdate: Exp[Date], l_receiptdate: Exp[Date], l_shipinstruct: Exp[String], l_shipmode: Exp[String], l_comment: Exp[String]) = struct[LineItem]("LineItem" :: Nil, ListMap("l_orderkey" -> l_orderkey, "l_partkey" -> l_partkey, "l_suppkey" -> l_suppkey, "l_linenumber" -> l_linenumber, "l_quantity" -> l_quantity, "l_extendedprice" -> l_extendedprice, "l_discount" -> l_discount, "l_tax" -> l_tax, "l_returnflag" -> l_returnflag, "l_linestatus" -> l_linestatus, "l_shipdate" -> l_shipdate, "l_commitdate" -> l_commitdate, "l_receiptdate" -> l_receiptdate, "l_shipinstruct" -> l_shipinstruct, "l_shipmode" -> l_shipmode, "l_comment" -> l_comment))
   def lineitem_l_orderkey(__x: Rep[LineItem]) = field[Int](__x, "l_orderkey")
   def lineitem_l_partkey(__x: Rep[LineItem]) = field[Int](__x, "l_partkey")
   def lineitem_l_suppkey(__x: Rep[LineItem]) = field[Int](__x, "l_suppkey")
@@ -549,7 +550,7 @@ trait N2Ops extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait N2OpsExp extends N2Ops with StructExp with EffectExp with BaseFatExp {
-  def n2_obj_new(n2id: Exp[String], n2junk: Exp[Int]) = struct[N2]("N2" :: Nil, Map("n2id" -> n2id, "n2junk" -> n2junk))
+  def n2_obj_new(n2id: Exp[String], n2junk: Exp[Int]) = struct[N2]("N2" :: Nil, ListMap("n2id" -> n2id, "n2junk" -> n2junk))
   def n2_n2id(__x: Rep[N2]) = field[String](__x, "n2id")
   def n2_n2junk(__x: Rep[N2]) = field[Int](__x, "n2junk")
 }
@@ -584,7 +585,7 @@ trait UserOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait UserOpsExp extends UserOps with StructExp with EffectExp with BaseFatExp {
-  def user_obj_new(userId: Exp[Int], name: Exp[String], age: Exp[Int]) = struct[User]("User" :: Nil, Map("userId" -> userId, "name" -> name, "age" -> age))
+  def user_obj_new(userId: Exp[Int], name: Exp[String], age: Exp[Int]) = struct[User]("User" :: Nil, ListMap("userId" -> userId, "name" -> name, "age" -> age))
   def user_userId(__x: Rep[User]) = field[Int](__x, "userId")
   def user_name(__x: Rep[User]) = field[String](__x, "name")
   def user_age(__x: Rep[User]) = field[Int](__x, "age")
@@ -622,7 +623,7 @@ trait AddressOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait AddressOpsExp extends AddressOps with StructExp with EffectExp with BaseFatExp {
-  def address_obj_new(userId: Exp[Int], street: Exp[String], zip: Exp[Int], city: Exp[String]) = struct[Address]("Address" :: Nil, Map("userId" -> userId, "street" -> street, "zip" -> zip, "city" -> city))
+  def address_obj_new(userId: Exp[Int], street: Exp[String], zip: Exp[Int], city: Exp[String]) = struct[Address]("Address" :: Nil, ListMap("userId" -> userId, "street" -> street, "zip" -> zip, "city" -> city))
   def address_userId(__x: Rep[Address]) = field[Int](__x, "userId")
   def address_street(__x: Rep[Address]) = field[String](__x, "street")
   def address_zip(__x: Rep[Address]) = field[Int](__x, "zip")

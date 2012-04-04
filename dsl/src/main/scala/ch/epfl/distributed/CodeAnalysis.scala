@@ -77,7 +77,7 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
         case _ => Nil
       }
     }
-    
+
     def getNodesForSymbol(x: Sym[_]) = {
       GraphUtil.stronglyConnectedComponents(List(x), getInputSyms).flatten.reverse
     }

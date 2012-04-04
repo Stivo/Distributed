@@ -3,7 +3,7 @@ import java.io.StringWriter
 import java.io.FileWriter
 import ch.epfl.distributed._
 import org.scalatest._
-import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps }
+import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps, LiftNumeric }
 import scala.util.Random
 
 trait TpchQueriesApp extends VectorImplOps with ApplicationOps with SparkVectorOps {
@@ -30,7 +30,7 @@ trait TpchQueriesApp extends VectorImplOps with ApplicationOps with SparkVectorO
     val lineItemTuples = lineitems.map(x => (x.l_orderkey, x))
     val orderTuples = filteredOrders.map(x => (x.o_orderkey, x))
     val joined = lineItemTuples.join(orderTuples)
-    val tupled = joined.map { x => val y = (x._2._1.l_orderkey, x._2._2.o_shippriority); (y, x._2._1.l_extendedprice) }
+    val tupled = joined.map { x => val y: Rep[(Int, Int)] = (x._2._1.l_orderkey, x._2._2.o_shippriority); (y, x._2._1.l_extendedprice) }
     val grouped = tupled.groupByKey
     grouped.reduce((x, y) => x + y)
       .save(getArgs(3))
@@ -56,19 +56,19 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
       println("-- begin")
 
       val dsl = new TpchQueriesApp with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp
-      //      val codegen = new { override val allOff = true } with SparkGenVector { val IR: dsl.type = dsl }
+      // val codegen = new { override val allOff = true } with SparkGenVector { val IR: dsl.type = dsl }
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
       var pw = setUpPrintWriter
       codegen.emitSource(dsl.query3nephele, appname, pw)
       writeToProject(pw, "spark", appname)
       release(pw)
 
-      //      val codegenUnoptimized = new { override val allOff = true } with SparkGenVector { val IR: dsl.type = dsl }
-      //      codegenUnoptimized.reduceByKey = true
-      //      pw = setUpPrintWriter
-      //      codegenUnoptimized.emitSource(dsl.statistics, unoptimizedAppname, pw)
-      //      writeToProject(pw, "spark", unoptimizedAppname)
-      //      release(pw)
+      val codegenUnoptimized = new { override val allOff = true } with SparkGenVector { val IR: dsl.type = dsl }
+      codegenUnoptimized.reduceByKey = true
+      pw = setUpPrintWriter
+      codegenUnoptimized.emitSource(dsl.query3nephele, unoptimizedAppname, pw)
+      writeToProject(pw, "spark", unoptimizedAppname)
+      release(pw)
 
       println("-- end")
     } catch {

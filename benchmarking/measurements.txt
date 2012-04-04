@@ -1,0 +1,21 @@
+tpch query 3 nephele, 725m lineitem, 164mb orders
+
+1 core
+optimized:
+real	0m33.426s
+user	0m38.454s
+sys	0m1.460s
+1.8Gb peak ram usage.
+
+unoptimized:
+real	1m35.444s
+user	1m59.611s
+sys	0m3.840s
+
+nearly 4gb of ram used.
+
+scoobi: optimized (unoptimized won't compile)
+real	1m20.054s
+user	1m16.961s
+sys	0m5.700s
+

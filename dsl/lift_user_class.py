@@ -73,6 +73,7 @@ def emitHeader(fileOut):
     #take care of package and imports
     l = l + """
 import java.io.PrintWriter
+import scala.collection.immutable.ListMap
 import scala.virtualization.lms.common.ScalaGenFat
 import scala.virtualization.lms.util.OverloadHack
 import scala.virtualization.lms.common.{ Base, StructExp, EffectExp, BaseFatExp, Variables, StringOps, ArrayOps }
@@ -255,7 +256,7 @@ def listify(fields):
     return l
 
 def mapify(fields):
-    l = "Map("
+    l = "ListMap("
     for f in fields:
         l = l + """ "%s" -> %s""" % (f,f)
         if(fields.index(f) != len(fields) - 1):

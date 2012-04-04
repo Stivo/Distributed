@@ -10,7 +10,7 @@ object Date {
   }
 }
 
-abstract class Date(val year: Int, val month: Int, val day: Int) {
+abstract class Date(val year: Int, val month: Int, val day: Int) extends Serializable {
   //Intervals
   def +(interval: Interval): Date
 
@@ -67,4 +67,4 @@ class IntervalBuilder(n: Int) {
   def days: Interval = new Interval(0, 0, n)
 }
 
-class Interval(val years: Int, val months: Int, val days: Int)
+class Interval(val years: Int, val months: Int, val days: Int) extends Serializable
