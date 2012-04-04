@@ -137,7 +137,7 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
       if (s != null)
         println("###################### " + s + " ######################")
       println("Printing all ttps for the current state")
-      ttps.foreach(println)
+      ttps.map(x => (x, " with types: " + x.lhs.map(_.Type).mkString(","))).foreach(println)
     }
   }
 

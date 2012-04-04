@@ -126,29 +126,22 @@ trait ScoobiGenVector extends ScalaGenBase with ScalaGenVector with VectorTransf
     transformer.currentState
   }
 
-  override def remap[A](m: Manifest[A]): String = {
-    val remappings = typeHandler.remappings.filter(!_._2.startsWith("tuple2s_"))
-    var out = m.toString
-    remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
-    out
-  }
-
   def mkWireFormats() = {
     val out = new StringBuilder
     def findName(s: String) = s.takeWhile('_' != _)
     val groupedNames = types.keySet.groupBy(findName).map { x => (x._1, (x._2 - (x._1)).toList.sorted) }.toMap
     var index = -1
-    out ++= groupedNames.map { in =>
-      index += 1;
-      " implicit val wireFormat_%s = mkAbstractWireFormat%s[%s, %s] "
-        .format(index, if (in._2.size == 1) "1" else "", in._1, in._2.mkString(", "))
-    }.mkString("\n")
-    out += '\n'
     val caseClassTypes = groupedNames.values.flatMap(x => x).toList.sorted
     out ++= caseClassTypes.map { typ =>
       index += 1
       " implicit val wireFormat_%s = mkCaseWireFormat(%s.apply _, %s.unapply _) "
         .format(index, typ, typ)
+    }.mkString("\n")
+    out += '\n'
+    out ++= groupedNames.map { in =>
+      index += 1;
+      " implicit val wireFormat_%s = mkAbstractWireFormat%s[%s, %s] "
+        .format(index, if (in._2.size == 1) "1" else "", in._1, in._2.mkString(", "))
     }.mkString("\n")
     out ++= "\n//groupings\n"
     out ++= caseClassTypes.map { typ =>
@@ -204,9 +197,9 @@ object %s {
         
   def main(scoobiInputArgsScoobi: Array[String]) = withHadoopArgs(scoobiInputArgsScoobi) { scoobiInputArgs =>
         import WireFormat.{ mkAbstractWireFormat, mkCaseWireFormat }
-        implicit val wireFormat_date = mkAbstractWireFormat[Date, SimpleDate, DateTime]
         implicit val wireFormat_simpledate = mkCaseWireFormat(SimpleDate, SimpleDate.unapply _)
         implicit val wireFormat_datetime = mkCaseWireFormat(DateTime, DateTime.unapply _)
+   		implicit val wireFormat_date = mkAbstractWireFormat[Date, SimpleDate, DateTime]
 
         ###wireFormats###
         """.format(className, className))

@@ -18,11 +18,12 @@ trait DateOps extends Base {
   }
 
   class DateRepOps(d: Rep[Date]) {
-    def <=(rd: Rep[Date]): Rep[Boolean] = dateLessThan(d, rd)
+    def <=(rd: Rep[Date]): Rep[Boolean] = dateComparison(d, rd, "<=")
+    def <(rd: Rep[Date]): Rep[Boolean] = dateComparison(d, rd, "<")
   }
 
   def dateObjectApply(str: Rep[String]): Rep[Date]
-  def dateLessThan(ld: Rep[Date], rd: Rep[Date]): Rep[Boolean]
+  def dateComparison(ld: Rep[Date], rd: Rep[Date], compare: String): Rep[Boolean]
 
 }
 
@@ -30,14 +31,26 @@ trait DateOpsExp extends DateOps with BaseExp {
 
   //IR nodes
   case class DateObjectApply[T: Manifest](str: Rep[String]) extends Def[Date]
-  case class DateLessThan[T: Manifest](ld: Rep[Date], rd: Rep[Date]) extends Def[Boolean]
+  case class DateComparison[T: Manifest](ld: Rep[Date], rd: Rep[Date], compare: String) extends Def[Boolean]
 
   //Interface implementation
   def dateObjectApply(str: Rep[String]) = DateObjectApply(str)
-  def dateLessThan(ld: Rep[Date], rd: Rep[Date]) = DateLessThan(ld, rd)
+  def dateComparison(ld: Rep[Date], rd: Rep[Date], compare: String) = DateComparison(ld, rd, compare)
+
+  override def syms(e: Any): List[Sym[Any]] = e match {
+    case DateComparison(l, r, _) => syms(l, r)
+    case DateObjectApply(str) => syms(str)
+    case _ => super.syms(e)
+  }
+
+  override def symsFreq(e: Any): List[(Sym[Any], Double)] = e match {
+    case DateComparison(l, r, _) => freqNormal(l, r)
+    case DateObjectApply(str) => freqNormal(str)
+    case _ => super.symsFreq(e)
+  }
 
   override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = (e match {
-    case DateLessThan(l, r) => dateLessThan(f(l), f(r));
+    case DateComparison(l, r, c) => dateComparison(f(l), f(r), c);
     case _ => super.mirror(e, f)
   }).asInstanceOf[Exp[A]]
 }
@@ -48,7 +61,7 @@ trait ScalaGenDateOps extends ScalaGenBase {
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
     case DateObjectApply(str: Exp[String]) => emitValDef(sym, "ch.epfl.distributed.datastruct.Date(" + quote(str) + ")")
-    case DateLessThan(ls: Exp[Date], rd: Exp[Date]) => emitValDef(sym, quote(ls) + " <= " + quote(rd))
+    case DateComparison(ls, rd, compare) => emitValDef(sym, quote(ls) + " " + compare + " " + quote(rd))
     case _ => super.emitNode(sym, rhs)
   }
 

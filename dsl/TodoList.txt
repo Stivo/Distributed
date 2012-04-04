@@ -29,6 +29,9 @@ An ugly hack, meaning that tuples will always use all their fields
 Decisions to take:
 - Tuples => Unimportant for now, leave as is
 
+BUGS:
+- Handling of nested tuples
+
 TODO List:
 - Refine finding of locations for inserting narrowing vectormaps.
 	- Check all nodes which preserve types but do not want a narrowing themselves (flatten, filter, not cache).
@@ -56,6 +59,7 @@ iterative constructs with VectorNode inside:
 - Would enable many spark benchmarks
 - Would enable pagerank, one of the most important ones
 - would need some var in main body
+- Assumption that VectorNodes are always on top level is not correct anymore, lots of changes.
 sum or avg on iterables:
 - TPCH usually need this.
 - maybe can provide sum or avg and let LMS fuse the loops
@@ -77,3 +81,4 @@ Easy, low priority tasks:
 
 To ask tiark:
 - Compile external source files? => Investigate self first.
+- How to handle tuples correctly that have one non-rep value? Added a converter in TupleOps, but this creates different problems.

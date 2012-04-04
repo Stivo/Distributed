@@ -283,28 +283,6 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
     transformer.currentState
   }
 
-  override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
-    if (hasVectorNodes(currentScope0In)) {
-      // set up transformer
-      var result0 = result0B.map(getBlockResultFull)
-      var state = new TransformationState(currentScope0In, result0)
-      val currentScope0 = state.ttps
-      result0 = state.results
-      // hack: should maybe not add all nodes here, but seems to work, as we are in the top scope
-      innerScope ++= IR.globalDefs.filter(!innerScope.contains(_))
-      super.focusExactScopeFat(currentScope0)(result0.map(IR.Block(_)))(body)
-    } else {
-      super.focusExactScopeFat(currentScope0In)(result0B)(body)
-    }
-  }
-
-  override def remap[A](m: Manifest[A]): String = {
-    val remappings = typeHandler.remappings.filter(!_._2.startsWith("tuple2s_"))
-    var out = m.toString
-    remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
-    out
-  }
-
   override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
     //    val func : Exp[A] => Exp[B] = {x => reifyEffects(f(x))}
 

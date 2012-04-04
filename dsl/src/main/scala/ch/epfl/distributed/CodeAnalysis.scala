@@ -71,23 +71,33 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
         case _ => throw new RuntimeException("Add narrow before candidate here or in subclass")
       }
 
-    def getNodesForSymbol(x: Sym[_]) = {
-      def getInputs(x: Sym[_]) = {
-        IR.findDefinition(x) match {
-          case Some(x) => IR.syms(x.rhs)
-          case _ => Nil
-        }
+    private def getInputSyms(x: Sym[_]) = {
+      IR.findDefinition(x) match {
+        case Some(x) => IR.syms(x.rhs)
+        case _ => Nil
       }
-
-      GraphUtil.stronglyConnectedComponents(List(x), getInputs).flatten.reverse
+    }
+    
+    def getNodesForSymbol(x: Sym[_]) = {
+      GraphUtil.stronglyConnectedComponents(List(x), getInputSyms).flatten.reverse
     }
 
     def getNodesInLambda(x: Any) = {
-      x match {
-        case Def(Lambda(_, _, IR.Block(y: Sym[_]))) => getNodesForSymbol(y)
-        case Def(Lambda2(_, _, _, IR.Block(y: Sym[_]))) => getNodesForSymbol(y)
-        case _ => Nil
+      val out = x match {
+        case Def(Lambda(_, x, IR.Block(y: Sym[_]))) => (x :: Nil, getNodesForSymbol(y))
+        case Def(Lambda2(_, x1, x2, IR.Block(y: Sym[_]))) => (x1 :: x2 :: Nil, getNodesForSymbol(y))
+        case _ => (Nil, Nil)
       }
+      def isDependantOnInput(s: Sym[_], input: Sym[_]): Boolean = {
+        val syms = getInputSyms(s)
+        if (s == input || syms.contains(input)) {
+          true
+        } else {
+          val recursed = syms.map(isDependantOnInput(_, input))
+          recursed.fold(false)(_ || _)
+        }
+      }
+      out._2.filter { node => out._1.map(input => isDependantOnInput(node, input)).fold(false)(_ || _) }
     }
 
     def getNodesInClosure(x: VectorNode) = x match {
@@ -269,8 +279,10 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
             comment)
       }
       for (node <- nodes; input1 <- getInputs(node)) {
+        val readPaths = (node.directFieldReads ++ input1.successorFieldReads).map(_.path)
+        val readPathsSorted = readPaths.toList.distinct.sorted
         buf += """%s -> %s [label="%s"]; """.format(getIdForNode(input1), getIdForNode(node),
-          node.directFieldReads.map(_.path).toList.sortBy(x => x).mkString(","))
+          readPathsSorted.mkString(","))
       }
       buf += "}"
       buf.mkString("\n")

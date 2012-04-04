@@ -357,6 +357,7 @@ trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
       val pathParts = path.split("\\.").drop(1).toList
       val m = mIn.asInstanceOf[Manifest[Any]]
       var typeNow: Any = m
+      //      println("===> Asking for type "+path+" of "+mIn)
       pathParts match {
         case Nil =>
         case x :: _ if remappings.contains(m) => typeNow = typeInfos2(remappings(m)).getField(x).get
@@ -381,13 +382,37 @@ trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
           case x :: rest => restOfPath(rest, partInfo.asInstanceOf[FieldInfo[_]].getType.getField(x).get)
         }
       }
-      restOfPath(pathParts.drop(1), out)
+      val ret = restOfPath(pathParts.drop(1), out)
+      //      println("Returning "+ret)
+      ret
     }
 
   }
 
   var typeHandler: TypeHandler = null
 
+  override def remap[A](m: Manifest[A]): String = {
+    val remappings = typeHandler.remappings.filter(!_._2.startsWith("tuple2s_"))
+    var out = m.toString
+    remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
+
+    // hack for problem with constant tuples in nested tuples
+    val expname = "Expressions$Exp["
+    while (out.contains(expname)) {
+      println("##*$*%**%%** => Remaphack in progress for " + out)
+      val start = out.indexOf(expname) + expname.length
+      val end = out.indexOf("]", start)
+      val len = end - start
+      val actualType = out.substring(start, end)
+      val searchStart = out.substring(0, start)
+      val removeLength = expname.length +
+        searchStart.reverse.drop(expname.length)
+        .takeWhile { x => x != '[' && x != ' ' }.length
+      val (before, after) = out.splitAt(start)
+      out = before.reverse.drop(removeLength).reverse + actualType + after.drop(actualType.length + 1)
+    }
+    out
+  }
 }
 
 trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTransformations with VectorAnalysis {
