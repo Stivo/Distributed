@@ -63,7 +63,9 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
       writeToProject(pw, "spark", appname)
       release(pw)
 
+      val typesDefined = codegen.types.keys
       val codegenUnoptimized = new { override val allOff = true } with SparkGenVector { val IR: dsl.type = dsl }
+      codegenUnoptimized.skipTypes ++= typesDefined
       codegenUnoptimized.reduceByKey = true
       pw = setUpPrintWriter
       codegenUnoptimized.emitSource(dsl.query3nephele, unoptimizedAppname, pw)
@@ -90,9 +92,11 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
       writeToProject(pw, "scoobi", appname)
       release(pw)
 
+      //      val typesDefined = codegen.types.keys
       //      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenVector { val IR: dsl.type = dsl }
+      //      codegenUnoptimized.skipTypes ++= typesDefined
       //      pw = setUpPrintWriter
-      //      codegenUnoptimized.emitSource(dsl.statistics, unoptimizedAppname, pw)
+      //      codegenUnoptimized.emitSource(dsl.query3nephele, unoptimizedAppname, pw)
       //      writeToProject(pw, "scoobi", unoptimizedAppname)
       //      release(pw)
 

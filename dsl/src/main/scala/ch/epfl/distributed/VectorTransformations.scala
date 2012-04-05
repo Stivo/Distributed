@@ -25,11 +25,14 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda }
   import IR.{ Struct }
 
+  val stopMarkingText = "stop transformation: node marked"
+
   class MarkerTransformer(val transformation: Transformation, val transformer: Transformer) extends SubstTransformer {
     private var toDo = mutable.HashSet[Exp[_]]()
     override def apply[A](inExp: Exp[A]): Exp[A] = {
       if (transformation.appliesToNode(inExp, transformer)) {
         toDo += inExp
+        throw new InterruptedException(stopMarkingText)
       }
       inExp
     }
@@ -60,7 +63,12 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
       var out = false
       transformations.find { transformation =>
         val marker = new MarkerTransformer(transformation, this)
-        transformAll(marker)
+        try {
+          transformAll(marker)
+        } catch {
+          case x: InterruptedException if (x.getMessage == stopMarkingText) => // expected, one value was found
+          case x => throw (x)
+        }
         for (exp <- marker.getTodo.take(1)) {
           out = true
           val (ttps, substs) = transformation.applyToNode(exp, this)
@@ -95,8 +103,11 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
           }
           val newState = new TransformationState(currentState.ttps ++ allAdded, currentState.results)
           val subst = new SubstTransformer()
-          subst.subst ++= substs
-          currentState = transformAll(subst, newState)
+          val substsAdd = substs.filter { case (Sym(i1), Sym(i2)) if (i1 == i2) => false case _ => true }
+          subst.subst ++= substsAdd
+          if (!substsAdd.isEmpty) {
+            currentState = transformAll(subst, newState)
+          }
         }
         out
       }
@@ -161,6 +172,7 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
       val ttps = List(fatten(outTp))
       // return ttps and substitutions
       val substs = List((inExp, outTp.sym))
+
       (ttps, substs)
     }
 

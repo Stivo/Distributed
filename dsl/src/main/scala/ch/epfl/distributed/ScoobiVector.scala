@@ -9,11 +9,10 @@ import scala.collection.mutable
 import java.util.regex.Pattern
 import java.io.StringWriter
 
-trait ScoobiProgram extends VectorOpsExp with VectorImplOps {
+trait ScoobiProgram extends VectorOpsExp with VectorImplOps
 
-}
-
-trait ScoobiGenVector extends ScalaGenBase with ScalaGenVector with VectorTransformations with Matchers {
+trait ScoobiGenVector extends ScalaGenBase with ScalaGenVector
+    with VectorTransformations with Matchers with CaseClassTypeFactory {
 
   val IR: VectorOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -35,58 +34,10 @@ trait ScoobiGenVector extends ScalaGenBase with ScalaGenVector with VectorTransf
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
-  def makeTypeFor(name: String, fields: Iterable[String]) = {
-    // fields is a sorted list of the field names
-    // typeInfo is the type with all fields and all infos
-    val typeInfo = typeHandler.typeInfos2(name)
-    // this is just a set to have contains
-    val fieldsSet = fields.toSet
-    val fieldsInType = typeInfo.fields
-    val fieldsHere = typeInfo.fields.filter(x => fieldsSet.contains(x.name))
-    if (!types.contains(name)) {
-      types(name) = "trait %s extends Serializable {\n%s\n} ".format(name,
-        fieldsInType.map {
-          fi =>
-            """def %s : %s = throw new RuntimeException("Should not try to access %s here, internal error")"""
-              .format(fi.name, fi.niceName, fi.name)
-        }.mkString("\n"))
-    }
-    val typeName = name + ((List("") ++ fieldsHere.map(_.position + "")).mkString("_"))
-    if (!types.contains(typeName)) {
-      val args = fieldsHere.map { fi => "override val %s : %s".format(fi.name, fi.niceName) }.mkString(", ")
-      types(typeName) = """case class %s(%s) extends %s {
-   override def toString() = {
-        val sb = new StringBuilder()
-        sb.append("%s(")
-        %s
-        sb.append(")")
-        sb.toString()
-   }
-}""".format(typeName, args, name, name,
-        fieldsInType
-          .map(x => if (fieldsSet.contains(x.name)) x.name else "")
-          .map(x => """%s sb.append(",")""".format(if (x.isEmpty) "" else "sb.append(%s); ".format(x)))
-          .mkString(";\n"))
-    }
-    typeName
-  }
-
-  val types = mutable.Map[String, String]()
   var wireFormats = List[String]()
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = {
     val out = rhs match {
-      case IR.Field(tuple, x, tp) => emitValDef(sym, "%s.%s".format(quote(tuple), x))
-      case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
-      case IR.ObjectCreation(name, fields) if (name.startsWith("tuple2s")) => {
-        emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
-      }
-      case IR.ObjectCreation(name, fields) => {
-        val typeInfo = typeHandler.typeInfos2(name)
-        val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)
-        val typeName = makeTypeFor(name, fieldsList.map(_._1))
-        emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
-      }
       case nv @ NewVector(filename) => emitValDef(sym, "TextInput.fromTextFile(%s)".format(quote(filename)))
       case vs @ VectorSave(vector, filename) => stream.println("DList.persist(TextOutput.toTextFile(%s,%s))".format(quote(vector), quote(filename)))
       case vm @ VectorMap(vector, function) => emitValDef(sym, "%s.map(%s)".format(quote(vector), handleClosure(vm.closure)))
@@ -222,7 +173,7 @@ object %s {
     stream.println("}")
     stream.println("}")
     stream.println("// Types that are used in this program")
-    stream.println(types.values.toList.sorted.mkString("\n"))
+    stream.println(restTypes.values.toList.sorted.mkString("\n"))
 
     stream.println("/*****************************************\n" +
       "  End of Scoobi Code                  \n" +

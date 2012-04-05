@@ -9,9 +9,7 @@ import scala.collection.mutable
 import java.util.regex.Pattern
 import java.io.StringWriter
 
-trait SparkProgram extends VectorOpsExp with VectorImplOps with SparkVectorOpsExp {
-
-}
+trait SparkProgram extends VectorOpsExp with VectorImplOps with SparkVectorOpsExp
 
 trait SparkVectorOps extends VectorOps {
   implicit def repVecToSparkVecOps[A: Manifest](vector: Rep[Vector[A]]) = new vecSparkOpsCls(vector)
@@ -64,10 +62,7 @@ trait SparkVectorOpsExp extends VectorOpsExp with SparkVectorOps {
       case v @ VectorCache(in) => toAtom(VectorCache(f(in))(v.mA))(mtype(v.getType))
       case _ => super.mirror(e, f)
     })
-    (e, out) match {
-      case (x: VectorNode, Def(y: VectorNode)) => copyMetaInfo(x, y)
-      case _ =>
-    }
+    copyMetaInfo(e, out)
     out.asInstanceOf[Exp[A]]
   }
 }
@@ -158,7 +153,8 @@ trait SparkVectorAnalysis extends VectorAnalysis {
 
 }
 
-trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransformations with SparkTransformations with Matchers with SparkVectorAnalysis {
+trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransformations
+    with SparkTransformations with Matchers with SparkVectorAnalysis with CaseClassTypeFactory {
 
   val IR: SparkVectorOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -181,57 +177,8 @@ trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransfo
   import IR.{ VectorReduceByKey, VectorCache }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
-  def makeTypeFor(name: String, fields: Iterable[String]) = {
-    // fields is a sorted list of the field names
-    // typeInfo is the type with all fields and all infos
-    val typeInfo = typeHandler.typeInfos2(name)
-    // this is just a set to have contains
-    val fieldsSet = fields.toSet
-    val fieldsInType = typeInfo.fields
-    val fieldsHere = typeInfo.fields.filter(x => fieldsSet.contains(x.name))
-    if (!types.contains(name)) {
-      types(name) = "trait %s extends Serializable {\n%s\n} ".format(name,
-        fieldsInType.map {
-          fi =>
-            """def %s : %s = throw new RuntimeException("Should not try to access %s here, internal error")"""
-              .format(fi.name, fi.niceName, fi.name)
-        }.mkString("\n"))
-    }
-    val typeName = name + ((List("") ++ fieldsHere.map(_.position + "")).mkString("_"))
-    if (!types.contains(typeName)) {
-      val args = fieldsHere.map { fi => "override val %s : %s".format(fi.name, fi.niceName) }.mkString(", ")
-      types(typeName) = """case class %s(%s) extends %s {
-   override def toString() = {
-        val sb = new StringBuilder()
-        sb.append("%s(")
-        %s
-        sb.append(")")
-        sb.toString()
-   }
-}""".format(typeName, args, name, name,
-        fieldsInType
-          .map(x => if (fieldsSet.contains(x.name)) x.name else "")
-          .map(x => """%s sb.append(",")""".format(if (x.isEmpty) "" else "sb.append(%s); ".format(x)))
-          .mkString(";\n"))
-    }
-    typeName
-  }
-
-  val types = mutable.Map[String, String]()
-
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = {
     val out = rhs match {
-      case IR.Field(tuple, x, tp) => emitValDef(sym, "%s.%s".format(quote(tuple), x))
-      case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
-      case IR.ObjectCreation(name, fields) if (name.startsWith("tuple2s")) => {
-        emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
-      }
-      case IR.ObjectCreation(name, fields) => {
-        val typeInfo = typeHandler.typeInfos2(name)
-        val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)
-        val typeName = makeTypeFor(name, fieldsList.map(_._1))
-        emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
-      }
       case nv @ NewVector(filename) => emitValDef(sym, "sc.textFile(%s)".format(quote(filename)))
       case vs @ VectorSave(vector, filename) => stream.println("%s.saveAsTextFile(%s)".format(quote(vector), quote(filename)))
       case vm @ VectorMap(vector, function) => emitValDef(sym, "%s.map(%s)".format(quote(vector), handleClosure(vm.closure)))
@@ -330,7 +277,8 @@ object %s {
     stream.println("}")
     stream.println("}")
     stream.println("// Types that are used in this program")
-    stream.println(types.values.toList.sorted.mkString("\n"))
+    val restTypes = types.filterKeys(x => !skipTypes.contains(x))
+    stream.println(restTypes.values.toList.sorted.mkString("\n"))
 
     stream.println("""class Registrator_%s extends KryoRegistrator {
         def registerClasses(kryo: Kryo) {
