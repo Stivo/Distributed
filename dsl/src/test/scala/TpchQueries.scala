@@ -134,13 +134,13 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
       writeToProject(pw, "scoobi", appname)
       release(pw)
 
-      //      val typesDefined = codegen.types.keys
-      //      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenVector { val IR: dsl.type = dsl }
-      //      codegenUnoptimized.skipTypes ++= typesDefined
-      //      pw = setUpPrintWriter
-      //      codegenUnoptimized.emitSource(dsl.query3nephele, unoptimizedAppname, pw)
-      //      writeToProject(pw, "scoobi", unoptimizedAppname)
-      //      release(pw)
+      val typesDefined = codegen.types.keys
+      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenVector { val IR: dsl.type = dsl }
+      codegenUnoptimized.skipTypes ++= typesDefined
+      pw = setUpPrintWriter
+      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
+      writeToProject(pw, "scoobi", unoptimizedAppname)
+      release(pw)
 
       println("-- end")
     } catch {

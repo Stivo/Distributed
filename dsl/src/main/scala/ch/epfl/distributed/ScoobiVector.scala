@@ -98,7 +98,7 @@ trait ScoobiGenVector extends ScalaGenBase with ScalaGenVector
     val caseClassTypes = groupedNames.values.flatMap(x => x).toList.sorted
     out ++= caseClassTypes.map { typ =>
       index += 1
-      " implicit val wireFormat_%s = mkCaseWireFormat(%s.apply _, %s.unapply _) "
+      " implicit val wireFormat_%s = mkCaseWireFormatGen(%s.apply _, %s.unapply _) "
         .format(index, typ, typ)
     }.mkString("\n")
     out += '\n'
@@ -115,7 +115,7 @@ trait ScoobiGenVector extends ScalaGenBase with ScalaGenVector
     }.mkString("\n")
     out += '\n'
     out.toString
-    // emit for each case class: implicit val wireFormat2 = mkCaseWireFormat(N2_0_1.apply _, N2_0_1.unapply _)
+    // emit for each case class: implicit val wireFormat2 = mkCaseWireFormatGen(N2_0_1.apply _, N2_0_1.unapply _)
   }
 
   override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, streamIn: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
@@ -138,9 +138,7 @@ trait ScoobiGenVector extends ScalaGenBase with ScalaGenVector
     stream.println("""
 package scoobi.generated;
 import com.nicta.scoobi.Scoobi._
-import com.nicta.scoobi.io.text._
-import com.nicta.scoobi.{DList, WireFormat, Grouping}
-import com.nicta.scoobi.lib.Join._
+import com.nicta.scoobi.WireFormat
 import ch.epfl.distributed.datastruct._
    
 object %s {
@@ -160,9 +158,10 @@ object %s {
   }
         
   def main(scoobiInputArgsScoobi: Array[String]) = withHadoopArgs(scoobiInputArgsScoobi) { scoobiInputArgs =>
-        import WireFormat.{ mkAbstractWireFormat, mkCaseWireFormat }
-        implicit val wireFormat_simpledate = mkCaseWireFormat(SimpleDate, SimpleDate.unapply _)
-        implicit val wireFormat_datetime = mkCaseWireFormat(DateTime, DateTime.unapply _)
+        import WireFormat.{ mkAbstractWireFormat }
+        import WireFormatsGen.{ mkCaseWireFormatGen }
+        implicit val wireFormat_simpledate = mkCaseWireFormatGen(SimpleDate, SimpleDate.unapply _)
+        implicit val wireFormat_datetime = mkCaseWireFormatGen(DateTime, DateTime.unapply _)
    		implicit val wireFormat_date = mkAbstractWireFormat[Date, SimpleDate, DateTime]
 
         ###wireFormats###
