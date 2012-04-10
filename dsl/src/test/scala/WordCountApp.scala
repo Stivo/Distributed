@@ -6,7 +6,7 @@ import org.scalatest._
 import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps }
 import scala.util.Random
 
-trait WordCountApp extends VectorImplOps with ApplicationOps with SparkVectorOps with MoreIterableOps {
+trait WordCountApp extends VectorImplOps with ApplicationOps with SparkVectorOps {
 
   def parse(x: Rep[String]): Rep[String] = {
     val splitted = x.split("\\s+")
@@ -41,8 +41,8 @@ class WordCountAppGenerator extends Suite with CodeGenerator {
     try {
       println("-- begin")
 
-      val dsl = new WordCountApp with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp with StringPatternOpsExp with MoreIterableOpsExp
-      val codegen = new SparkGenVector with StringPatternOpsCodeGen with MoreIterableOpsCodeGen { val IR: dsl.type = dsl }
+      val dsl = new WordCountApp with VectorImplOps with ApplicationOpsExp with SparkVectorOpsExp
+      val codegen = new SparkGenVector { val IR: dsl.type = dsl }
       var pw = setUpPrintWriter
       codegen.emitSource(dsl.statistics, appname, pw)
       writeToProject(pw, "spark", appname)
@@ -68,16 +68,16 @@ class WordCountAppGenerator extends Suite with CodeGenerator {
     try {
       println("-- begin")
 
-      val dsl = new WordCountApp with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp with StringPatternOpsExp with MoreIterableOpsExp
+      val dsl = new WordCountApp with VectorImplOps with ApplicationOpsExp with SparkVectorOpsExp
 
       var pw = setUpPrintWriter
-      val codegen = new ScoobiGenVector with StringPatternOpsCodeGen with MoreIterableOpsCodeGen { val IR: dsl.type = dsl }
+      val codegen = new ScoobiGenVector { val IR: dsl.type = dsl }
       codegen.emitSource(dsl.statistics, appname, pw)
       writeToProject(pw, "scoobi", appname)
       release(pw)
 
       dsl.disablePatterns = true
-      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenVector with StringPatternOpsCodeGen with MoreIterableOpsCodeGen { val IR: dsl.type = dsl }
+      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenVector { val IR: dsl.type = dsl }
       pw = setUpPrintWriter
       codegenUnoptimized.emitSource(dsl.statistics, unoptimizedAppname, pw)
       writeToProject(pw, "scoobi", unoptimizedAppname)

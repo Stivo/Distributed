@@ -36,6 +36,48 @@ trait TpchQueriesApp extends VectorImplOps with ApplicationOps with SparkVectorO
       .save(getArgs(3))
   }
 
+  def query12(x: Rep[Unit]) = {
+    // read arguments
+    val inputFolder = getArgs(0)
+    val outputFolder = getArgs(1)
+    val date = getArgs(2).toDate
+    val shipMode1 = getArgs(3)
+    val shipMode2 = getArgs(4)
+
+    // read and parse tables
+    val lineitems = Vector(getArgs(0) + "/lineitem.tbl")
+      .map(x => LineItem.parse(x, "\\|"))
+    val orders = Vector(getArgs(0) + "/orders.tbl")
+      .map(x => Order.parse(x, "\\|"))
+
+    // filter the line items
+    val filteredLineitems = lineitems
+      .filter(x => x.l_shipmode == shipMode1 || x.l_shipmode == shipMode2)
+      .filter(x => date <= x.l_receiptdate)
+      .filter(x => x.l_shipdate < x.l_commitdate)
+      .filter(x => x.l_commitdate < x.l_receiptdate)
+      .filter(x => x.l_receiptdate < date + (1, 0, 0))
+    // perform the join
+    val orderTuples = orders.map(x => (x.o_orderkey, x))
+    val lineItemTuples = filteredLineitems.map(x => (x.l_orderkey, x))
+    val joined = lineItemTuples.join(orderTuples)
+    // prepare for aggregation
+    val joinedTupled = joined.map {
+      x =>
+        val prio = x._2._2.o_orderpriority;
+        val isHigh = prio.startsWith("1") || prio.startsWith("2");
+        val count = if (isHigh) 1 else 0
+        val part2: Rep[(Int, Int)] = (count, 1 - count)
+        (x._2._1.l_shipmode, part2)
+    }
+    // aggregate and save
+    val reduced = joinedTupled.groupByKey.reduce((x, y) => (x._1 + y._1, x._2 + y._2))
+    reduced.map {
+      x =>
+        "shipmode " + x._1 + ": high " + x._2._1 + ", low " + x._2._2
+    }.save(getArgs(1))
+  }
+
   def tupleProblem(x: Rep[Unit]) = {
     val lineitems = Vector(getArgs(0) + "/lineitem.tbl")
       .map(x => LineItem.parse(x, "\\|"))
@@ -55,11 +97,11 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
     try {
       println("-- begin")
 
-      val dsl = new TpchQueriesApp with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp
+      val dsl = new TpchQueriesApp with VectorImplOps with ApplicationOpsExp with SparkVectorOpsExp
       // val codegen = new { override val allOff = true } with SparkGenVector { val IR: dsl.type = dsl }
       val codegen = new SparkGenVector { val IR: dsl.type = dsl }
       var pw = setUpPrintWriter
-      codegen.emitSource(dsl.query3nephele, appname, pw)
+      codegen.emitSource(dsl.query12, appname, pw)
       writeToProject(pw, "spark", appname)
       release(pw)
 
@@ -68,7 +110,7 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
       codegenUnoptimized.skipTypes ++= typesDefined
       codegenUnoptimized.reduceByKey = true
       pw = setUpPrintWriter
-      codegenUnoptimized.emitSource(dsl.query3nephele, unoptimizedAppname, pw)
+      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
       writeToProject(pw, "spark", unoptimizedAppname)
       release(pw)
 
@@ -84,11 +126,11 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
     try {
       println("-- begin")
 
-      val dsl = new TpchQueriesApp with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp
+      val dsl = new TpchQueriesApp with VectorImplOps with ApplicationOpsExp with SparkVectorOpsExp
 
       var pw = setUpPrintWriter
       val codegen = new ScoobiGenVector { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.query3nephele, appname, pw)
+      codegen.emitSource(dsl.query12, appname, pw)
       writeToProject(pw, "scoobi", appname)
       release(pw)
 

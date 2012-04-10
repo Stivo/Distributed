@@ -21,6 +21,7 @@ trait VectorBase extends Base with LiftAll
   with ImplicitOps with NumericOps with OrderingOps with StringOps
   with BooleanOps with PrimitiveOps with MiscOps with TupleOps
   with MathOps with CastingOps with ObjectOps with ArrayOps
+  with MoreIterableOps
   with StringAndNumberOps with IterableOps with ListOps with DateOps
 
 trait VectorBaseExp extends VectorBase
@@ -32,6 +33,7 @@ trait VectorBaseExp extends VectorBase
   with StructExp with StructExpOpt
   with StructFatExp with StructFatExpOptCommon
   with FatExpressions with LoopsFatExp with IfThenElseFatExp
+  with StringPatternOpsExp with MoreIterableOpsExp
   with StringAndNumberOpsExp with IterableOpsExp with ListOpsExp with DateOpsExp
 
 trait VectorBaseCodeGenPkg extends ScalaGenDSLOps
@@ -43,6 +45,7 @@ trait VectorBaseCodeGenPkg extends ScalaGenDSLOps
   with ScalaGenDateOps
   //with ScalaGenFatStruct
   with ScalaGenStruct with GenericFatCodegen
+  with StringPatternOpsCodeGen with MoreIterableOpsCodeGen
   with StringAndNumberOpsCodeGen with ScalaGenListOps with ScalaGenIterableOps { val IR: VectorOpsExp }
 
 trait VectorOps extends VectorBase {
