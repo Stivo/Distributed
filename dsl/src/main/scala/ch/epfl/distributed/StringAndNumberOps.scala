@@ -35,10 +35,6 @@ trait StringAndNumberOps extends PrimitiveOps with StringOps with OverloadHack {
 
 trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with StringOpsExp {
 
-  case class StringPattern(regex: Exp[String]) extends Def[java.util.regex.Pattern]
-  case class StringSplitPattern(s: Exp[String], pattern: Exp[java.util.regex.Pattern], limit: Exp[Int]) extends Def[Array[String]]
-  case class StringMatchesPattern(string: Exp[String], pattern: Exp[java.util.regex.Pattern]) extends Def[Boolean]
-
   case class StringToNumber[A <: AnyVal: Manifest](s: Exp[String]) extends Def[A] {
     val m = manifest[A]
     val typeName = m.toString.reverse.takeWhile(_ != '.').reverse
@@ -50,14 +46,37 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
   //  
   override def string_toNumber[A <: AnyVal: Manifest](s: Rep[String])(implicit ctx: SourceContext) = StringToNumber[A](s)
   //  override def long_modulo( l : Exp[Long], mod : Exp[Long])(implicit ctx: SourceContext) = LongModulo(l, mod)
-  override def string_split(s: Rep[String], separators: Rep[String], limit: Rep[Int]) = StringSplitPattern(s, StringPattern(separators), limit)
-  override def string_matches(s: Exp[String], regex: Exp[String]) = StringMatchesPattern(s, StringPattern(regex))
 
   def string_toChar(s: Rep[String])(implicit ctx: SourceContext) = StringToChar(s)
 
   override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = (e match {
     case n @ StringToNumber(s) => string_toNumber(f(s))(n.m, null)
     case n @ StringToChar(s) => string_toChar(f(s))
+    case _ => super.mirror(e, f)
+  }).asInstanceOf[Exp[A]]
+
+}
+
+trait StringPatternOpsExp extends StringOps with StringOpsExp {
+
+  var disablePatterns = false
+
+  case class StringPattern(regex: Exp[String]) extends Def[java.util.regex.Pattern]
+  case class StringSplitPattern(s: Exp[String], pattern: Exp[java.util.regex.Pattern], limit: Exp[Int]) extends Def[Array[String]]
+  case class StringMatchesPattern(string: Exp[String], pattern: Exp[java.util.regex.Pattern]) extends Def[Boolean]
+
+  override def string_split(s: Rep[String], separators: Rep[String], limit: Rep[Int]) =
+    if (disablePatterns)
+      super.string_split(s, separators, limit)
+    else
+      StringSplitPattern(s, StringPattern(separators), limit)
+  override def string_matches(s: Exp[String], regex: Exp[String]) =
+    if (disablePatterns)
+      super.string_matches(s, regex)
+    else
+      StringMatchesPattern(s, StringPattern(regex))
+
+  override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = (e match {
     case StringPattern(regex) => StringPattern(f(regex))
     case StringSplitPattern(s, pat, l) => StringSplitPattern(f(s), f(pat), f(l))
     case StringMatchesPattern(s, pat) => StringMatchesPattern(f(s), f(pat))
@@ -77,12 +96,20 @@ trait StringAndNumberOpsCodeGen extends ScalaCodegen {
   //  }
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
-    case StringSplitPattern(s, pattern, limit) => emitValDef(sym, "%s.split(%s, %s)".format(quote(pattern), quote(s), quote(limit)))
-    case StringPattern(s) => emitValDef(sym, "java.util.regex.Pattern.compile(%s)".format(quote(s)))
     case StringToChar(s) => emitValDef(sym, "%s.charAt(0)".format(quote(s)))
-    case StringMatchesPattern(s, pattern) => emitValDef(sym, "%s.matcher(%s).matches()".format(quote(pattern), quote(s)))
     case n @ StringToNumber(s) => emitValDef(sym, "%s.to%s".format(quote(s), n.typeName))
     case _ => super.emitNode(sym, rhs)(stream)
   }
 
+}
+
+trait StringPatternOpsCodeGen extends ScalaCodegen {
+  val IR: StringPatternOpsExp
+  import IR._
+  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
+    case StringSplitPattern(s, pattern, limit) => emitValDef(sym, "%s.split(%s, %s)".format(quote(pattern), quote(s), quote(limit)))
+    case StringPattern(s) => emitValDef(sym, "java.util.regex.Pattern.compile(%s)".format(quote(s)))
+    case StringMatchesPattern(s, pattern) => emitValDef(sym, "%s.matcher(%s).matches()".format(quote(pattern), quote(s)))
+    case _ => super.emitNode(sym, rhs)(stream)
+  }
 }
