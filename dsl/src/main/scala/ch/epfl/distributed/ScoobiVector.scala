@@ -154,7 +154,7 @@ object %s {
   }
         
   def makeGrouping[A] = new Grouping[A] {
-    def sortCompare(x: A, y: A): Int = (x.hashCode - y.hashCode)
+    def groupCompare(x: A, y: A): Int = (x.hashCode - y.hashCode)
   }
         
   def main(scoobiInputArgsScoobi: Array[String]) = withHadoopArgs(scoobiInputArgsScoobi) { scoobiInputArgs =>
@@ -163,7 +163,10 @@ object %s {
         implicit val wireFormat_simpledate = mkCaseWireFormatGen(SimpleDate, SimpleDate.unapply _)
         implicit val wireFormat_datetime = mkCaseWireFormatGen(DateTime, DateTime.unapply _)
    		implicit val wireFormat_date = mkAbstractWireFormat[Date, SimpleDate, DateTime]
-
+    	implicit val grouping_date = makeGrouping[Date]
+    	implicit val grouping_simpledate = makeGrouping[SimpleDate]
+    	implicit val grouping_datetime = makeGrouping[DateTime]
+    	
         ###wireFormats###
         """.format(className, className))
 
