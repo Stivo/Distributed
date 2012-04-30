@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" output="target/scala-2.10.0-M1-virtualized/classes" path="src/main/scala"/>
+	<classpathentry kind="src" output="target/scala-2.10.0-M1-virtualized/test-classes" path="src/test/scala"/>
+	<classpathentry kind="con" path="org.scala-ide.sdt.launching.SCALA_CONTAINER"/>
+	<classpathentry kind="con" path="org.scala-ide.sdt.launching.SCALA_COMPILER_CONTAINER"/>
+	<classpathentry kind="lib" path="/home/stivo/.ivy2/cache/org.scalatest/scalatest_2.10.0-virtualized-SNAPSHOT/jars/scalatest_2.10.0-virtualized-SNAPSHOT-1.6.1-SNAPSHOT.jar"/>
+	<classpathentry combineaccessrules="false" exported="true" kind="src" path="/LMS"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
