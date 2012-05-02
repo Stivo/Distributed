@@ -25,6 +25,7 @@ trait VectorBase extends Base with LiftAll
 //  with MoreIterableOps
 //  with StringAndNumberOps  with DateOps
 
+/*
 trait VectorBaseExp extends VectorBase
   with DSLOpsExp with BlockExp
   with EqualExp with IfThenElseExp with VariablesExp with WhileExp with FunctionsExp
@@ -38,7 +39,8 @@ trait VectorBaseExp extends VectorBase
   with IterableOpsExp with ListOpsExp
 //  with StringPatternOpsExp with MoreIterableOpsExp
 //  with StringAndNumberOpsExp  with DateOpsExp
-
+*/
+  
 trait DListBaseExp extends DListOps
   with StructExp with StructExpOpt
   with FunctionsExp
@@ -65,8 +67,8 @@ trait DListOps extends Base with Variables {
     def apply(file: Rep[String]) = dlist_new[String](file)
   }
 
-  implicit def repDlistToDListOps[A: Manifest](dlist: Rep[DList[A]]) = new dListOpsCls(dlist)
-  implicit def varDlistToDListOps[A: Manifest](dlist: Var[DList[A]]) = new dListOpsCls(readVar(dlist))
+  implicit def repDlistToDListOps[A: Manifest](dlist: Rep[DList[A]]) = new dListOpsCls[A](dlist)
+  implicit def varDlistToDListOps[A: Manifest](dlist: Var[DList[A]]) = new dListOpsCls[A](readVar(dlist))
   class dListOpsCls[A: Manifest](dlist: Rep[DList[A]]) {
 //    def flatMap[B: Manifest](f: Rep[A] => Rep[Iterable[B]]) = dlist_flatMap(dlist, f)
     def map[B: Manifest](f: Rep[A] => Rep[B]) = dlist_map(dlist, f)
@@ -168,13 +170,12 @@ trait DListOpsExp extends DListOps with DListBaseExp with WhileExp {
 
   def makeDListManifest[B: Manifest] = manifest[DList[B]]
 
-  case class DListMap[A: Manifest, B: Manifest](in: Exp[DList[A]], func: Exp[A] => Exp[B])
-      extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, B] {
+  case class DListMap[A: Manifest, B: Manifest](in: Exp[DList[A]], func: Exp[A => B])
+      extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]]  {
     val mA = manifest[A]
     val mB = manifest[B]
     def getClosureTypes = (mA, mB)
     def getTypes = (makeDListManifest[A], makeDListManifest[B])
-    override def toString = "DListMap(%s, %s)".format(in, closure)
   }
 
   case class DListFilter[A: Manifest](in: Exp[DList[A]], func: Exp[A] => Exp[Boolean])
@@ -240,7 +241,7 @@ trait DListOpsExp extends DListOps with DListBaseExp with WhileExp {
 
   override def get_args() = GetArgs()
   override def dlist_new[A: Manifest](file: Exp[String]) = NewDList[A](file)
-  override def dlist_map[A: Manifest, B: Manifest](dlist: Exp[DList[A]], f: Exp[A] => Exp[B]) = DListMap[A, B](dlist, f)
+  override def dlist_map[A: Manifest, B: Manifest](dlist: Exp[DList[A]], f: Exp[A] => Exp[B]) = DListMap[A, B](dlist, doLambda(f))
   override def dlist_flatMap[A: Manifest, B: Manifest](dlist: Rep[DList[A]], f: Rep[A] => Rep[Iterable[B]]) = DListFlatMap(dlist, f)
   override def dlist_filter[A: Manifest](dlist: Rep[DList[A]], f: Exp[A] => Exp[Boolean]) = DListFilter(dlist, f)
   override def dlist_save[A: Manifest](dlist: Exp[DList[A]], file: Exp[String]) = {
@@ -262,14 +263,14 @@ trait DListOpsExp extends DListOps with DListBaseExp with WhileExp {
   }
 
   override def mirrorDef[A:Manifest](e: Def[A], f: Transformer)(implicit ctx: SourceContext): Def[A] = {
-    println("Calling mirror with "+e)
+//    println("Calling mirror with "+e)
     var out = e match {
       case GetArgs() => GetArgs()
       case o @ ObjectCreation(name, fields) => ObjectCreation(name, fields.mapValues(f(_)))(o.mA)
 //      case flat @ DListFlatten(list) => toAtom(DListFlatten(f(list))(flat.mA))
       case vm @ NewDList(dlist) => NewDList(f(dlist))(vm.mA)
-      case vm @ DListMap(dlist, func) =>
-        new { override val overrideClosure = Some(f(vm.closure)) } with DListMap(f(dlist), f(func))(vm.mA, vm.mB)
+      case vm @ DListMap(dlist, func) => new DListMap(f(dlist), f(func))(vm.mA, vm.mB)
+//        new { override val overrideClosure = Some(f(vm.closure)) } with DListMap(f(dlist), f(func))(vm.mA, vm.mB)
       
       case vf @ DListFilter(dlist, func) => 
         new { override val overrideClosure = Some(f(vf.closure)) } with DListFilter(f(dlist), f(func))(vf.mA)
@@ -282,8 +283,10 @@ trait DListOpsExp extends DListOps with DListBaseExp with WhileExp {
 //        new { override val overrideClosure = Some(f(v.closure)) } with DListReduce(f(dlist), f(func))(v.mKey, v.mValue)
 //      )(mtype(manifest[A]))
       case vs @ DListSave(dlist, path) => DListSave(f(dlist), f(path))
-      case Reflect(vs @ DListSave(dlist, path), u, es) => Reflect(DListSave(f(dlist), f(path))(vs.mA), mapOver(f, u), f(es))
-      case Reflect(While(cond, block), u, es) => Reflect(While(f(cond), f(block)), mapOver(f, u), f(es))
+//      case Reflect(vs @ DListSave(dlist, path), u, es) => Reflect(DListSave(f(dlist), f(path))(vs.mA), mapOver(f, u), f(es))
+//      case While(cond, block) => While(f(cond), f(block))
+//      case Reflect(While(cond, block), u, es) => Reflect(While(f(cond), f(block)), mapOver(f, u), f(es))
+ 
       case Reify(x, u, es) => Reify(f(x), mapOver(f, u), f(es))
       case _ => super.mirrorDef(e, f)
     }
@@ -292,9 +295,21 @@ trait DListOpsExp extends DListOps with DListBaseExp with WhileExp {
     out.asInstanceOf[Def[A]]
   }
   
+/*  override def mirror[A:Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Exp[A] = e match {
+//    case Reflect(While(cond,block), u, es) => reflectMirrored(Reflect(While(f(cond),f(block)), mapOver(f,u), f(es))).asInstanceOf[Exp[A]]
+    case While(cond, block) => (
+      if (f.hasContext)
+        While(Block(f.reflectBlock(cond)),Block(f.reflectBlock(block)))
+      else
+        While(f(cond),f(block)) // FIXME: should apply pattern rewrites (ie call smart constructor)
+        ).asInstanceOf[Exp[A]]
+    case _ => super.mirror(e,f)
+  }
+*/
+  
   override def syms(e: Any): List[Sym[Any]] = e match {
-    case s: ClosureNode[_, _] => syms(s.in, s.closure)
-    case s: Closure2Node[_, _, _] => syms(s.in, s.closure)
+//    case s: ClosureNode[_, _] => syms(s.in, s.closure)
+//    case s: Closure2Node[_, _, _] => syms(s.in, s.closure)
     case DListFlatten(x) => syms(x)
 //    case NewDList(arg) => syms(arg)
 //    case DListSave(vec, path) => syms(vec, path)
@@ -305,8 +320,8 @@ trait DListOpsExp extends DListOps with DListBaseExp with WhileExp {
 
   override def symsFreq(e: Any): List[(Sym[Any], Double)] = e match {
     // TODO: ++ does not work anymore, because it is defined in ListOps
-    case s: ClosureNode[_, _] => freqHot(s.closure, s.in) //++ freqNormal(s.in)
-    case s: Closure2Node[_, _, _] => freqHot(s.closure, s.in) //++ freqNormal(s.in)
+//    case s: ClosureNode[_, _] => freqHot(s.closure, s.in) //++ freqNormal(s.in)
+//    case s: Closure2Node[_, _, _] => freqHot(s.closure, s.in) //++ freqNormal(s.in)
     case DListFlatten(x) => freqNormal(x)
 //    case NewDList(arg) => freqNormal(arg)
 //    case DListSave(vec, path) => freqNormal(vec, path)
@@ -315,11 +330,11 @@ trait DListOpsExp extends DListOps with DListBaseExp with WhileExp {
     case _ => super.symsFreq(e)
   }
 
-  override def boundSyms(e: Any): List[Sym[Any]] = e match {
-   case s: ClosureNode[_, _] => effectSyms(s.in, s.closure) //s.in.asInstanceOf[Sym[_]] :: effectSyms(s.closure) //++ freqNormal(s.in)
-    case s: Closure2Node[_, _, _] => syms(s.in, s.closure) // s.in.asInstanceOf[Sym[_]] :: effectSyms(s.closure) //++ freqNormal(s.in)
-    case _ => super.boundSyms(e)
-  }  
+//  override def boundSyms(e: Any): List[Sym[Any]] = e match {
+//   case s: ClosureNode[_, _] => effectSyms(s.in, s.closure) //s.in.asInstanceOf[Sym[_]] :: effectSyms(s.closure) //++ freqNormal(s.in)
+//    case s: Closure2Node[_, _, _] => syms(s.in, s.closure) // s.in.asInstanceOf[Sym[_]] :: effectSyms(s.closure) //++ freqNormal(s.in)
+//    case _ => super.boundSyms(e)
+//  }  
 
   
 }
@@ -346,7 +361,7 @@ trait PrinterGenDList extends ScalaNestedCodegen {
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case nv @ NewDList(filename) => emitValDef(sym, "New vector created from %s with type %s".format(filename, nv.mA))
     case vs @ DListSave(vector, filename) => stream.println("Saving vector %s (of type %s) to %s".format(vector, vs.mA, filename))
-    case vm @ DListMap(vector, function) => emitValDef(sym, "mapping vector %s with function %s, type %s => %s".format(vector, quote(vm.closure), vm.mA, vm.mB))
+    case vm @ DListMap(vector, function) => emitValDef(sym, "mapping vector %s with function %s, type %s => %s".format(vector, quote(vm.func), vm.mA, vm.mB))
     case vf @ DListFilter(vector, function) => emitValDef(sym, "filtering vector %s with function %s".format(vector, quote(vf.closure)))
     case vm @ DListFlatMap(vector, function) => emitValDef(sym, "flat mapping vector %s with function %s".format(vector, function))
     case vm @ DListFlatten(v1) => emitValDef(sym, "flattening vectors %s".format(v1))
