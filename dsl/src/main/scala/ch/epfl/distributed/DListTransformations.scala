@@ -7,7 +7,7 @@ import scala.collection.mutable
 trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with Matchers {
 
   
-  /*
+  
   val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const }
   import IR.{
@@ -26,6 +26,16 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
   import IR.{ findDefinition }
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda }
   import IR.{ Struct }
+/*  
+  class TransformationState(val ttps: List[TTP], val results: List[Exp[Any]]) {
+    def printAll(s: String = null) = {
+      if (s != null)
+        println("###################### " + s + " ######################")
+      println("Printing all ttps for the current state")
+      ttps.map(x => (x, " with types: " + x.lhs.map(_.Type).mkString(","))).foreach(println)
+    }
+  }
+
 
   val stopMarkingText = "stop transformation: node marked"
 
@@ -143,15 +153,6 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
       out
     }
 
-  }
-
-  class TransformationState(val ttps: List[TTP], val results: List[Exp[Any]]) {
-    def printAll(s: String = null) = {
-      if (s != null)
-        println("###################### " + s + " ######################")
-      println("Printing all ttps for the current state")
-      ttps.map(x => (x, " with types: " + x.lhs.map(_.Type).mkString(","))).foreach(println)
-    }
   }
 
   trait Transformation {
@@ -427,6 +428,6 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
       case _ => null
     }
   }
-
 */
+
 }

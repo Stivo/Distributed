@@ -10,8 +10,8 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
 
   
   val IR: DListOpsExp
-  /*
-  import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
+  
+  import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block, TP }
   import IR.{
     NewDList,
     DListSave,
@@ -26,31 +26,31 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
     DListNode,
     GetArgs
   }
-  import IR.{ TTP, TP, SubstTransformer, Field }
-  import IR.{ ClosureNode, Closure2Node, freqHot, freqNormal, Lambda, Lambda2 }
-  import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
+  import IR.{ SubstTransformer, Field }
+  import IR.{ ClosureNode, Closure2Node, freqNormal, Lambda, Lambda2 }
+  import IR.{ fresh, reifyEffects, reifyEffectsHere, toAtom }
 
-  def newAnalyzer(state: TransformationState, typeHandlerForUse: TypeHandler = typeHandler) = new Analyzer(state, typeHandlerForUse)
+  def newAnalyzer(block: Block[_], typeHandlerForUse: TypeHandler = typeHandler) = new Analyzer(block, typeHandlerForUse)
 
-  class Analyzer(state: TransformationState, typeHandler: TypeHandler) {
-    lazy val nodes = state.ttps.flatMap {
-      case TTPDef(x: DListNode) => Some(x)
-      case TTPDef(Reflect(x: DListNode, _, _)) => Some(x)
+  class Analyzer(block: Block[_], typeHandler: TypeHandler) extends BlockVisitor(block) {
+    lazy val nodes = statements.flatMap {
+      case SomeDef(x: DListNode) => Some(x)
+      case SomeDef(Reflect(x: DListNode, _, _)) => Some(x)
+      case _ => Nil
+    }
+    lazy val lambdas = statements.flatMap {
+      case SomeDef(l @ Lambda(f, x, y)) => Some(l)
       case _ => None
     }
-    lazy val lambdas = state.ttps.flatMap {
-      case TTPDef(l @ Lambda(f, x, y)) => Some(l)
-      case _ => None
-    }
-    lazy val lambda2s = state.ttps.flatMap {
-      case TTPDef(l @ IR.Lambda2(f, x1, x2, y)) => Some(l)
+    lazy val lambda2s = statements.flatMap {
+      case SomeDef(l @ IR.Lambda2(f, x1, x2, y)) => Some(l)
       case _ => None
     }
     lazy val saves = nodes.filter { case v: DListSave[_] => true; case _ => false }
 
     def getInputs(x: DListNode) = {
       val syms = IR.syms(x)
-      syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.rhs match { case x: DListNode => Some(x) case _ => None } }
+      syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.defs.flatMap { _ match { case x: DListNode => Some(x) case _ => None } }}
     }
 
     lazy val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
@@ -75,7 +75,7 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
 
     private def getInputSyms(x: Sym[_]) = {
       IR.findDefinition(x) match {
-        case Some(x) => IR.syms(x.rhs)
+        case Some(x) => IR.syms(x.defs.head)
         case _ => Nil
       }
     }
@@ -104,7 +104,7 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
 
     def getNodesInClosure(x: DListNode) = x match {
       case x: ClosureNode[_, _] => getNodesInLambda(x.closure)
-      case x: Closure2Node[_, _, _] => getNodesInLambda(x.closure)
+      //case x: Closure2Node[_, _, _] => getNodesInLambda(x.closure)
       case _ => Nil
     }
 
@@ -117,7 +117,7 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
     }
 
     def analyzeFunction(v: DListNode) = {
-      val nodes = getNodesInClosure(v).flatMap(IR.findDefinition(_)).map(_.rhs)
+      val nodes = getNodesInClosure(v).flatMap(IR.findDefinition(_)).flatMap(_.defs)
       val fields = nodes.filter { SomeAccess.unapply(_).isDefined }
       fields.flatMap(n => pathToInput(n, getNodesInClosure(v).head)).toSet
     }
@@ -149,6 +149,7 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
         case v @ DListMap(in, func) if !v.metaInfos.contains("narrowed")
           && !SimpleType.unapply(v.getClosureTypes._2).isDefined
           && hasObjectCreationInClosure(v) => {
+            /*
           // backup TTPs, or create new transformer?
           val transformer = new Transformer(state)
           // tag this map to recognize it after transformations
@@ -174,6 +175,8 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
           // remove the tag, not needed afterwards
           v.metaInfos.remove(id)
           a2.analyzeFunction(candidates.head)
+          */
+            analyzeFunction(v)
         }
 
         case v @ DListMap(in, func) => analyzeFunction(v)
@@ -243,7 +246,7 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
           val reads = computeFieldReads(node)
           node.directFieldReads ++= reads
           getInputs(node).foreach { _.successorFieldReads ++= reads }
-        //          println("Computed field reads for " + node + " got " + reads)
+          println("Computed field reads for " + node + " got " + reads)
       }
     }
 
@@ -252,14 +255,15 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
       nodes.find { case Def(s: IR.SimpleStruct[_]) => true case _ => false }.isDefined
     }
 
+    
     def getIdForNode(n: DListNode with Def[_]) = {
       //      nodes.indexOf(n)
       val op1 = IR.findDefinition(n.asInstanceOf[Def[_]])
       if (op1.isDefined) {
-        op1.get.sym.id
+        op1.get.syms.head.id
       } else {
-        state.ttps.flatMap {
-          case TTP(Sym(s) :: _, ThinDef(Reflect(x, _, _))) if x == n => Some(s)
+        statements.flatMap {
+          case TP(Sym(s), Reflect(x, _, _)) if x == n => Some(s)
           //          case TTPDef(Reflect(s@Def(x),_,_)) if x==n => Some(s)
           case _ => None
         }.head
@@ -289,7 +293,7 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
       buf += "}"
       buf.mkString("\n")
     }
-
+     
   }
-  */
+  
 }

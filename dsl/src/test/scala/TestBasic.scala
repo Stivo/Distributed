@@ -31,7 +31,7 @@ trait DListsProg extends DListProgram with ComplexBase{
   def simple(x: Rep[Unit]) = {
     val words1 = DList(getArgs(0))
     words1.map(x => (Complex(x.toDouble, 5.0), unit("asdf")))
-    
+    .map(_._1.im)
 //    words1
 //    //.filter(_.matches("\\d+"))
 //    .map(_.toInt)
@@ -56,6 +56,7 @@ trait DListsProg extends DListProgram with ComplexBase{
 
 class TestDLists2 extends Suite with CodeGenerator {
 
+  /*
   def testPrinter {
     try {
       println("-- begin")
@@ -76,7 +77,7 @@ class TestDLists2 extends Suite with CodeGenerator {
     }
 
   }
-
+  */
   /*
   def testSpark {
     try {
@@ -97,18 +98,20 @@ class TestDLists2 extends Suite with CodeGenerator {
         println(e.getMessage)
     }
   }
-
+ */
   def testScoobi {
     try {
       println("-- begin")
 
-      val dsl = new DListsProg with DListImplOps with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
+      val dsl = new DListsProg with DListProgramExp with ComplexStructExp
 
       val pw = setUpPrintWriter
-      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.findLogEntry, "g", pw)
-
+      val codegen =  new BaseCodeGenerator with ScoobiGenDList { val IR: dsl.type = dsl }
+      codegen.withStream(pw) {
+      codegen.emitSource(dsl.simple, "g", pw)
+      }
       writeToProject(pw, "scoobi", "ScoobiGenerated")
+      println(getContent(pw))
       release(pw)
       println("-- end")
     } catch {
@@ -117,6 +120,6 @@ class TestDLists2 extends Suite with CodeGenerator {
         println(e.getMessage)
     }
   }
-  */
+ 
 }
 

@@ -100,6 +100,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
 
   trait ClosureNode[A, B] extends DListNode {
     val in: Exp[DList[_]]
+    def closure : Exp[A => B] = null
     def getClosureTypes: (Manifest[A], Manifest[B])
   }
 
@@ -136,6 +137,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     val mA = manifest[A]
     val mB = manifest[B]
     def getClosureTypes = (mA, mB)
+    override def closure = func
     def getTypes = (makeDListManifest[A], makeDListManifest[B])
   }
 
@@ -492,6 +494,11 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     typeHandler.remappings.foreach(println)
     typeHandler.typeInfos.foreach(println)
     println(typeHandler.typeInfos2("Complex"))
+    
+    val analyzer = newAnalyzer(y)
+    println(analyzer.nodes)
+    analyzer.makeFieldAnalysis
+    println(analyzer.exportToGraph)
     val sA = remap(mA)
     val sB = remap(mB)
 
@@ -520,8 +527,6 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   }
 
   
-  def hasDListNodes(ttps: List[TTP]) = !ttps.flatMap { TTPDef.unapply }.flatMap { case x: DListNode => Some(x) case _ => None }.isEmpty
-
   /*
   override def fattenAll(e: List[TP[Any]]): List[TTP] = {
     val out = super.fattenAll(e)
@@ -536,6 +541,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     val sw = new StringWriter()
     val pw = new PrintWriter(sw)
     def remapHere(x: Manifest[_]) = if (typesInInlinedClosures) ": " + remap(x) else ""
+      withStream(pw) {
     closure match {
       case Def(Lambda(fun, x, y)) => {
         pw.println("{ %s %s => ".format(quote(x), remapHere(x.tp)))
@@ -549,6 +555,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
         pw.println("%s %s".format(quote(getBlockResult(y)), remapHere(y.tp)))
         pw.print("}")
       }
+    }
     }
     pw.flush
     sw.toString
@@ -697,17 +704,27 @@ trait TypeFactory extends ScalaGenDList {
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
     val out = rhs match {
       case IR.Field(tuple, x, tp) => emitValDef(sym, "%s.%s".format(quote(tuple), x))
-      case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
-      case IR.ObjectCreation(name, fields) if (name.startsWith("tuple2s")) => {
-        emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
+      //case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
+      case IR.SimpleStruct(IR.ClassTag("tuple2s"), elems) => {
+        emitValDef(sym, "(%s, %s)".format(quote(elems("_1")), quote(elems("_2")))) //fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
+        //emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
       }
-/*      case IR.ObjectCreation(name, fields) => {
+      case IR.SimpleStruct(IR.ClassTag(name), fields) => {
         val typeInfo = typeHandler.typeInfos2(name)
         val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)
         val typeName = makeTypeFor(name, fieldsList.map(_._1))
         emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
       }
-      */
+      case IR.ObjectCreation(name, fields) if (name.startsWith("tuple2s")) => {
+        emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
+      }
+      case IR.ObjectCreation(name, fields) => {
+        val typeInfo = typeHandler.typeInfos2(name)
+        val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)
+        val typeName = makeTypeFor(name, fieldsList.map(_._1))
+        emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
+      }
+      
       case _ => super.emitNode(sym, rhs)
     }
   }
@@ -716,7 +733,7 @@ trait TypeFactory extends ScalaGenDList {
 
 trait CaseClassTypeFactory extends TypeFactory {
   def makeTypeFor(name: String, fields: Iterable[String]): String = {
-    /*
+    
     // fields is a sorted list of the field names
     // typeInfo is the type with all fields and all infos
     val typeInfo = typeHandler.typeInfos2(name)
@@ -751,8 +768,6 @@ trait CaseClassTypeFactory extends TypeFactory {
     }
     
     typeName
-    */
-    name
   }
 
 }

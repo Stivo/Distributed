@@ -1,4 +1,4 @@
-/*package ch.epfl.distributed
+package ch.epfl.distributed
 
 import scala.virtualization.lms.common.ScalaGenBase
 import java.io.PrintWriter
@@ -9,9 +9,9 @@ import scala.collection.mutable
 import java.util.regex.Pattern
 import java.io.StringWriter
 
-trait ScoobiProgram extends DListOpsExp with DListImplOps
+trait ScoobiProgram extends DListProgram
 
-trait ScoobiGenDList extends ScalaGenBase with ScalaGenDList
+trait ScoobiGenDList extends ScalaGenBase 
     with DListTransformations with Matchers with CaseClassTypeFactory {
 
   val IR: DListOpsExp
@@ -50,7 +50,7 @@ trait ScoobiGenDList extends ScalaGenBase with ScalaGenDList
       }
       case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
       case v @ DListJoin(left, right) => emitValDef(sym, "join(%s,%s)".format(quote(left), quote(right)))
-      case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.combine(%s)".format(quote(dlist), handleClosure(red.closure)))
+//      case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.combine(%s)".format(quote(dlist), handleClosure(red.closure)))
       case GetArgs() => emitValDef(sym, "scoobiInputArgs")
       case _ => super.emitNode(sym, rhs)
     }
@@ -68,6 +68,7 @@ trait ScoobiGenDList extends ScalaGenBase with ScalaGenDList
     mapMerge = false
   }
 
+  /*
   override def transformTree(state: TransformationState): TransformationState = {
     val transformer = new Transformer(state)
     var pullDeps = newPullDeps
@@ -89,7 +90,7 @@ trait ScoobiGenDList extends ScalaGenBase with ScalaGenDList
 
     transformer.currentState
   }
-
+  */
   def mkWireFormats() = {
     val out = new StringBuilder
     def findName(s: String) = s.takeWhile('_' != _)
@@ -123,14 +124,6 @@ trait ScoobiGenDList extends ScalaGenBase with ScalaGenDList
 
     val capture = new StringWriter
     val stream = new PrintWriter(capture)
-
-    val x = fresh[A]
-    val y = reifyBlock(f(x))
-
-    val sA = mA.toString
-    val sB = mB.toString
-
-    //    val staticData = getFreeDataBlock(y)
 
     stream.println("/*****************************************\n" +
       "  Emitting Scoobi Code                  \n" +
@@ -170,8 +163,20 @@ object %s {
         ###wireFormats###
         """.format(className, className))
 
-    emitBlock(y)
+    
+    val x = fresh[A]
+    val y = reifyBlock(f(x))
+    typeHandler = new TypeHandler(y)
 
+    val sA = mA.toString
+    val sB = mB.toString
+
+    //    val staticData = getFreeDataBlock(y)
+
+ 
+    withStream(stream) {
+    	emitBlock(y)
+    }
     stream.println("}")
     stream.println("}")
     stream.println("// Types that are used in this program")
@@ -193,4 +198,3 @@ object %s {
 
 trait ScoobiGen extends DListBaseCodeGenPkg with ScoobiGenDList
 
-*/

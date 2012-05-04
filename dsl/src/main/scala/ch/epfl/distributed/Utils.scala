@@ -7,8 +7,9 @@ trait Matchers extends AbstractScalaGenDList {
   import IR.ClosureNode
 
   object SomeDef {
-    def unapply(x: Any): Option[Def[_]] = x match {
+    def unapply(x: Any) = x match {
       //case TTPDef(x) => Some(x)
+      case TP(_, x) => Some(x)
       case x: Def[_] => Some(x)
       case Def(x) => Some(x)
       //	          case x => Some(x)
@@ -16,12 +17,14 @@ trait Matchers extends AbstractScalaGenDList {
     }
   }
 
+  /*
   object TTPDef {
     def unapply(ttp: Stm) = ttp match {
       //case TTP(_, ThinDef(x)) => Some(x)
       case _ => None
     }
   }
+  */
 
   object FieldAccess {
     def unapply(ttp: Stm) = ttp match {

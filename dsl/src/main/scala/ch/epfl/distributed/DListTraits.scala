@@ -11,11 +11,11 @@ trait DListProgram extends DListOps
 trait DListOpsExpBase extends DListOps
 	with ScalaOpsPkgExp
 	with FatExpressions with BlockExp with Effects with EffectExp
-	with MoreIterableOpsExp
-	with StringPatternOpsExp with DateOpsExp
-	with StringAndNumberOpsExp
 	with IfThenElseFatExp with LoopsFatExp
+	with MoreIterableOpsExp with StringAndNumberOpsExp with DateOpsExp 
+	with StringPatternOpsExp
 	with StructTupleOpsExp
+	with Expressions
 	
 trait DListProgramExp extends DListOpsExp
 	with ScalaOpsPkgExp
