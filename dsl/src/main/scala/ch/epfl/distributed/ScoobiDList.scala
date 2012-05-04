@@ -8,6 +8,7 @@ import java.io.FileOutputStream
 import scala.collection.mutable
 import java.util.regex.Pattern
 import java.io.StringWriter
+import scala.virtualization.lms.common.WorklistTransformer
 
 trait ScoobiProgram extends DListProgram
 
@@ -124,7 +125,7 @@ trait ScoobiGenDList extends ScalaGenBase
 
     val capture = new StringWriter
     val stream = new PrintWriter(capture)
-
+    
     stream.println("/*****************************************\n" +
       "  Emitting Scoobi Code                  \n" +
       "*******************************************/")
@@ -165,7 +166,7 @@ object %s {
 
     
     val x = fresh[A]
-    val y = reifyBlock(f(x))
+    var y = reifyBlock(f(x))
     typeHandler = new TypeHandler(y)
 
     val sA = mA.toString
@@ -173,7 +174,41 @@ object %s {
 
     //    val staticData = getFreeDataBlock(y)
 
- 
+    val wt = new WorklistTransformer() {val IR : ScoobiGenDList.this.IR.type = ScoobiGenDList.this.IR}
+    var a = newAnalyzer(y)
+    a.narrowBefore.foreach(x => println(" this is one "+x))
+    val gbks = a.narrowBefore.flatMap{ case g@DListGroupByKey(x) => Some(g); case _ => None}
+    for (gbk <- gbks) {
+    	val stm = IR.findDefinition(gbk).get
+    	class GroupByKeyTransformer[K: Manifest,V: Manifest](in : Exp[DList[(K,V)]]) {
+    	val mapNew = IR.dlist_map(wt(in), { x: IR.Rep[(K,V)] => x })
+    	IR.findDefinition(mapNew.asInstanceOf[Sym[_]]).get.defs.head.asInstanceOf[DListNode].metaInfos("narrower") = true
+    	val gbkNew = IR.dlist_groupByKey(
+    	    mapNew
+    	    )
+    	wt.register(stm.syms.head)(gbkNew)
+    	}
+    	new GroupByKeyTransformer(gbk.dlist)(gbk.mKey, gbk.mValue)
+    	()
+    }
+//    	wt.register(stm.syms.head)(IR.dlist_groupByKey[A,B](
+//    	    mapNew
+//    	    )(IR.mtype(gbk.mKey), IR.mtype(gbk.mValue)))
+    y = wt.run(y)
+//    val firstSave = a.saves.head
+//    println(firstSave)
+//    println(availableDefs)
+//    val stm = IR.findDefinition(firstSave).get
+//    val sym = stm.syms.head
+    
+//    def cast(a : Any) = a.asInstanceOf[wt.IR.Exp[_]]
+//    
+//    wt.register(sym)(IR.toAtom2(new DListSave(
+//        IR.dlist_map(wt(firstSave.dlist), { x: IR.Rep[_] => x })
+//        , wt(firstSave.path))))
+    
+//    y = wt.run(y)
+    
     withStream(stream) {
     	emitBlock(y)
     }

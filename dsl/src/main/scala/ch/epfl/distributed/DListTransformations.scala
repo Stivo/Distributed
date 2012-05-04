@@ -3,6 +3,8 @@ package ch.epfl.distributed
 import scala.virtualization.lms.common.ScalaGenBase
 import scala.virtualization.lms.common.BooleanOps
 import scala.collection.mutable
+import scala.virtualization.lms.common.WorklistTransformer
+import scala.virtualization.lms.common.ForwardTransformer
 
 trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with Matchers {
 
@@ -26,6 +28,52 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
   import IR.{ findDefinition }
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda }
   import IR.{ Struct }
+  
+  /*
+   * insert identity mapper before a save
+   * - try to keep existing interface?
+   */
+  class TransformationState(val block : Block[_])
+  
+//  class SimpleWorklistTransformer extends WorklistTransformer {
+//    
+////    def register(x : Exp[A], y: Transformation) {
+////      
+////    }
+//    
+//  }
+  
+  class Transformer(var state : TransformationState) {
+    
+//	  def runOnce(transformation : Transformation) {
+//	     val visitor = new BlockVisitor(state.block)
+//	     val nodesToUpdate = visitor.statements.flatMap{_.syms}.filter(x => transformation.appliesToNode(x, this))
+//	     if (!nodesToUpdate.isEmpty) {
+//	       val wt = new SimpleWorklistTransformer() {
+//	         val IR = DListTransformations.this.IR
+//	       }
+//	       for (toUpdate <- nodesToUpdate) {
+//	    	   wt.register(toUpdate.asInstanceOf[wt.IR.Exp[_]])(transformation(toUpdate, wt, this).asInstanceOf[wt.IR.Exp[_]])(toUpdate.tp)
+//	       }
+//	     }
+//	  }
+    
+  }
+  
+  trait Transformation {
+    def appliesToNode(inExp: Exp[_], t: Transformer): Boolean
+
+//    def applyToNode(inExp: Exp[_], transformer: Transformer): (List[TTP], List[(Exp[_], Exp[_])])
+
+    def apply[A](oldNode : Exp[A], ft: ForwardTransformer, t: Transformer) : ft.IR.Exp[A]
+    
+    override def toString =
+      this.getClass.getSimpleName.replaceAll("Transformation", "")
+        .split("(?=[A-Z])").mkString(" ").trim
+
+  }
+
+  
 /*  
   class TransformationState(val ttps: List[TTP], val results: List[Exp[Any]]) {
     def printAll(s: String = null) = {

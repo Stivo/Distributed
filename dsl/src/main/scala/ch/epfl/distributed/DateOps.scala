@@ -59,7 +59,7 @@ trait DateOpsExp extends DateOps with BaseExp {
     case DateComparison(l, r, c) => dateComparison(f(l), f(r), c)
     case DateObjectApply(s) => dateObjectApply(f(s))
     case DateAdd(d, y, m, days) => dateAdd(f(d), f(y), f(m), f(days))
-    case _ => super.mirror(e, f)
+    case _ => super.mirrorDef(e, f)
   }).asInstanceOf[Def[A]]
 }
 

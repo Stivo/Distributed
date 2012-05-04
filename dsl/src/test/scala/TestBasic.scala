@@ -32,14 +32,18 @@ trait DListsProg extends DListProgram with ComplexBase{
     val words1 = DList(getArgs(0))
     words1.map(x => (Complex(x.toDouble, 5.0), unit("asdf")))
     .map(_._1.im)
+//    .save(getArgs(1))
+    words1.map(x => (x, unit(1))).groupByKey.save(getArgs(1))
 //    words1
 //    //.filter(_.matches("\\d+"))
 //    .map(_.toInt)
-    .save(getArgs(1))
+   
+    
     //)(0)
     unit(())
   }
 
+  
   /*
   def simple2(x: Rep[Unit]) = {
     val words1 = DList(getArgs(0))

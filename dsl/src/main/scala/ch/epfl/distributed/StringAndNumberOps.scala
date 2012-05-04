@@ -52,7 +52,7 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
     case n @ StringToNumber(s) => string_toNumber(f(s))(n.m, null)
     case n @ StringToChar(s) => string_toChar(f(s))
-    case _ => super.mirror(e, f)
+    case _ => super.mirrorDef(e, f)
   }).asInstanceOf[Def[A]]
 
 }

@@ -162,7 +162,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def getType = manifest[DList[A]]
   }
 
-  case class DListGroupByKey[K: Manifest, V: Manifest](v1: Exp[DList[(K, V)]]) extends Def[DList[(K, Iterable[V])]]
+  case class DListGroupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]]) extends Def[DList[(K, Iterable[V])]]
       with ComputationNodeTyped[DList[(K, V)], DList[(K, Iterable[V])]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
@@ -188,7 +188,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def mIn1 = manifest[(K, V1)]
   }
 
-  case class DListSave[A: Manifest](dlists: Exp[DList[A]], path: Exp[String]) extends Def[Unit]
+  case class DListSave[A: Manifest](dlist: Exp[DList[A]], path: Exp[String]) extends Def[Unit]
       with ComputationNodeTyped[DList[A], Nothing] {
     val mA = manifest[A]
     def getTypes = (manifest[DList[A]], manifest[Nothing])
@@ -227,6 +227,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
     var out = e match {
+      case GetArgs() => GetArgs()
       case vm @ NewDList(path) => NewDList(f(path))(vm.mA)
       case vm @ DListMap(dlist, func) => DListMap(f(dlist), f(func))(vm.mA, vm.mB)
       case vs @ DListSave(dlist, path) => DListSave(f(dlist), f(path))(vs.mA)
@@ -421,7 +422,10 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
   var typeHandler: TypeHandler = null
 
   override def remap[A](m: Manifest[A]): String = {
-    val remappings = typeHandler.remappings.filter(!_._2.startsWith("tuple2s_"))
+    println(m)
+    println(typeHandler.remappings)
+    val remappings = typeHandler.remappings.filter(!_._2.startsWith("tuple2s"))
+    println(remappings)
     var out = m.toString
     remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
 
@@ -491,9 +495,6 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     val y = reifyBlock(f(x))
 
     typeHandler = new TypeHandler(y)
-    typeHandler.remappings.foreach(println)
-    typeHandler.typeInfos.foreach(println)
-    println(typeHandler.typeInfos2("Complex"))
     
     val analyzer = newAnalyzer(y)
     println(analyzer.nodes)

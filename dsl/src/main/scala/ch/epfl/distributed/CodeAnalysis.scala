@@ -46,7 +46,7 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
       case SomeDef(l @ IR.Lambda2(f, x1, x2, y)) => Some(l)
       case _ => None
     }
-    lazy val saves = nodes.filter { case v: DListSave[_] => true; case _ => false }
+    lazy val saves = nodes.filter { case v: DListSave[_] => true; case _ => false }.map(_.asInstanceOf[DListSave[_]])
 
     def getInputs(x: DListNode) = {
       val syms = IR.syms(x)
