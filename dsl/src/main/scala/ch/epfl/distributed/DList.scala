@@ -14,9 +14,9 @@ import scala.collection.mutable
 import scala.collection.immutable
 import java.util.regex.Pattern
 
-trait Vector[+A]
+trait DList[+A]
 
-trait VectorBase extends Base with LiftAll
+trait DListBase extends Base with LiftAll
   with Equal with IfThenElse with Variables with While with Functions
   with ImplicitOps with NumericOps with OrderingOps with StringOps
   with BooleanOps with PrimitiveOps with MiscOps with TupleOps
@@ -24,19 +24,11 @@ trait VectorBase extends Base with LiftAll
   with MoreIterableOps
   with StringAndNumberOps with IterableOps with ListOps with DateOps
 
-trait VectorBaseExp extends VectorBase
-  with DSLOpsExp with BlockExp
-  with EqualExp with IfThenElseExp with VariablesExp with WhileExp with FunctionsExp
-  with ImplicitOpsExp with NumericOpsExp with OrderingOpsExp with StringOpsExp with StringOpsExpOpt
-  with BooleanOpsExp with PrimitiveOpsExp with MiscOpsExp with StructTupleOpsExp
-  with MathOpsExp with CastingOpsExp with ObjectOpsExp with ArrayOpsExp with RangeOpsExp
+trait DListBaseExp extends DListOps
   with StructExp with StructExpOpt
-  with StructFatExp with StructFatExpOptCommon
-  with FatExpressions with LoopsFatExp with IfThenElseFatExp
-  with StringPatternOpsExp with MoreIterableOpsExp
-  with StringAndNumberOpsExp with IterableOpsExp with ListOpsExp with DateOpsExp
-
-trait VectorBaseCodeGenPkg extends ScalaGenDSLOps
+  with FunctionsExp
+  
+trait DListBaseCodeGenPkg extends ScalaGenDSLOps
   with SimplifyTransform with ScalaGenIfThenElseFat
   with ScalaGenEqual with ScalaGenIfThenElse with ScalaGenVariables with ScalaGenWhile with ScalaGenFunctions
   with ScalaGenImplicitOps with ScalaGenNumericOps with ScalaGenOrderingOps with ScalaGenStringOps
@@ -46,47 +38,47 @@ trait VectorBaseCodeGenPkg extends ScalaGenDSLOps
   //with ScalaGenFatStruct
   with ScalaGenStruct with GenericFatCodegen
   with StringPatternOpsCodeGen with MoreIterableOpsCodeGen
-  with StringAndNumberOpsCodeGen with ScalaGenListOps with ScalaGenIterableOps { val IR: VectorOpsExp }
+  with StringAndNumberOpsCodeGen with ScalaGenListOps with ScalaGenIterableOps { val IR: DListOpsExp }
 
-trait VectorOps extends VectorBase {
+trait DListOps extends Base with Variables {
   def getArgs = get_args()
 
-  object Vector {
-    def apply(file: Rep[String]) = vector_new[String](file)
+  object DList {
+    def apply(file: Rep[String]) = dlist_new[String](file)
   }
 
-  implicit def repVecToVecOps[A: Manifest](vector: Rep[Vector[A]]) = new vecOpsCls(vector)
-  class vecOpsCls[A: Manifest](vector: Rep[Vector[A]]) {
-    def flatMap[B: Manifest](f: Rep[A] => Rep[Iterable[B]]) = vector_flatMap(vector, f)
-    def map[B: Manifest](f: Rep[A] => Rep[B]) = vector_map(vector, f)
-    def filter(f: Rep[A] => Rep[Boolean]) = vector_filter(vector, f)
-    def save(path: Rep[String]) = vector_save(vector, path)
-    def ++(vector2: Rep[Vector[A]]) = vector_++(vector, vector2)
+  implicit def repDListToDListOps[A: Manifest](dlist: Rep[DList[A]]) = new dlistOpsCls(dlist)
+  class dlistOpsCls[A: Manifest](dlist: Rep[DList[A]]) {
+    def flatMap[B: Manifest](f: Rep[A] => Rep[Iterable[B]]) = dlist_flatMap(dlist, f)
+    def map[B: Manifest](f: Rep[A] => Rep[B]) = dlist_map(dlist, f)
+    def filter(f: Rep[A] => Rep[Boolean]) = dlist_filter(dlist, f)
+    def save(path: Rep[String]) = dlist_save(dlist, path)
+    def ++(dlist2: Rep[DList[A]]) = dlist_++(dlist, dlist2)
   }
 
-  implicit def repVecToVecIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[Vector[(K, Iterable[V])]]) = new vecIterableTupleOpsCls(x)
-  class vecIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[Vector[(K, Iterable[V])]]) {
-    def reduce(f: (Rep[V], Rep[V]) => Rep[V]) = vector_reduce[K, V](x, f)
+  implicit def repDListToDListIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, Iterable[V])]]) = new dlistIterableTupleOpsCls(x)
+  class dlistIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, Iterable[V])]]) {
+    def reduce(f: (Rep[V], Rep[V]) => Rep[V]) = dlist_reduce[K, V](x, f)
   }
 
-  implicit def repVecToVecTupleOps[K: Manifest, V: Manifest](x: Rep[Vector[(K, V)]]) = new vecTupleOpsCls(x)
-  class vecTupleOpsCls[K: Manifest, V: Manifest](x: Rep[Vector[(K, V)]]) {
-    def groupByKey = vector_groupByKey[K, V](x)
-    def join[V2: Manifest](right: Rep[Vector[(K, V2)]]) = vector_join(x, right)
+  implicit def repDListToDListTupleOps[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) = new dlistTupleOpsCls(x)
+  class dlistTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) {
+    def groupByKey = dlist_groupByKey[K, V](x)
+    def join[V2: Manifest](right: Rep[DList[(K, V2)]]) = dlist_join(x, right)
   }
 
   def get_args(): Rep[Array[String]]
 
   //operations
-  def vector_new[A: Manifest](file: Rep[String]): Rep[Vector[String]]
-  def vector_map[A: Manifest, B: Manifest](vector: Rep[Vector[A]], f: Rep[A] => Rep[B]): Rep[Vector[B]]
-  def vector_flatMap[A: Manifest, B: Manifest](vector: Rep[Vector[A]], f: Rep[A] => Rep[Iterable[B]]): Rep[Vector[B]]
-  def vector_filter[A: Manifest](vector: Rep[Vector[A]], f: Rep[A] => Rep[Boolean]): Rep[Vector[A]]
-  def vector_save[A: Manifest](vector: Rep[Vector[A]], path: Rep[String]): Rep[Unit]
-  def vector_++[A: Manifest](vector1: Rep[Vector[A]], vector2: Rep[Vector[A]]): Rep[Vector[A]]
-  def vector_reduce[K: Manifest, V: Manifest](vector: Rep[Vector[(K, Iterable[V])]], f: (Rep[V], Rep[V]) => Rep[V]): Rep[Vector[(K, V)]]
-  def vector_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[Vector[(K, V1)]], right: Rep[Vector[(K, V2)]]): Rep[Vector[(K, (V1, V2))]]
-  def vector_groupByKey[K: Manifest, V: Manifest](vector: Rep[Vector[(K, V)]]): Rep[Vector[(K, Iterable[V])]]
+  def dlist_new[A: Manifest](file: Rep[String]): Rep[DList[String]]
+  def dlist_map[A: Manifest, B: Manifest](dlist: Rep[DList[A]], f: Rep[A] => Rep[B]): Rep[DList[B]]
+  def dlist_flatMap[A: Manifest, B: Manifest](dlist: Rep[DList[A]], f: Rep[A] => Rep[Iterable[B]]): Rep[DList[B]]
+  def dlist_filter[A: Manifest](dlist: Rep[DList[A]], f: Rep[A] => Rep[Boolean]): Rep[DList[A]]
+  def dlist_save[A: Manifest](dlist: Rep[DList[A]], path: Rep[String]): Rep[Unit]
+  def dlist_++[A: Manifest](dlist1: Rep[DList[A]], dlist2: Rep[DList[A]]): Rep[DList[A]]
+  def dlist_reduce[K: Manifest, V: Manifest](dlist: Rep[DList[(K, Iterable[V])]], f: (Rep[V], Rep[V]) => Rep[V]): Rep[DList[(K, V)]]
+  def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]]
+  def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]]): Rep[DList[(K, Iterable[V])]]
 }
 
 object FakeSourceContext {
@@ -97,44 +89,27 @@ case class FieldRead(val path: String) {
   val getPath = path.split("\\.").toList
 }
 
-trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
+trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   def toAtom2[T: Manifest](d: Def[T])(implicit ctx: SourceContext): Exp[T] = super.toAtom(d)
 
-  trait VectorNode {
+  trait DListNode {
     val directFieldReads = mutable.HashSet[FieldRead]()
     val successorFieldReads = mutable.HashSet[FieldRead]()
     val metaInfos = mutable.Map[String, Any]()
   }
 
-  trait ClosureNode[A, B] extends VectorNode {
-    val in: Exp[Vector[_]]
-    val func: Exp[A] => Exp[B]
+  trait ClosureNode[A, B] extends DListNode {
+    val in: Exp[DList[_]]
     def getClosureTypes: (Manifest[A], Manifest[B])
-
-    val overrideClosure: Option[Exp[A => B]] = None
-
-    lazy val closure: Exp[A => B] = {
-      overrideClosure.getOrElse(
-        VectorOpsExp.this.doLambda(func)(getClosureTypes._1, getClosureTypes._2)
-      )
-    }
   }
 
-  trait Closure2Node[A, B, C] extends VectorNode {
-    val in: Exp[Vector[_]]
-    val func: (Exp[A], Exp[B]) => Exp[C]
+  trait Closure2Node[A, B, C] extends DListNode {
+    val in: Exp[DList[_]]
     def getClosureTypes: ((Manifest[A], Manifest[B]), Manifest[C])
 
-    val overrideClosure: Option[Exp[(A, B) => C]] = None
-
-    lazy val closure = {
-      overrideClosure.getOrElse(
-        VectorOpsExp.this.doLambda2(func)(getClosureTypes._1._1, getClosureTypes._1._2, getClosureTypes._2)
-      )
-    }
   }
 
-  trait ComputationNode extends VectorNode {
+  trait ComputationNode extends DListNode {
     def getTypes: (Manifest[_], Manifest[_])
     def getElementTypes: (Manifest[_], Manifest[_]) = (getTypes._1.typeArguments(0), getTypes._2.typeArguments(0))
   }
@@ -148,142 +123,155 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     def getTypes = (getType, getType)
   }
 
-  case class NewVector[A: Manifest](file: Exp[String]) extends Def[Vector[String]]
-      with ComputationNodeTyped[Nothing, Vector[A]] {
+  case class NewDList[A: Manifest](file: Exp[String]) extends Def[DList[String]]
+      with ComputationNodeTyped[Nothing, DList[A]] {
     val mA = manifest[A]
-    def getTypes = (manifest[Nothing], manifest[Vector[A]])
+    def getTypes = (manifest[Nothing], manifest[DList[A]])
   }
 
-  def makeVectorManifest[B: Manifest] = manifest[Vector[B]]
+  def makeDListManifest[B: Manifest] = manifest[DList[B]]
 
-  case class VectorMap[A: Manifest, B: Manifest](in: Exp[Vector[A]], func: Exp[A] => Exp[B])
-      extends Def[Vector[B]] with ComputationNodeTyped[Vector[A], Vector[B]] with ClosureNode[A, B] {
+  case class DListMap[A: Manifest, B: Manifest](in: Exp[DList[A]], func: Exp[A => B])
+      extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, B] {
     val mA = manifest[A]
     val mB = manifest[B]
     def getClosureTypes = (mA, mB)
-    def getTypes = (makeVectorManifest[A], makeVectorManifest[B])
-    override def toString = "VectorMap(%s, %s)".format(in, closure)
+    def getTypes = (makeDListManifest[A], makeDListManifest[B])
   }
 
-  case class VectorFilter[A: Manifest](in: Exp[Vector[A]], func: Exp[A] => Exp[Boolean])
-      extends Def[Vector[A]] with PreservingTypeComputation[Vector[A]] with ClosureNode[A, Boolean] {
+  case class DListFilter[A: Manifest](in: Exp[DList[A]], func: Exp[A] => Exp[Boolean])
+      extends Def[DList[A]] with PreservingTypeComputation[DList[A]] with ClosureNode[A, Boolean] {
     val mA = manifest[A]
     def getClosureTypes = (mA, Manifest.Boolean)
-    def getType = makeVectorManifest[A]
+    def getType = makeDListManifest[A]
   }
 
-  case class VectorFlatMap[A: Manifest, B: Manifest](in: Exp[Vector[A]], func: Exp[A] => Exp[Iterable[B]])
-      extends Def[Vector[B]] with ComputationNodeTyped[Vector[A], Vector[B]] with ClosureNode[A, Iterable[B]] {
+  case class DListFlatMap[A: Manifest, B: Manifest](in: Exp[DList[A]], func: Exp[A] => Exp[Iterable[B]])
+      extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, Iterable[B]] {
     val mA = manifest[A]
     val mB = manifest[B]
-    def getTypes = (manifest[Vector[A]], manifest[Vector[B]])
+    def getTypes = (manifest[DList[A]], manifest[DList[B]])
     def getClosureTypes = (manifest[A], manifest[Iterable[B]])
   }
 
-  case class VectorFlatten[A: Manifest](vectors: List[Exp[Vector[A]]]) extends Def[Vector[A]]
-      with PreservingTypeComputation[Vector[A]] {
+  case class DListFlatten[A: Manifest](dlists: List[Exp[DList[A]]]) extends Def[DList[A]]
+      with PreservingTypeComputation[DList[A]] {
     val mA = manifest[A]
-    def getType = manifest[Vector[A]]
+    def getType = manifest[DList[A]]
   }
 
-  case class VectorGroupByKey[K: Manifest, V: Manifest](v1: Exp[Vector[(K, V)]]) extends Def[Vector[(K, Iterable[V])]]
-      with ComputationNodeTyped[Vector[(K, V)], Vector[(K, Iterable[V])]] {
+  case class DListGroupByKey[K: Manifest, V: Manifest](v1: Exp[DList[(K, V)]]) extends Def[DList[(K, Iterable[V])]]
+      with ComputationNodeTyped[DList[(K, V)], DList[(K, Iterable[V])]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     val mOutType = manifest[(K, Iterable[V])]
     val mInType = manifest[(K, V)]
-    def getTypes = (manifest[Vector[(K, V)]], manifest[Vector[(K, Iterable[V])]])
+    def getTypes = (manifest[DList[(K, V)]], manifest[DList[(K, Iterable[V])]])
   }
 
-  case class VectorReduce[K: Manifest, V: Manifest](in: Exp[Vector[(K, Iterable[V])]], func: (Exp[V], Exp[V]) => Exp[V])
-      extends Def[Vector[(K, V)]] with Closure2Node[V, V, V]
-      with ComputationNodeTyped[Vector[(K, Iterable[V])], Vector[(K, V)]] {
+  case class DListReduce[K: Manifest, V: Manifest](in: Exp[DList[(K, Iterable[V])]], func: (Exp[V], Exp[V]) => Exp[V])
+      extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
+      with ComputationNodeTyped[DList[(K, Iterable[V])], DList[(K, V)]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     def getClosureTypes = ((manifest[V], manifest[V]), manifest[V])
-    def getTypes = (manifest[Vector[(K, Iterable[V])]], manifest[Vector[(K, V)]])
+    def getTypes = (manifest[DList[(K, Iterable[V])]], manifest[DList[(K, V)]])
   }
 
-  case class VectorJoin[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[Vector[(K, V1)]], right: Exp[Vector[(K, V2)]])
-      extends Def[Vector[(K, (V1, V2))]] with VectorNode {
+  case class DListJoin[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]])
+      extends Def[DList[(K, (V1, V2))]] with DListNode {
     def mK = manifest[K]
     def mV1 = manifest[V1]
     def mV2 = manifest[V2]
     def mIn1 = manifest[(K, V1)]
   }
 
-  case class VectorSave[A: Manifest](vectors: Exp[Vector[A]], path: Exp[String]) extends Def[Unit]
-      with ComputationNodeTyped[Vector[A], Nothing] {
+  case class DListSave[A: Manifest](dlists: Exp[DList[A]], path: Exp[String]) extends Def[Unit]
+      with ComputationNodeTyped[DList[A], Nothing] {
     val mA = manifest[A]
-    def getTypes = (manifest[Vector[A]], manifest[Nothing])
+    def getTypes = (manifest[DList[A]], manifest[Nothing])
   }
 
   case class GetArgs() extends Def[Array[String]]
 
-  case class Narrowing(struct: Vector[Rep[SimpleStruct[_]]], fields: List[String]) extends Def[Vector[Rep[SimpleStruct[_]]]]
+  case class Narrowing(struct: DList[Rep[SimpleStruct[_]]], fields: List[String]) extends Def[DList[Rep[SimpleStruct[_]]]]
 
   case class ObjectCreation[A: Manifest](className: String, fields: Map[String, Rep[_]]) extends Def[A] {
     val mA = manifest[A]
   }
 
   override def get_args() = GetArgs()
-  override def vector_new[A: Manifest](file: Exp[String]) = NewVector[A](file)
-  override def vector_map[A: Manifest, B: Manifest](vector: Exp[Vector[A]], f: Exp[A] => Exp[B]) = VectorMap[A, B](vector, f)
-  override def vector_flatMap[A: Manifest, B: Manifest](vector: Rep[Vector[A]], f: Rep[A] => Rep[Iterable[B]]) = VectorFlatMap(vector, f)
-  override def vector_filter[A: Manifest](vector: Rep[Vector[A]], f: Exp[A] => Exp[Boolean]) = VectorFilter(vector, f)
-  override def vector_save[A: Manifest](vector: Exp[Vector[A]], file: Exp[String]) = {
-    val save = new VectorSave[A](vector, file)
+  override def dlist_new[A: Manifest](file: Exp[String]) = NewDList[A](file)
+  override def dlist_map[A: Manifest, B: Manifest](dlist: Exp[DList[A]], f: Exp[A] => Exp[B]) = DListMap[A, B](dlist, doLambda(f))
+  override def dlist_flatMap[A: Manifest, B: Manifest](dlist: Rep[DList[A]], f: Rep[A] => Rep[Iterable[B]]) = DListFlatMap(dlist, f)
+  override def dlist_filter[A: Manifest](dlist: Rep[DList[A]], f: Exp[A] => Exp[Boolean]) = DListFilter(dlist, f)
+  override def dlist_save[A: Manifest](dlist: Exp[DList[A]], file: Exp[String]) = {
+    val save = new DListSave[A](dlist, file)
     reflectEffect(save)
   }
-  override def vector_++[A: Manifest](vector1: Rep[Vector[A]], vector2: Rep[Vector[A]]) = VectorFlatten(immutable.List(vector1, vector2))
-  override def vector_reduce[K: Manifest, V: Manifest](vector: Exp[Vector[(K, Iterable[V])]], f: (Exp[V], Exp[V]) => Exp[V]) = VectorReduce(vector, f)
-  override def vector_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[Vector[(K, V1)]], right: Rep[Vector[(K, V2)]]): Rep[Vector[(K, (V1, V2))]] = VectorJoin(left, right)
-  override def vector_groupByKey[K: Manifest, V: Manifest](vector: Exp[Vector[(K, V)]]) = VectorGroupByKey(vector)
+  override def dlist_++[A: Manifest](dlist1: Rep[DList[A]], dlist2: Rep[DList[A]]) = DListFlatten(immutable.List(dlist1, dlist2))
+  override def dlist_reduce[K: Manifest, V: Manifest](dlist: Exp[DList[(K, Iterable[V])]], f: (Exp[V], Exp[V]) => Exp[V]) = DListReduce(dlist, f)
+  override def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]] = DListJoin(left, right)
+  override def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]]) = DListGroupByKey(dlist)
 
   def copyMetaInfo(from: Any, to: Any) = {
-    def copyMetaInfoHere[A <: VectorNode](from: VectorNode, to: A) = { to.metaInfos ++= from.metaInfos; to }
+    def copyMetaInfoHere[A <: DListNode](from: DListNode, to: A) = { to.metaInfos ++= from.metaInfos; to }
     (from, to) match {
-      case (x: VectorNode, Def(y: VectorNode)) => copyMetaInfoHere(x, y)
-      case (Def(x: VectorNode), Def(y: VectorNode)) => copyMetaInfoHere(x, y)
+      case (x: DListNode, Def(y: DListNode)) => copyMetaInfoHere(x, y)
+      case (Def(x: DListNode), Def(y: DListNode)) => copyMetaInfoHere(x, y)
       case _ =>
     }
   }
 
+  override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
+    var out = e match {
+      case vm @ NewDList(path) => NewDList(f(path))(vm.mA)
+      case vm @ DListMap(dlist, func) => DListMap(f(dlist), f(func))(vm.mA, vm.mB)
+      case vs @ DListSave(dlist, path) => DListSave(f(dlist), f(path))(vs.mA)
+      case _ => super.mirrorDef(e,f)
+    }
+    copyMetaInfo(e, out)
+    out.asInstanceOf[Def[A]]
+  }
+
+  /*
   override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = {
     var out = e match {
       case o @ ObjectCreation(name, fields) => toAtom(ObjectCreation(name, fields.mapValues(f(_)))(o.mA))(o.mA)
-      case flat @ VectorFlatten(list) => toAtom(VectorFlatten(f(list))(flat.mA))
-      case vm @ NewVector(vector) => toAtom(NewVector(f(vector))(vm.mA))(mtype(vm.mA))
-      case vm @ VectorMap(vector, func) => toAtom(
-        new { override val overrideClosure = Some(f(vm.closure)) } with VectorMap(f(vector), f(func))(vm.mA, vm.mB)
+      case flat @ DListFlatten(list) => toAtom(DListFlatten(f(list))(flat.mA))
+      case vm @ NewDList(dlist) => toAtom(NewDList(f(dlist))(vm.mA))(mtype(vm.mA))
+      case vm @ DListMap(dlist, func) => toAtom(
+        new { override val overrideClosure = Some(f(vm.closure)) } with DListMap(f(dlist), f(func))(vm.mA, vm.mB)
       )(vm.getTypes._2)
-      case vf @ VectorFilter(vector, func) => toAtom(
-        new { override val overrideClosure = Some(f(vf.closure)) } with VectorFilter(f(vector), f(func))(vf.mA)
+      case vf @ DListFilter(dlist, func) => toAtom(
+        new { override val overrideClosure = Some(f(vf.closure)) } with DListFilter(f(dlist), f(func))(vf.mA)
       )(mtype(manifest[A]))
-      case vfm @ VectorFlatMap(vector, func) => toAtom(
-        new { override val overrideClosure = Some(f(vfm.closure)) } with VectorFlatMap(f(vector), f(func))(vfm.mA, vfm.mB)
+      case vfm @ DListFlatMap(dlist, func) => toAtom(
+        new { override val overrideClosure = Some(f(vfm.closure)) } with DListFlatMap(f(dlist), f(func))(vfm.mA, vfm.mB)
       )(mtype(manifest[A]))
-      case gbk @ VectorGroupByKey(vector) => toAtom(VectorGroupByKey(f(vector))(gbk.mKey, gbk.mValue))(mtype(manifest[A]))
-      case v @ VectorJoin(left, right) => toAtom(VectorJoin(f(left), f(right))(v.mK, v.mV1, v.mV2))(mtype(manifest[A]))
-      case v @ VectorReduce(vector, func) => toAtom(
-        new { override val overrideClosure = Some(f(v.closure)) } with VectorReduce(f(vector), f(func))(v.mKey, v.mValue)
+      case gbk @ DListGroupByKey(dlist) => toAtom(DListGroupByKey(f(dlist))(gbk.mKey, gbk.mValue))(mtype(manifest[A]))
+      case v @ DListJoin(left, right) => toAtom(DListJoin(f(left), f(right))(v.mK, v.mV1, v.mV2))(mtype(manifest[A]))
+      case v @ DListReduce(dlist, func) => toAtom(
+        new { override val overrideClosure = Some(f(v.closure)) } with DListReduce(f(dlist), f(func))(v.mKey, v.mValue)
       )(mtype(manifest[A]))
-      case vs @ VectorSave(vector, path) => toAtom(VectorSave(f(vector), f(path))(vs.mA))
-      case Reflect(vs @ VectorSave(vector, path), u, es) => reflectMirrored(Reflect(VectorSave(f(vector), f(path))(vs.mA), mapOver(f, u), f(es)))
+      case vs @ DListSave(dlist, path) => toAtom(DListSave(f(dlist), f(path))(vs.mA))
+      case Reflect(vs @ DListSave(dlist, path), u, es) => reflectMirrored(Reflect(DListSave(f(dlist), f(path))(vs.mA), mapOver(f, u), f(es)))
       case Reify(x, u, es) => toAtom(Reify(f(x), mapOver(f, u), f(es)))(mtype(manifest[A]))
       case _ => super.mirror(e, f)
     }
     copyMetaInfo(e, out)
     out.asInstanceOf[Exp[A]]
   }
+  */
+  /*
   override def syms(e: Any): List[Sym[Any]] = e match {
     case s: ClosureNode[_, _] => syms(s.in, s.closure)
     case s: Closure2Node[_, _, _] => syms(s.in, s.closure)
-    case VectorFlatten(x) => syms(x)
-    case NewVector(arg) => syms(arg)
-    case VectorSave(vec, path) => syms(vec, path)
+    case DListFlatten(x) => syms(x)
+    case NewDList(arg) => syms(arg)
+    case DListSave(dlist, path) => syms(dlist, path)
     case ObjectCreation(_, fields) => syms(fields)
-    case VectorJoin(left, right) => syms(left, right)
+    case DListJoin(left, right) => syms(left, right)
     case _ => super.syms(e)
   }
 
@@ -291,25 +279,51 @@ trait VectorOpsExp extends VectorOps with VectorBaseExp with FunctionsExp {
     // TODO: ++ does not work anymore, because it is defined in ListOps
     case s: ClosureNode[_, _] => freqHot(s.closure, s.in) //++ freqNormal(s.in)
     case s: Closure2Node[_, _, _] => freqHot(s.closure, s.in) //++ freqNormal(s.in)
-    case VectorFlatten(x) => freqNormal(x)
-    case NewVector(arg) => freqNormal(arg)
-    case VectorSave(vec, path) => freqNormal(vec, path)
+    case DListFlatten(x) => freqNormal(x)
+    case NewDList(arg) => freqNormal(arg)
+    case DListSave(dlist, path) => freqNormal(dlist, path)
     case ObjectCreation(_, fields) => freqNormal(fields)
-    case VectorJoin(left, right) => freqNormal(left, right)
+    case DListJoin(left, right) => freqNormal(left, right)
     case _ => super.symsFreq(e)
   }
+*/
+}
+
+trait DListImplOps extends DListOps with FunctionsExp {
 
 }
 
-trait VectorImplOps extends VectorOps with FunctionsExp {
+trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
+  val IR: DListOpsExp
+  import IR.{ TP, Stm, SimpleStruct, Def, Sym, Exp, Block, StructTag, ClassTag }
+  import IR.{findDefinition, syms, infix_rhs}
+  class BlockVisitor(block : Block[_]) {
+     def visitAll(inputSym : Exp[Any]) : List[Stm] = {
+        def getInputs(x : Exp[Any]) = x match {
+          case x : Sym[Any] =>
+          findDefinition(x) match {
+            case Some(x) => syms(infix_rhs(x))
+            case None => Nil
+          }
+          case _ => Nil
+        } 
+        
+        var out = List[Stm]()
+        val inputs = getInputs(inputSym)
+        for (input <- inputs) input match {
+          case s : Sym[_] => {
+            val stm = findDefinition(s)
+            out ++= (visitAll(s) ++ stm)
+          }
+          case _ => 
+        }
+        out.distinct
+      }
 
-}
-
-trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
-  val IR: VectorOpsExp
-  import IR.{ TTP, ThinDef, SimpleStruct, Def, Phi, Sym, Exp }
-
-  class TypeHandler(ttps: List[TTP]) {
+    lazy val statements = visitAll(block.res)
+  }
+  
+  class TypeHandler(block : Block[_]) extends BlockVisitor(block) {
     trait PartInfo[A] {
       def m: Manifest[A]
       def niceName: String
@@ -317,7 +331,7 @@ trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
     case class FieldInfo[A: Manifest](val name: String, val niceType: String, position: Int) extends PartInfo[A] {
       val m = manifest[A]
       def niceName = niceType
-      lazy val containingType = typeInfos2.map(_._2).filter(_.fields.size > position).find(_.fields(position) == this).get
+//      lazy val containingType = typeInfos2.map(_._2).filter(_.fields.size > position).find(_.fields(position) == this).get
       def getType = typeInfos2(niceType)
     }
     case class TypeInfo[A: Manifest](val name: String, val fields: List[FieldInfo[_]]) extends PartInfo[A] {
@@ -325,14 +339,20 @@ trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
       def getField(field: String) = fields.find(_.name == field)
       def niceName = name
     }
-    val objectCreations = ttps.flatMap {
-      case TTP(_, ThinDef(s @ SimpleStruct(tag, elems))) => Some(s)
+    val objectCreations = statements.flatMap {
+      case TP(_, s @ SimpleStruct(tag, elems)) => Some(s)
+      //case TTP(_, ThinDef(s @ SimpleStruct(tag, elems))) => Some(s)
       case _ => None
     }
 
+    def getNameForTag(t : StructTag[_]) = t match {
+      case ClassTag(n) => n
+      case _ => throw new RuntimeException("Add name for this tag type")
+    }
+    
     val remappings = objectCreations.map {
       s =>
-        (s.m, s.tag.mkString("_"))
+        (s.m, getNameForTag(s.tag))
     }.toMap
     def cleanUpType(m: Manifest[_]) = {
       var out = m.toString
@@ -340,21 +360,21 @@ trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
       out
     }
     // Phi's do not have the correct type.
-    def getType(s: Exp[_]) = s match {
-      case Def(Phi(_, _, _, _, x)) => x.Type
-      case x => x.Type
-    }
+//    def getType(s: Exp[_]) = s match {
+//      case Def(Phi(_, _, _, _, x)) => x.Type
+//      case x => x.Type
+//    }
     val typeInfos = objectCreations.map {
       s =>
-        (s.tag.mkString("_"), s.elems.mapValues(x => cleanUpType(getType(x))))
+        (s.tag, s.elems) //.mapValues(x => cleanUpType(getType(x))))
     }.toMap
     val typeInfos2 = objectCreations.map {
       s =>
         var i = -1
-        val name = s.tag.mkString("_")
+        val name = getNameForTag(s.tag)
         val fields = s.elems.map { x =>
           i += 1;
-          val typ = x._2.Type
+          val typ = x._2.tp
           new FieldInfo(x._1, cleanUpType(typ), i)(typ)
         }.toList
         (name, new TypeInfo(name, fields)(s.m))
@@ -420,55 +440,97 @@ trait AbstractScalaGenVector extends ScalaGenBase with VectorBaseCodeGenPkg {
     }
     out
   }
+  
+  def emitProgram[A,B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)]
+  
 }
 
-trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTransformations with VectorAnalysis {
-  val IR: VectorOpsExp
+trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransformations with DListAnalysis {
+  val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
   import IR.{
-    NewVector,
-    VectorSave,
-    VectorMap,
-    VectorFilter,
-    VectorFlatMap,
-    VectorFlatten,
-    VectorGroupByKey,
-    VectorReduce,
+    NewDList,
+    DListSave,
+    DListMap,
+    DListFilter,
+    DListFlatMap,
+    DListFlatten,
+    DListGroupByKey,
+    DListReduce,
     ComputationNode,
-    VectorNode,
-    VectorJoin,
+    DListNode,
+    DListJoin,
     GetArgs
   }
   import IR.{ SimpleStruct }
-  import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
+  import IR.{ TTP, TP, SubstTransformer, Field }
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
-  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
-    case nv @ NewVector(filename) => emitValDef(sym, "New vector created from %s with type %s".format(filename, nv.mA))
-    case vs @ VectorSave(vector, filename) => stream.println("Saving vector %s (of type %s) to %s".format(vector, vs.mA, filename))
-    case vm @ VectorMap(vector, function) => emitValDef(sym, "mapping vector %s with function %s, type %s => %s".format(vector, quote(vm.closure), vm.mA, vm.mB))
-    case vf @ VectorFilter(vector, function) => emitValDef(sym, "filtering vector %s with function %s".format(vector, function))
-    case vm @ VectorFlatMap(vector, function) => emitValDef(sym, "flat mapping vector %s with function %s".format(vector, function))
-    case vm @ VectorFlatten(v1) => emitValDef(sym, "flattening vectors %s".format(v1))
-    case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "grouping vector by key")
-    case gbk @ VectorJoin(left, right) => emitValDef(sym, "Joining %s with %s".format(left, right))
-    case red @ VectorReduce(vector, f) => emitValDef(sym, "reducing vector")
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
+    case nv @ NewDList(filename) => emitValDef(sym, "New dlist created from %s with type %s".format(filename, nv.mA))
+    case vs @ DListSave(dlist, filename) => stream.println("Saving dlist %s (of type %s) to %s".format(dlist, remap(vs.mA), filename))
+    case vm @ DListMap(dlist, func) => emitValDef(sym, "mapping dlist %s with function %s, type %s => %s".format(dlist, quote(func), vm.mA, vm.mB))
+//    case vf @ DListFilter(dlist, function) => emitValDef(sym, "filtering dlist %s with function %s".format(dlist, function))
+//    case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "flat mapping dlist %s with function %s".format(dlist, function))
+//    case vm @ DListFlatten(v1) => emitValDef(sym, "flattening dlists %s".format(v1))
+//    case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "grouping dlist by key")
+//    case gbk @ DListJoin(left, right) => emitValDef(sym, "Joining %s with %s".format(left, right))
+//    case red @ DListReduce(dlist, f) => emitValDef(sym, "reducing dlist")
     case GetArgs() => emitValDef(sym, "getting the arguments")
     case IR.Lambda(_, _, _) if inlineClosures =>
     case IR.Lambda2(_, _, _, _) if inlineClosures =>
     case _ => super.emitNode(sym, rhs)
   }
 
-  def hasVectorNodes(ttps: List[TTP]) = !ttps.flatMap { TTPDef.unapply }.flatMap { case x: VectorNode => Some(x) case _ => None }.isEmpty
+  def emitProgram[A,B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
+    
+    val x = fresh[A]
+    val y = reifyBlock(f(x))
 
+    typeHandler = new TypeHandler(y)
+    typeHandler.remappings.foreach(println)
+    typeHandler.typeInfos.foreach(println)
+    println(typeHandler.typeInfos2("Complex"))
+    val sA = remap(mA)
+    val sB = remap(mB)
+
+    withStream(stream) {
+      stream.println("/*****************************************\n"+
+                     "  Emitting Generated Code                  \n"+
+                     "*******************************************/")
+                   
+      // TODO: separate concerns, should not hard code "pxX" name scheme for static data here
+//      stream.println("class "+className+" extends (("+sA+")=>("+sB+")) {")
+//      stream.println("def apply("+quote(x)+":"+sA+"): "+sB+" = {")
+
+      
+      emitBlock(y)
+      stream.println(quote(getBlockResult(y)))
+    
+//      stream.println("}")
+//    
+//      stream.println("}")
+//      stream.println("/*****************************************\n"+
+//                     "  End of Generated Code                  \n"+
+//                     "*******************************************/")
+    }
+
+    Nil
+  }
+
+  
+  def hasDListNodes(ttps: List[TTP]) = !ttps.flatMap { TTPDef.unapply }.flatMap { case x: DListNode => Some(x) case _ => None }.isEmpty
+
+  /*
   override def fattenAll(e: List[TP[Any]]): List[TTP] = {
     val out = super.fattenAll(e)
-    if (!typeHandler.isInstanceOf[TypeHandler] || hasVectorNodes(out)) {
+    if (!typeHandler.isInstanceOf[TypeHandler] || hasDListNodes(out)) {
       typeHandler = new TypeHandler(out)
     }
     out
   }
+  */
 
   def writeClosure(closure: Exp[_]) = {
     val sw = new StringWriter()
@@ -476,15 +538,15 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
     def remapHere(x: Manifest[_]) = if (typesInInlinedClosures) ": " + remap(x) else ""
     closure match {
       case Def(Lambda(fun, x, y)) => {
-        pw.println("{ %s %s => ".format(quote(x), remapHere(x.Type)))
-        emitBlock(y)(pw)
-        pw.println("%s %s".format(quote(getBlockResult(y)), remapHere(y.Type)))
+        pw.println("{ %s %s => ".format(quote(x), remapHere(x.tp)))
+        emitBlock(y)
+        pw.println("%s %s".format(quote(getBlockResult(y)), remapHere(y.tp)))
         pw.print("}")
       }
       case Def(Lambda2(fun, x1, x2, y)) => {
-        pw.println("{ (%s %s, %s %s) => ".format(quote(x1), remapHere(x1.Type), quote(x2), remapHere(x2.Type)))
-        emitBlock(y)(pw)
-        pw.println("%s %s".format(quote(getBlockResult(y)), remapHere(y.Type)))
+        pw.println("{ (%s %s, %s %s) => ".format(quote(x1), remapHere(x1.tp), quote(x2), remapHere(x2.tp)))
+        emitBlock(y)
+        pw.println("%s %s".format(quote(getBlockResult(y)), remapHere(y.tp)))
         pw.print("}")
       }
     }
@@ -507,9 +569,7 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
   var narrowExistingMaps = true
   var insertNarrowingMaps = true
   var mapMerge = true
-
-  def newPullDeps = new PullDependenciesTransformation()
-
+/*
   def mapNarrowing(transformer: Transformer) {
     // replace maps with narrower ones
     var oneFound = false
@@ -523,7 +583,7 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
         var goOn = true
         analyzer.ordered.foreach {
           case _ if !goOn =>
-          case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed")
+          case v @ DListMap(in, func) if !v.metaInfos.contains("narrowed")
             && !SimpleType.unapply(v.getClosureTypes._2).isDefined
             && analyzer.hasObjectCreationInClosure(v) => {
             oneFound = true
@@ -546,7 +606,7 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
     var oneFound = false
     var pullDeps = newPullDeps
     if (insertNarrowingMaps) {
-      //inserting narrowing vectormaps where analyzer says it should 
+      //inserting narrowing dlistmaps where analyzer says it should 
       do {
         oneFound = false
         val analyzer = newAnalyzer(transformer.currentState, typeHandler)
@@ -580,9 +640,10 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
 
   def transformTree(state: TransformationState): TransformationState = state
 
+  
   override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
     // only do our optimizations in top scope
-    if (hasVectorNodes(currentScope0In)) {
+    if (hasDListNodes(currentScope0In)) {
       // set up state
       var result0 = result0B.map(getBlockResultFull)
       var state = new TransformationState(currentScope0In, result0)
@@ -607,6 +668,8 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
     insertNarrowingMaps(transformer)
   }
 
+  
+  
   def writeGraphToFile(transformer: Transformer, name: String, comments: Boolean = true) {
     val out = new FileOutputStream(name)
     val analyzer = newAnalyzer(transformer.currentState, typeHandler)
@@ -616,11 +679,11 @@ trait ScalaGenVector extends AbstractScalaGenVector with Matchers with VectorTra
     out.close
 
   }
-
+*/
 }
 
-trait TypeFactory extends ScalaGenVector {
-  val IR: VectorOpsExp
+trait TypeFactory extends ScalaGenDList {
+  val IR: DListOpsExp
   import IR.{ Sym, Def }
 
   def makeTypeFor(name: String, fields: Iterable[String]): String
@@ -631,19 +694,20 @@ trait TypeFactory extends ScalaGenVector {
 
   def restTypes = types.filterKeys(x => !skipTypes.contains(x))
 
-  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = {
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
     val out = rhs match {
       case IR.Field(tuple, x, tp) => emitValDef(sym, "%s.%s".format(quote(tuple), x))
       case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
       case IR.ObjectCreation(name, fields) if (name.startsWith("tuple2s")) => {
         emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
       }
-      case IR.ObjectCreation(name, fields) => {
+/*      case IR.ObjectCreation(name, fields) => {
         val typeInfo = typeHandler.typeInfos2(name)
         val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)
         val typeName = makeTypeFor(name, fieldsList.map(_._1))
         emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
       }
+      */
       case _ => super.emitNode(sym, rhs)
     }
   }
@@ -652,6 +716,7 @@ trait TypeFactory extends ScalaGenVector {
 
 trait CaseClassTypeFactory extends TypeFactory {
   def makeTypeFor(name: String, fields: Iterable[String]): String = {
+    /*
     // fields is a sorted list of the field names
     // typeInfo is the type with all fields and all infos
     val typeInfo = typeHandler.typeInfos2(name)
@@ -684,7 +749,10 @@ trait CaseClassTypeFactory extends TypeFactory {
           .map(x => """%s sb.append(",")""".format(if (x.isEmpty) "" else "sb.append(%s); ".format(x)))
           .mkString(";\n"))
     }
+    
     typeName
+    */
+    name
   }
 
 }

@@ -4,23 +4,25 @@ import scala.virtualization.lms.common.ScalaGenBase
 import scala.virtualization.lms.common.BooleanOps
 import scala.collection.mutable
 
-trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector with Matchers {
+trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with Matchers {
 
-  val IR: VectorOpsExp
+  
+  /*
+  val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const }
   import IR.{
-    NewVector,
-    VectorSave,
-    VectorMap,
-    VectorFilter,
-    VectorFlatMap,
-    VectorFlatten,
-    VectorGroupByKey,
-    VectorReduce,
+    NewDList,
+    DListSave,
+    DListMap,
+    DListFilter,
+    DListFlatMap,
+    DListFlatten,
+    DListGroupByKey,
+    DListReduce,
     ComputationNode,
-    VectorNode
+    DListNode
   }
-  import IR.{ TTP, TP, SubstTransformer, ThinDef }
+  import IR.{ TTP, TP, SubstTransformer }
   import IR.{ findDefinition }
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda }
   import IR.{ Struct }
@@ -211,19 +213,19 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
 
   class MergeFlattenTransformation extends Transformation {
     def appliesToNode(inExp: Exp[_], t: Transformer): Boolean = inExp match {
-      case Def(VectorFlatten(list)) => {
-        list.find { case Def(VectorFlatten(list2)) => true case _ => false }.isDefined
+      case Def(DListFlatten(list)) => {
+        list.find { case Def(DListFlatten(list2)) => true case _ => false }.isDefined
       }
       case _ => false
     }
 
     override def applyToNode(inExp: Exp[_], transformer: Transformer): (List[TTP], List[(Exp[_], Exp[_])]) = {
       inExp match {
-        case Def(lower @ VectorFlatten(list)) =>
-          val flat2 = list.find { case Def(VectorFlatten(list2)) => true case _ => false }.get
+        case Def(lower @ DListFlatten(list)) =>
+          val flat2 = list.find { case Def(DListFlatten(list2)) => true case _ => false }.get
           flat2 match {
-            case d @ Def(upper @ VectorFlatten(list2)) =>
-              val out = new VectorFlatten(list.filterNot(_ == d) ++ list2)
+            case d @ Def(upper @ DListFlatten(list2)) =>
+              val out = new DListFlatten(list.filterNot(_ == d) ++ list2)
               var newDefs = List(out)
               val ttps = newDefs.map(IR.findOrCreateDefinition(_)).map(fatten)
               return (ttps, List((inExp, IR.findOrCreateDefinition(out).sym), (d, IR.findOrCreateDefinition(out).sym)))
@@ -236,13 +238,13 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
 
   class SinkFlattenTransformation extends SimpleTransformation {
     def doTransformationPure(inExp: Exp[_]) = inExp match {
-      case Def(vm @ VectorMap(Def(vf @ VectorFlatten(list)), func)) => {
+      case Def(vm @ DListMap(Def(vf @ DListFlatten(list)), func)) => {
         val mappers = list.map { x =>
-          val mapper = new VectorMap(x, func)
+          val mapper = new DListMap(x, func)
           val newDef = IR.toAtom2(mapper)
           newDef
         }
-        new VectorFlatten(mappers)
+        new DListFlatten(mappers)
       }
       case _ => null
     }
@@ -252,8 +254,8 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
   class MapMergeTransformation extends SimpleSingleConsumerTransformation {
 
     def doTransformationPure(inExp: Exp[_]) = inExp match {
-      case Def(red @ VectorMap(Def(gbk @ VectorMap(v1, f2)), f1)) => {
-        VectorMap(v1, f2.andThen(f1))(gbk.mA, red.mB)
+      case Def(red @ DListMap(Def(gbk @ DListMap(v1, f2)), f1)) => {
+        DListMap(v1, f2.andThen(f1))(gbk.mA, red.mB)
       }
       case _ => null
     }
@@ -298,8 +300,8 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
   ////		this : {def composePredicates[A : Manifest](p1 : Exp[A] => Exp[Boolean], p2 : Exp[A] => Exp[Boolean]) : Exp[A] => Exp[Boolean]}
   ////		=>
   //	   def doTransformationPure(inExp : Exp[_]) = inExp match {
-  //            case Def(vf1@VectorFilter(Def(vf2@VectorFilter(v1, f1)),f2)) => {
-  //              VectorFilter(v1, composePredicates(f1,f2)(vf2.mA))(vf2.mA)
+  //            case Def(vf1@DListFilter(Def(vf2@DListFilter(v1, f1)),f2)) => {
+  //              DListFilter(v1, composePredicates(f1,f2)(vf2.mA))(vf2.mA)
   //            }
   //            case _ => null
   //	   }
@@ -308,7 +310,7 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
   //	class FilterMergeTransformation extends ComposePredicateBooleanOpsExp with FilterMergeTransformationHack 
 
   class MapNarrowTransformationNew(target: IR.Lambda[_, _], fieldReads: List[FieldRead], typeHandler: TypeHandler) extends SimpleTransformation {
-    def this(target: VectorNode with ClosureNode[_, _], typeHandler: TypeHandler) = this(
+    def this(target: DListNode with ClosureNode[_, _], typeHandler: TypeHandler) = this(
       target.closure match {
         case Def(l @ IR.Lambda(_, _, _)) => l
       }, target.successorFieldReads.toList, typeHandler)
@@ -382,13 +384,13 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
     }
   }
 
-  class InsertMapNarrowTransformation(target: VectorNode, fields: List[FieldRead]) extends SimpleTransformation {
-    var lastOut: Option[VectorMap[_, _]] = None
+  class InsertMapNarrowTransformation(target: DListNode, fields: List[FieldRead]) extends SimpleTransformation {
+    var lastOut: Option[DListMap[_, _]] = None
     def doTransformationPure(inExp: Exp[_]) = inExp match {
-      case Def(x: VectorNode) if x.metaInfos.contains("narrowed") => null
+      case Def(x: DListNode) if x.metaInfos.contains("narrowed") => null
       case Def(x: ComputationNode) if target == x => {
         val typ = (x.getTypes._2.typeArguments(0))
-        val out = VectorMap(inExp.asInstanceOf[Exp[Vector[Any]]], { x: IR.Rep[_] => x })(IR.mtype(typ), IR.mtype(typ))
+        val out = DListMap(inExp.asInstanceOf[Exp[DList[Any]]], { x: IR.Rep[_] => x })(IR.mtype(typ), IR.mtype(typ))
         lastOut = Some(out)
         out.metaInfos("narrower") = true
         out.metaInfos("narrowed") = true
@@ -426,4 +428,5 @@ trait VectorTransformations extends ScalaGenBase with AbstractScalaGenVector wit
     }
   }
 
+*/
 }

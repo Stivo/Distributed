@@ -1,4 +1,4 @@
-import java.io.PrintWriter
+/*import java.io.PrintWriter
 import java.io.StringWriter
 import java.io.FileWriter
 import ch.epfl.distributed._
@@ -6,10 +6,10 @@ import org.scalatest._
 import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps, LiftNumeric }
 import scala.util.Random
 
-trait TpchQueriesApp extends VectorImplOps with ApplicationOps with SparkVectorOps {
+trait TpchQueriesApp extends DListImplOps with ApplicationOps with SparkDListOps {
 
   def loadTest(x: Rep[Unit]) = {
-    val read = Vector(getArgs(0))
+    val read = DList(getArgs(0))
     val parsed = read.map(x => LineItem.parse(x, "\\|"))
     parsed
       .filter(_.l_linestatus == 'F')
@@ -20,9 +20,9 @@ trait TpchQueriesApp extends VectorImplOps with ApplicationOps with SparkVectorO
   def query3nephele(x: Rep[Unit]) = {
     val limit = getArgs(1).toInt
     val date = getArgs(2).toDate
-    val lineitems = Vector(getArgs(0) + "/lineitem.tbl")
+    val lineitems = DList(getArgs(0) + "/lineitem.tbl")
       .map(x => LineItem.parse(x, "\\|"))
-    val orders = Vector(getArgs(0) + "/orders.tbl")
+    val orders = DList(getArgs(0) + "/orders.tbl")
       .map(x => Order.parse(x, "\\|"))
     val filteredOrders = orders
       .filter(x => x.o_custkey < limit)
@@ -45,9 +45,9 @@ trait TpchQueriesApp extends VectorImplOps with ApplicationOps with SparkVectorO
     val shipMode2 = getArgs(4)
 
     // read and parse tables
-    val lineitems = Vector(getArgs(0) + "/lineitem.tbl")
+    val lineitems = DList(getArgs(0) + "/lineitem.tbl")
       .map(x => LineItem.parse(x, "\\|"))
-    val orders = Vector(getArgs(0) + "/orders.tbl")
+    val orders = DList(getArgs(0) + "/orders.tbl")
       .map(x => Order.parse(x, "\\|"))
 
     // filter the line items
@@ -79,7 +79,7 @@ trait TpchQueriesApp extends VectorImplOps with ApplicationOps with SparkVectorO
   }
 
   def tupleProblem(x: Rep[Unit]) = {
-    val lineitems = Vector(getArgs(0) + "/lineitem.tbl")
+    val lineitems = DList(getArgs(0) + "/lineitem.tbl")
       .map(x => LineItem.parse(x, "\\|"))
     val tupled = lineitems.map(x => ((x.l_linenumber, x.l_orderkey), x.l_comment))
     tupled
@@ -97,16 +97,16 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
     try {
       println("-- begin")
 
-      val dsl = new TpchQueriesApp with VectorImplOps with ApplicationOpsExp with SparkVectorOpsExp
-      // val codegen = new { override val allOff = true } with SparkGenVector { val IR: dsl.type = dsl }
-      val codegen = new SparkGenVector { val IR: dsl.type = dsl }
+      val dsl = new TpchQueriesApp with DListImplOps with ApplicationOpsExp with SparkDListOpsExp
+      // val codegen = new { override val allOff = true } with SparkGenDList { val IR: dsl.type = dsl }
+      val codegen = new SparkGenDList { val IR: dsl.type = dsl }
       var pw = setUpPrintWriter
       codegen.emitSource(dsl.query12, appname, pw)
       writeToProject(pw, "spark", appname)
       release(pw)
 
       val typesDefined = codegen.types.keys
-      val codegenUnoptimized = new { override val allOff = true } with SparkGenVector { val IR: dsl.type = dsl }
+      val codegenUnoptimized = new { override val allOff = true } with SparkGenDList { val IR: dsl.type = dsl }
       codegenUnoptimized.skipTypes ++= typesDefined
       codegenUnoptimized.reduceByKey = true
       pw = setUpPrintWriter
@@ -126,16 +126,16 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
     try {
       println("-- begin")
 
-      val dsl = new TpchQueriesApp with VectorImplOps with ApplicationOpsExp with SparkVectorOpsExp
+      val dsl = new TpchQueriesApp with DListImplOps with ApplicationOpsExp with SparkDListOpsExp
 
       var pw = setUpPrintWriter
-      val codegen = new ScoobiGenVector { val IR: dsl.type = dsl }
+      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
       codegen.emitSource(dsl.query12, appname, pw)
       writeToProject(pw, "scoobi", appname)
       release(pw)
 
       val typesDefined = codegen.types.keys
-      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenVector { val IR: dsl.type = dsl }
+      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
       codegenUnoptimized.skipTypes ++= typesDefined
       pw = setUpPrintWriter
       codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
@@ -151,3 +151,4 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
   }
 
 }
+*/

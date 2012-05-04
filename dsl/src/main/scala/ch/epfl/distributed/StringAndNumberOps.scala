@@ -11,7 +11,7 @@ import scala.virtualization.lms.util.OverloadHack
 
 trait StringAndNumberOps extends PrimitiveOps with StringOps with OverloadHack {
   def infix_toLong(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Long](s1)
-  def infix_toDouble(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Double](s1)
+//  def infix_toDouble(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Double](s1)
   def infix_toInt(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Int](s1)
   def infix_toByte(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Byte](s1)
   def infix_toFloat(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Float](s1)
@@ -49,16 +49,17 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
 
   def string_toChar(s: Rep[String])(implicit ctx: SourceContext) = StringToChar(s)
 
-  override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = (e match {
+  override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
     case n @ StringToNumber(s) => string_toNumber(f(s))(n.m, null)
     case n @ StringToChar(s) => string_toChar(f(s))
     case _ => super.mirror(e, f)
-  }).asInstanceOf[Exp[A]]
+  }).asInstanceOf[Def[A]]
 
 }
 
 trait StringPatternOpsExp extends StringOps with StringOpsExp {
 
+  /*
   var disablePatterns = false
 
   case class StringPattern(regex: Exp[String]) extends Def[java.util.regex.Pattern]
@@ -82,11 +83,11 @@ trait StringPatternOpsExp extends StringOps with StringOpsExp {
     case StringMatchesPattern(s, pat) => StringMatchesPattern(f(s), f(pat))
     case _ => super.mirror(e, f)
   }).asInstanceOf[Exp[A]]
-
+ */
 }
 
 trait StringAndNumberOpsCodeGen extends ScalaCodegen {
-
+  
   val IR: StringAndNumberOpsExp
   import IR._
   //  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter): Unit = rhs match {
@@ -95,10 +96,10 @@ trait StringAndNumberOpsCodeGen extends ScalaCodegen {
   //    case _ => super.emitNode(sym, rhs)
   //  }
 
-  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case StringToChar(s) => emitValDef(sym, "%s.charAt(0)".format(quote(s)))
     case n @ StringToNumber(s) => emitValDef(sym, "%s.to%s".format(quote(s), n.typeName))
-    case _ => super.emitNode(sym, rhs)(stream)
+    case _ => super.emitNode(sym, rhs)
   }
 
 }
@@ -106,10 +107,12 @@ trait StringAndNumberOpsCodeGen extends ScalaCodegen {
 trait StringPatternOpsCodeGen extends ScalaCodegen {
   val IR: StringPatternOpsExp
   import IR._
-  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
+  /*
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case StringSplitPattern(s, pattern, limit) => emitValDef(sym, "%s.split(%s, %s)".format(quote(pattern), quote(s), quote(limit)))
     case StringPattern(s) => emitValDef(sym, "java.util.regex.Pattern.compile(%s)".format(quote(s)))
     case StringMatchesPattern(s, pattern) => emitValDef(sym, "%s.matcher(%s).matches()".format(quote(pattern), quote(s)))
-    case _ => super.emitNode(sym, rhs)(stream)
+    case _ => super.emitNode(sym, rhs)
   }
+  */
 }

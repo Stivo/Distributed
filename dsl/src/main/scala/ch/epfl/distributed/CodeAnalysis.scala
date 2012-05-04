@@ -6,25 +6,27 @@ import scala.collection.mutable
 import java.util.regex.Pattern
 import scala.util.Random
 
-trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations with Matchers {
+trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with Matchers {
 
-  val IR: VectorOpsExp
+  
+  val IR: DListOpsExp
+  /*
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
   import IR.{
-    NewVector,
-    VectorSave,
-    VectorMap,
-    VectorFilter,
-    VectorFlatMap,
-    VectorFlatten,
-    VectorGroupByKey,
-    VectorJoin,
-    VectorReduce,
+    NewDList,
+    DListSave,
+    DListMap,
+    DListFilter,
+    DListFlatMap,
+    DListFlatten,
+    DListGroupByKey,
+    DListJoin,
+    DListReduce,
     ComputationNode,
-    VectorNode,
+    DListNode,
     GetArgs
   }
-  import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
+  import IR.{ TTP, TP, SubstTransformer, Field }
   import IR.{ ClosureNode, Closure2Node, freqHot, freqNormal, Lambda, Lambda2 }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
@@ -32,8 +34,8 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
 
   class Analyzer(state: TransformationState, typeHandler: TypeHandler) {
     lazy val nodes = state.ttps.flatMap {
-      case TTPDef(x: VectorNode) => Some(x)
-      case TTPDef(Reflect(x: VectorNode, _, _)) => Some(x)
+      case TTPDef(x: DListNode) => Some(x)
+      case TTPDef(Reflect(x: DListNode, _, _)) => Some(x)
       case _ => None
     }
     lazy val lambdas = state.ttps.flatMap {
@@ -44,30 +46,30 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
       case TTPDef(l @ IR.Lambda2(f, x1, x2, y)) => Some(l)
       case _ => None
     }
-    lazy val saves = nodes.filter { case v: VectorSave[_] => true; case _ => false }
+    lazy val saves = nodes.filter { case v: DListSave[_] => true; case _ => false }
 
-    def getInputs(x: VectorNode) = {
+    def getInputs(x: DListNode) = {
       val syms = IR.syms(x)
-      syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.rhs match { case x: VectorNode => Some(x) case _ => None } }
+      syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.rhs match { case x: DListNode => Some(x) case _ => None } }
     }
 
     lazy val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
 
-    lazy val narrowBeforeCandidates: Iterable[VectorNode] = ordered.filter(isNarrowBeforeCandidate)
+    lazy val narrowBeforeCandidates: Iterable[DListNode] = ordered.filter(isNarrowBeforeCandidate)
 
-    def isNarrowBeforeCandidate(x: VectorNode) = x match {
-      case VectorGroupByKey(x) => true
-      case VectorJoin(x, y) => true
+    def isNarrowBeforeCandidate(x: DListNode) = x match {
+      case DListGroupByKey(x) => true
+      case DListJoin(x, y) => true
       case x => false
     }
 
-    lazy val narrowBefore: Iterable[VectorNode] = narrowBeforeCandidates
+    lazy val narrowBefore: Iterable[DListNode] = narrowBeforeCandidates
       .filter { x =>
         getInputs(x).size != x.metaInfos.getOrElse("insertedNarrowers", 0)
       }
       .filter {
         case x: ComputationNode => !isSimpleType(x.getElementTypes._1)
-        case VectorJoin(l, r) => true
+        case DListJoin(l, r) => true
         case _ => throw new RuntimeException("Add narrow before candidate here or in subclass")
       }
 
@@ -100,7 +102,7 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
       out._2.filter { node => out._1.map(input => isDependantOnInput(node, input)).fold(false)(_ || _) }
     }
 
-    def getNodesInClosure(x: VectorNode) = x match {
+    def getNodesInClosure(x: DListNode) = x match {
       case x: ClosureNode[_, _] => getNodesInLambda(x.closure)
       case x: Closure2Node[_, _, _] => getNodesInLambda(x.closure)
       case _ => Nil
@@ -114,7 +116,7 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
       }
     }
 
-    def analyzeFunction(v: VectorNode) = {
+    def analyzeFunction(v: DListNode) = {
       val nodes = getNodesInClosure(v).flatMap(IR.findDefinition(_)).map(_.rhs)
       val fields = nodes.filter { SomeAccess.unapply(_).isDefined }
       fields.flatMap(n => pathToInput(n, getNodesInClosure(v).head)).toSet
@@ -138,13 +140,13 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
       reads.map(FieldRead).toSet
     }
 
-    def computeFieldReads(node: VectorNode): Set[FieldRead] = {
+    def computeFieldReads(node: DListNode): Set[FieldRead] = {
       val out: Set[FieldRead] = node match {
-        case NewVector(_) => Set()
+        case NewDList(_) => Set()
 
-        case v @ VectorFilter(in, func) => analyzeFunction(v) ++ node.successorFieldReads
+        case v @ DListFilter(in, func) => analyzeFunction(v) ++ node.successorFieldReads
 
-        case v @ VectorMap(in, func) if !v.metaInfos.contains("narrowed")
+        case v @ DListMap(in, func) if !v.metaInfos.contains("narrowed")
           && !SimpleType.unapply(v.getClosureTypes._2).isDefined
           && hasObjectCreationInClosure(v) => {
           // backup TTPs, or create new transformer?
@@ -166,7 +168,7 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
           // analyze field reads of the new function
           val a2 = newAnalyzer(transformer.currentState, typeHandler)
           val candidates = transformer.currentState.ttps.flatMap {
-            case TTPDef(vm @ VectorMap(_, _)) if (vm.metaInfos.contains(id)) => Some(vm)
+            case TTPDef(vm @ DListMap(_, _)) if (vm.metaInfos.contains(id)) => Some(vm)
             case _ => None
           }
           // remove the tag, not needed afterwards
@@ -174,9 +176,9 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
           a2.analyzeFunction(candidates.head)
         }
 
-        case v @ VectorMap(in, func) => analyzeFunction(v)
+        case v @ DListMap(in, func) => analyzeFunction(v)
 
-        case v @ VectorJoin(Def(left: VectorNode), Def(right: VectorNode)) =>
+        case v @ DListJoin(Def(left: DListNode), Def(right: DListNode)) =>
           def fieldRead(x: List[String]) = FieldRead("input." + x.mkString("."))
           val reads = v.successorFieldReads.map(_.getPath.drop(1)).map {
             case "_2" :: "_1" :: x => List(left) -> fieldRead("_2" :: x)
@@ -187,7 +189,7 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
           reads.foreach { case (targets, read) => targets.foreach { _.successorFieldReads += read } }
           visitAll("input._1", v.mIn1)
 
-        case v @ VectorReduce(in, func) =>
+        case v @ DListReduce(in, func) =>
           // analyze function
           // convert the analyzed accesses to accesses of input._2.iterable
           val part1 = (analyzeFunction(v) ++ Set(FieldRead("input")))
@@ -200,7 +202,7 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
           }.map(_.mkString("."))
           (part1 ++ part2).map(FieldRead)
 
-        case v @ VectorGroupByKey(in) =>
+        case v @ DListGroupByKey(in) =>
           // rewrite access to input._2.iterable.X to input._2.X
           // add access to _1
           ((v.successorFieldReads.map(_.getPath).map {
@@ -208,11 +210,11 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
             case x => x
           }.map(_.mkString(".")))).map(FieldRead).toSet ++ visitAll("input._1", v.mInType)
 
-        case v @ VectorFlatten(inputs) =>
+        case v @ DListFlatten(inputs) =>
           // just pass on the successor field reads
           v.successorFieldReads.toSet
 
-        case v @ VectorSave(_, _) => {
+        case v @ DListSave(_, _) => {
           if (SimpleType.unapply(v.mA).isDefined) {
             Set()
           } else {
@@ -221,7 +223,7 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
           }
         }
 
-        case v @ VectorFlatMap(in, func) => analyzeFunction(v)
+        case v @ DListFlatMap(in, func) => analyzeFunction(v)
 
         case x => throw new RuntimeException("Need to implement field analysis for " + x)
         //Set[FieldRead]()
@@ -245,12 +247,12 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
       }
     }
 
-    def hasObjectCreationInClosure(v: VectorNode) = {
+    def hasObjectCreationInClosure(v: DListNode) = {
       val nodes = getNodesInClosure(v)
       nodes.find { case Def(s: IR.SimpleStruct[_]) => true case _ => false }.isDefined
     }
 
-    def getIdForNode(n: VectorNode with Def[_]) = {
+    def getIdForNode(n: DListNode with Def[_]) = {
       //      nodes.indexOf(n)
       val op1 = IR.findDefinition(n.asInstanceOf[Def[_]])
       if (op1.isDefined) {
@@ -289,4 +291,5 @@ trait VectorAnalysis extends AbstractScalaGenVector with VectorTransformations w
     }
 
   }
+  */
 }

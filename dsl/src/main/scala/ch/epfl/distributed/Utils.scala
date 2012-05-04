@@ -1,14 +1,14 @@
 package ch.epfl.distributed
 
-trait Matchers extends AbstractScalaGenVector {
-  val IR: VectorOpsExp
+trait Matchers extends AbstractScalaGenDList {
+  val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
-  import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
+  import IR.{ Stm, TP, SubstTransformer, Field }
   import IR.ClosureNode
 
   object SomeDef {
     def unapply(x: Any): Option[Def[_]] = x match {
-      case TTPDef(x) => Some(x)
+      //case TTPDef(x) => Some(x)
       case x: Def[_] => Some(x)
       case Def(x) => Some(x)
       //	          case x => Some(x)
@@ -17,22 +17,22 @@ trait Matchers extends AbstractScalaGenVector {
   }
 
   object TTPDef {
-    def unapply(ttp: TTP) = ttp match {
-      case TTP(_, ThinDef(x)) => Some(x)
+    def unapply(ttp: Stm) = ttp match {
+      //case TTP(_, ThinDef(x)) => Some(x)
       case _ => None
     }
   }
 
   object FieldAccess {
-    def unapply(ttp: TTP) = ttp match {
-      case TTPDef(f @ Field(obj, field, typ)) => Some(f)
+    def unapply(ttp: Stm) = ttp match {
+      case SomeDef(f @ Field(obj, field, typ)) => Some(f)
       case _ => None
     }
   }
 
   object ClosureNode {
-    def unapply(any: Any) = any match {
-      case TTPDef(cn: ClosureNode[_, _]) => Some(cn)
+    def unapply(any: Any) : Option[ClosureNode[_,_]] = any match {
+//      case SomeDef(cn: ClosureNode[_, _]) => Some(cn)
       case cn: ClosureNode[_, _] => Some(cn)
       case _ => None
     }

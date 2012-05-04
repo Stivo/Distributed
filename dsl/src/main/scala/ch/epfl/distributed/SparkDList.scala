@@ -1,4 +1,4 @@
-package ch.epfl.distributed
+/*package ch.epfl.distributed
 
 import scala.virtualization.lms.common.ScalaGenBase
 import java.io.PrintWriter
@@ -9,57 +9,57 @@ import scala.collection.mutable
 import java.util.regex.Pattern
 import java.io.StringWriter
 
-trait SparkProgram extends VectorOpsExp with VectorImplOps with SparkVectorOpsExp
+trait SparkProgram extends DListOpsExp with DListImplOps with SparkDListOpsExp
 
-trait SparkVectorOps extends VectorOps {
-  implicit def repVecToSparkVecOps[A: Manifest](vector: Rep[Vector[A]]) = new vecSparkOpsCls(vector)
-  class vecSparkOpsCls[A: Manifest](vector: Rep[Vector[A]]) {
-    def cache = vector_cache(vector)
+trait SparkDListOps extends DListOps {
+  implicit def repVecToSparkVecOps[A: Manifest](dlist: Rep[DList[A]]) = new dlistSparkOpsCls(dlist)
+  class dlistSparkOpsCls[A: Manifest](dlist: Rep[DList[A]]) {
+    def cache = dlist_cache(dlist)
   }
 
-  def vector_cache[A: Manifest](vector: Rep[Vector[A]]): Rep[Vector[A]]
+  def dlist_cache[A: Manifest](dlist: Rep[DList[A]]): Rep[DList[A]]
 }
 
-trait SparkVectorOpsExp extends VectorOpsExp with SparkVectorOps {
-  case class VectorReduceByKey[K: Manifest, V: Manifest](in: Exp[Vector[(K, V)]], func: (Exp[V], Exp[V]) => Exp[V])
-      extends Def[Vector[(K, V)]] with Closure2Node[V, V, V]
-      with PreservingTypeComputation[Vector[(K, V)]] {
+trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
+  case class DListReduceByKey[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], func: (Exp[V], Exp[V]) => Exp[V])
+      extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
+      with PreservingTypeComputation[DList[(K, V)]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     def getClosureTypes = ((manifest[V], manifest[V]), manifest[V])
-    def getType = manifest[Vector[(K, V)]]
+    def getType = manifest[DList[(K, V)]]
   }
 
-  case class VectorCache[A: Manifest](in: Exp[Vector[A]]) extends Def[Vector[A]] with PreservingTypeComputation[Vector[A]] {
+  case class DListCache[A: Manifest](in: Exp[DList[A]]) extends Def[DList[A]] with PreservingTypeComputation[DList[A]] {
     val mA = manifest[A]
-    def getType = manifest[Vector[A]]
+    def getType = manifest[DList[A]]
   }
 
-  override def vector_cache[A: Manifest](in: Rep[Vector[A]]) = VectorCache[A](in)
+  override def dlist_cache[A: Manifest](in: Rep[DList[A]]) = DListCache[A](in)
 
-  //  override def vector_map[A: Manifest, B: Manifest](vector: Exp[Vector[A]], f: Exp[A] => Exp[B]) = vector match {
-  //    case Def(vm @ VectorMap(in, f2)) => VectorMap(vector, f2.andThen(f))(mtype(vm.mA), manifest[B]) 
-  //    case _ => super.vector_map(vector, f)
+  //  override def dlist_map[A: Manifest, B: Manifest](dlist: Exp[DList[A]], f: Exp[A] => Exp[B]) = dlist match {
+  //    case Def(vm @ DListMap(in, f2)) => DListMap(dlist, f2.andThen(f))(mtype(vm.mA), manifest[B]) 
+  //    case _ => super.dlist_map(dlist, f)
   //  }
 
   override def syms(e: Any): List[Sym[Any]] = e match {
-    // VectorReduceBykey is a closure2node, handled by superclass
-    case v: VectorCache[_] => syms(v.in)
+    // DListReduceBykey is a closure2node, handled by superclass
+    case v: DListCache[_] => syms(v.in)
     case _ => super.syms(e)
   }
 
   override def symsFreq(e: Any): List[(Sym[Any], Double)] = e match {
-    // VectorReduceBykey is a closure2node, handled by superclass
-    case v: VectorCache[_] => freqNormal(v.in)
+    // DListReduceBykey is a closure2node, handled by superclass
+    case v: DListCache[_] => freqNormal(v.in)
     case _ => super.symsFreq(e)
   }
 
   override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = {
     val out = (e match {
-      case v @ VectorReduceByKey(vector, func) => toAtom(
-        new { override val overrideClosure = Some(f(v.closure)) } with VectorReduceByKey(f(vector), f(func))(v.mKey, v.mValue)
+      case v @ DListReduceByKey(dlist, func) => toAtom(
+        new { override val overrideClosure = Some(f(v.closure)) } with DListReduceByKey(f(dlist), f(func))(v.mKey, v.mValue)
       )(mtype(manifest[A]))
-      case v @ VectorCache(in) => toAtom(VectorCache(f(in))(v.mA))(mtype(v.getType))
+      case v @ DListCache(in) => toAtom(DListCache(f(in))(v.mA))(mtype(v.getType))
       case _ => super.mirror(e, f)
     })
     copyMetaInfo(e, out)
@@ -67,17 +67,17 @@ trait SparkVectorOpsExp extends VectorOpsExp with SparkVectorOps {
   }
 }
 
-trait SparkTransformations extends VectorTransformations {
-  val IR: VectorOpsExp with SparkVectorOpsExp
-  import IR.{ VectorReduceByKey, VectorReduce, VectorGroupByKey, VectorMap }
+trait SparkTransformations extends DListTransformations {
+  val IR: DListOpsExp with SparkDListOpsExp
+  import IR.{ DListReduceByKey, DListReduce, DListGroupByKey, DListMap }
   import IR.{ Def, Exp }
 
   class ReduceByKeyTransformation extends SimpleSingleConsumerTransformation {
     // TODO: apply if all consumers of group by key are reduces,
     // even if there is more than one
     def doTransformationPure(inExp: Exp[_]) = inExp match {
-      case Def(red @ VectorReduce(Def(gbk @ VectorGroupByKey(v1)), f1)) => {
-        new VectorReduceByKey(v1, f1)(red.mKey, red.mValue)
+      case Def(red @ DListReduce(Def(gbk @ DListGroupByKey(v1)), f1)) => {
+        new DListReduceByKey(v1, f1)(red.mKey, red.mValue)
       }
       case _ => null
     }
@@ -87,37 +87,37 @@ trait SparkTransformations extends VectorTransformations {
 
     override def appliesToNodeImpl(inExp: Exp[_], t: Transformer) = {
       inExp match {
-        case Def(VectorReduceByKey(in, func)) => true
+        case Def(DListReduceByKey(in, func)) => true
         case _ => super.appliesToNodeImpl(inExp, t)
       }
     }
     override def doTransformation(inExp: Exp[_]): Def[_] = inExp match {
-      case Def(r @ VectorReduceByKey(in, func)) => _doneNodes += inExp; r
+      case Def(r @ DListReduceByKey(in, func)) => _doneNodes += inExp; r
       case _ => super.doTransformation(inExp)
     }
   }
 
 }
 
-trait SparkVectorAnalysis extends VectorAnalysis {
-  val IR: SparkVectorOpsExp
+trait SparkDListAnalysis extends DListAnalysis {
+  val IR: SparkDListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
   import IR.{
-    NewVector,
-    VectorSave,
-    VectorMap,
-    VectorFilter,
-    VectorFlatMap,
-    VectorFlatten,
-    VectorGroupByKey,
-    VectorReduce,
+    NewDList,
+    DListSave,
+    DListMap,
+    DListFilter,
+    DListFlatMap,
+    DListFlatten,
+    DListGroupByKey,
+    DListReduce,
     ComputationNode,
-    VectorNode,
-    VectorReduceByKey,
-    VectorCache,
+    DListNode,
+    DListReduceByKey,
+    DListCache,
     GetArgs
   }
-  import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
+  import IR.{ TTP, TP, SubstTransformer, Field }
   import IR.{ ClosureNode, Closure2Node, freqHot, freqNormal, Lambda, Lambda2 }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
@@ -125,14 +125,14 @@ trait SparkVectorAnalysis extends VectorAnalysis {
 
   class SparkAnalyzer(state: TransformationState, typeHandler: TypeHandler) extends Analyzer(state, typeHandler) {
 
-    override def isNarrowBeforeCandidate(x: VectorNode) = x match {
-      case VectorReduceByKey(_, _) => true
-      case VectorCache(_) => true
+    override def isNarrowBeforeCandidate(x: DListNode) = x match {
+      case DListReduceByKey(_, _) => true
+      case DListCache(_) => true
       case x => super.isNarrowBeforeCandidate(x)
     }
 
-    override def computeFieldReads(node: VectorNode): Set[FieldRead] = node match {
-      case v @ VectorReduceByKey(in, func) => {
+    override def computeFieldReads(node: DListNode): Set[FieldRead] = node match {
+      case v @ DListReduceByKey(in, func) => {
         // analyze function
         // convert the analyzed accesses to accesses of input._2
         val part1 = (analyzeFunction(v) ++ Set(FieldRead("input")))
@@ -145,7 +145,7 @@ trait SparkVectorAnalysis extends VectorAnalysis {
         (part1 ++ part2 ++ part3).toSet
       }
 
-      case v @ VectorCache(in) => node.successorFieldReads.toSet
+      case v @ DListCache(in) => node.successorFieldReads.toSet
 
       case _ => super.computeFieldReads(node)
     }
@@ -153,47 +153,47 @@ trait SparkVectorAnalysis extends VectorAnalysis {
 
 }
 
-trait SparkGenVector extends ScalaGenBase with ScalaGenVector with VectorTransformations
-    with SparkTransformations with Matchers with SparkVectorAnalysis with CaseClassTypeFactory {
+trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransformations
+    with SparkTransformations with Matchers with SparkDListAnalysis with CaseClassTypeFactory {
 
-  val IR: SparkVectorOpsExp
+  val IR: SparkDListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
   import IR.{
-    NewVector,
-    VectorSave,
-    VectorMap,
-    VectorFilter,
-    VectorFlatMap,
-    VectorFlatten,
-    VectorGroupByKey,
-    VectorJoin,
-    VectorReduce,
+    NewDList,
+    DListSave,
+    DListMap,
+    DListFilter,
+    DListFlatMap,
+    DListFlatten,
+    DListGroupByKey,
+    DListJoin,
+    DListReduce,
     ComputationNode,
-    VectorNode,
+    DListNode,
     GetArgs
   }
-  import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
+  import IR.{ TTP, TP, SubstTransformer, Field }
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
-  import IR.{ VectorReduceByKey, VectorCache }
+  import IR.{ DListReduceByKey, DListCache }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
-  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = {
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
     val out = rhs match {
-      case nv @ NewVector(filename) => emitValDef(sym, "sc.textFile(%s)".format(quote(filename)))
-      case vs @ VectorSave(vector, filename) => stream.println("%s.saveAsTextFile(%s)".format(quote(vector), quote(filename)))
-      case vm @ VectorMap(vector, function) => emitValDef(sym, "%s.map(%s)".format(quote(vector), handleClosure(vm.closure)))
-      case vm @ VectorFilter(vector, function) => emitValDef(sym, "%s.filter(%s)".format(quote(vector), handleClosure(vm.closure)))
-      case vm @ VectorFlatMap(vector, function) => emitValDef(sym, "%s.flatMap(%s)".format(quote(vector), handleClosure(vm.closure)))
-      case vm @ VectorFlatten(v1) => {
+      case nv @ NewDList(filename) => emitValDef(sym, "sc.textFile(%s)".format(quote(filename)))
+      case vs @ DListSave(dlist, filename) => stream.println("%s.saveAsTextFile(%s)".format(quote(dlist), quote(filename)))
+      case vm @ DListMap(dlist, function) => emitValDef(sym, "%s.map(%s)".format(quote(dlist), handleClosure(vm.closure)))
+      case vm @ DListFilter(dlist, function) => emitValDef(sym, "%s.filter(%s)".format(quote(dlist), handleClosure(vm.closure)))
+      case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "%s.flatMap(%s)".format(quote(dlist), handleClosure(vm.closure)))
+      case vm @ DListFlatten(v1) => {
         var out = "(" + v1.map(quote(_)).mkString(").union(")
         out += ")"
         emitValDef(sym, out)
       }
-      case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "%s.groupByKey".format(quote(vector)))
-      case v @ VectorJoin(left, right) => emitValDef(sym, "%s.join(%s)".format(quote(left), quote(right)))
-      case red @ VectorReduce(vector, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(vector), handleClosure(red.closure)))
-      case red @ VectorReduceByKey(vector, f) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(vector), handleClosure(red.closure)))
-      case v @ VectorCache(vector) => emitValDef(sym, "%s.cache()".format(quote(vector)))
+      case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
+      case v @ DListJoin(left, right) => emitValDef(sym, "%s.join(%s)".format(quote(left), quote(right)))
+      case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(dlist), handleClosure(red.closure)))
+      case red @ DListReduceByKey(dlist, f) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(dlist), handleClosure(red.closure)))
+      case v @ DListCache(dlist) => emitValDef(sym, "%s.cache()".format(quote(dlist)))
       case GetArgs() => emitValDef(sym, "sparkInputArgs.drop(1); // First argument is for spark context")
       case _ => super.emitNode(sym, rhs)
     }
@@ -272,7 +272,7 @@ object %s {
     		val sc = new SparkContext(sparkInputArgs(0), "%s")
         """.format(className, className, className))
 
-    emitBlock(y)(stream)
+    emitBlock(y)
 
     stream.println("}")
     stream.println("}")
@@ -301,5 +301,6 @@ object %s {
 
 }
 
-trait SparkGen extends VectorBaseCodeGenPkg with SparkGenVector
+trait SparkGen extends DListBaseCodeGenPkg with SparkGenDList
 
+*/

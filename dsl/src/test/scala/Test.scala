@@ -1,4 +1,4 @@
-import java.io.PrintWriter
+/*import java.io.PrintWriter
 import java.io.StringWriter
 import java.io.FileWriter
 import ch.epfl.distributed._
@@ -26,7 +26,7 @@ trait ComplexStructExp extends ComplexBase with StructExp with PrimitiveOps {
   def infix_abs(c: Rep[Complex]): Rep[Double] = field[Double](c, "abs")
 }
 
-trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps with SparkVectorOps {
+trait DListsProg extends DListImplOps with ComplexBase with ApplicationOps with SparkDListOps {
 
   def strings(x: Rep[Unit]) = {
     val s = getArgs(0)
@@ -39,12 +39,31 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
     println(unit("asdf").split("s"))
   }
 
+Compilation of this:
+- analyze initial constructions of objects
+- analyze accesses in closures and propagate
+- insert identity map nodes before barriers
+	- use list of field accesses
+	- for each field:
+		- generate field.
+		- if field is complex: look up type and recursively prepare it
+- forget struct struct nesting? => might be enough for paper
+- tuple struct nesting needed (keys, values, joins)
+
+milestones:
+- compile program correctly which uses structs
+- insert narrowing node with synthesized output
+- get rest running again
+
+input representation: list
+do I need manifests on structs? on classTag in struct? can I use the symbols manifest?
+
   def join(x: Rep[Unit]) = {
-    val users = Vector(getArgs(0))
+    val users = DList(getArgs(0))
       .map(x => User(25, x, 35))
       .map(x => (x.userId, x))
       .filter(_._2.age == 35)
-    val addresses = Vector(getArgs(1))
+    val addresses = DList(getArgs(1))
       .map(x => Address(25, x, 1003, "Lsn"))
       .map(x => (x.userId, x))
       .filter(_._2.street != "fff")
@@ -54,7 +73,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
   }
 
   def nested(x: Rep[Unit]) = {
-    val words1 = Vector(getArgs(0))
+    val words1 = DList(getArgs(0))
     words1
       .map(x => N2(x, 558))
       //    .map(x => N2(x.n2id, 238))
@@ -70,7 +89,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
   }
 
   def logEntry(x: Rep[Unit]) = {
-    val words1 = Vector(getArgs(0))
+    val words1 = DList(getArgs(0))
     words1.map(LogEntry(1L, 3.5, _))
       .map(x => (x, unit(1)))
       .groupByKey
@@ -86,7 +105,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
   }
 
   def fields(x: Rep[Unit]) = {
-    val words1 = Vector(getArgs(0))
+    val words1 = DList(getArgs(0))
     words1 //.filter(_.matches("\\d+"))
       .map(x => Complex(3, x.toInt))
       //    .filter(_._2.im > 3)
@@ -101,7 +120,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
   }
 
   def simple(x: Rep[Unit]) = {
-    val words1 = Vector(getArgs(0))
+    val words1 = DList(getArgs(0))
     words1.filter(_.matches("\\d+")).map(_.toInt).map(_ + 3).cache
       .save(getArgs(1))
     //)(0)
@@ -109,7 +128,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
   }
 
   def simple2(x: Rep[Unit]) = {
-    val words1 = Vector(getArgs(0))
+    val words1 = DList(getArgs(0))
     words1.map { x => (x, unit(1)) }
       .filter(!_._1.matches("asdf"))
       .map(_._2)
@@ -119,8 +138,8 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
   }
 
   def wordCount(x: Rep[Unit]) = {
-    val words1 = Vector("words1")
-    val words2 = Vector("words2")
+    val words1 = DList("words1")
+    val words2 = DList("words2")
     val wordsInLine = words1 ++ words2 //.flatMap( _.split(" ").toSeq)
     //    words.map(_.contains(" ")).save("lines with more than one word")
     val wordsTupled = wordsInLine.map((_, unit(1)))
@@ -130,7 +149,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
   }
 
   def findLogEntry(x: Rep[Unit]) = {
-    val words = Vector("words1")
+    val words = DList("words1")
     //    words.map(_.contains(" ")).save("lines with more than one word")
     val wordsTupled = words.map(x => (x, LogEntry.parse(x, "\\s")))
     val wordsGrouped = wordsTupled.groupByKey
@@ -140,9 +159,9 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
   }
 
   def twoStage(x: Rep[Unit]) = {
-    val words1 = Vector("words1")
-    val words2 = Vector("words2")
-    val words3 = Vector("words3")
+    val words1 = DList("words1")
+    val words2 = DList("words2")
+    val words3 = DList("words3")
     val wordsInLine = words1 ++ words2 ++ words3 //.flatMap( _.split(" ").toSeq)
     //    words.map(_.contains(" ")).save("lines with more than one word")
     val wordsTupled = wordsInLine.map((_, unit(1)))
@@ -156,7 +175,7 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
       .map(_._2)
       .save("most common word")
     //    val invertedGrouped = inverted.groupByKey
-    //    val invertedGrouped2 = Vector[(Int, String)]("Asdf").groupByKey
+    //    val invertedGrouped2 = DList[(Int, String)]("Asdf").groupByKey
 
     //    val added = invertedGrouped++invertedGrouped2
     //    invertedGrouped
@@ -165,15 +184,15 @@ trait VectorsProg extends VectorImplOps with ComplexBase with ApplicationOps wit
 
 }
 
-class TestVectors extends Suite with CodeGenerator {
+class TestDLists extends Suite with CodeGenerator {
 
   def testSpark {
     try {
       println("-- begin")
 
-      val dsl = new VectorsProg with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp
+      val dsl = new DListsProg with DListImplOps with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
 
-      val codegen = new SparkGenVector { val IR: dsl.type = dsl }
+      val codegen = new SparkGenDList { val IR: dsl.type = dsl }
       val pw = setUpPrintWriter
       codegen.emitSource(dsl.findLogEntry, "g", pw)
 
@@ -191,10 +210,10 @@ class TestVectors extends Suite with CodeGenerator {
     try {
       println("-- begin")
 
-      val dsl = new VectorsProg with VectorImplOps with ComplexStructExp with ApplicationOpsExp with SparkVectorOpsExp
+      val dsl = new DListsProg with DListImplOps with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
 
       val pw = setUpPrintWriter
-      val codegen = new ScoobiGenVector { val IR: dsl.type = dsl }
+      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
       codegen.emitSource(dsl.findLogEntry, "g", pw)
 
       writeToProject(pw, "scoobi", "ScoobiGenerated")
@@ -208,3 +227,4 @@ class TestVectors extends Suite with CodeGenerator {
   }
 }
 
+*/

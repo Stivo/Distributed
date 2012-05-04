@@ -1,4 +1,4 @@
-package ch.epfl.distributed
+/*package ch.epfl.distributed
 
 import scala.virtualization.lms.common.ScalaGenBase
 import java.io.PrintWriter
@@ -9,48 +9,48 @@ import scala.collection.mutable
 import java.util.regex.Pattern
 import java.io.StringWriter
 
-trait ScoobiProgram extends VectorOpsExp with VectorImplOps
+trait ScoobiProgram extends DListOpsExp with DListImplOps
 
-trait ScoobiGenVector extends ScalaGenBase with ScalaGenVector
-    with VectorTransformations with Matchers with CaseClassTypeFactory {
+trait ScoobiGenDList extends ScalaGenBase with ScalaGenDList
+    with DListTransformations with Matchers with CaseClassTypeFactory {
 
-  val IR: VectorOpsExp
+  val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
   import IR.{
-    NewVector,
-    VectorSave,
-    VectorMap,
-    VectorFilter,
-    VectorFlatMap,
-    VectorFlatten,
-    VectorGroupByKey,
-    VectorJoin,
-    VectorReduce,
+    NewDList,
+    DListSave,
+    DListMap,
+    DListFilter,
+    DListFlatMap,
+    DListFlatten,
+    DListGroupByKey,
+    DListJoin,
+    DListReduce,
     ComputationNode,
-    VectorNode,
+    DListNode,
     GetArgs
   }
-  import IR.{ TTP, TP, SubstTransformer, ThinDef, Field }
+  import IR.{ TTP, TP, SubstTransformer, Field }
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
   var wireFormats = List[String]()
 
-  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = {
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
     val out = rhs match {
-      case nv @ NewVector(filename) => emitValDef(sym, "TextInput.fromTextFile(%s)".format(quote(filename)))
-      case vs @ VectorSave(vector, filename) => stream.println("DList.persist(TextOutput.toTextFile(%s,%s))".format(quote(vector), quote(filename)))
-      case vm @ VectorMap(vector, function) => emitValDef(sym, "%s.map(%s)".format(quote(vector), handleClosure(vm.closure)))
-      case vm @ VectorFilter(vector, function) => emitValDef(sym, "%s.filter(%s)".format(quote(vector), handleClosure(vm.closure)))
-      case vm @ VectorFlatMap(vector, function) => emitValDef(sym, "%s.flatMap(%s)".format(quote(vector), handleClosure(vm.closure)))
-      case vm @ VectorFlatten(v1) => {
+      case nv @ NewDList(filename) => emitValDef(sym, "TextInput.fromTextFile(%s)".format(quote(filename)))
+      case vs @ DListSave(dlist, filename) => stream.println("DList.persist(TextOutput.toTextFile(%s,%s))".format(quote(dlist), quote(filename)))
+      case vm @ DListMap(dlist, function) => emitValDef(sym, "%s.map(%s)".format(quote(dlist), handleClosure(vm.closure)))
+      case vm @ DListFilter(dlist, function) => emitValDef(sym, "%s.filter(%s)".format(quote(dlist), handleClosure(vm.closure)))
+      case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "%s.flatMap(%s)".format(quote(dlist), handleClosure(vm.closure)))
+      case vm @ DListFlatten(v1) => {
         var out = "(" + v1.map(quote(_)).mkString(" ++ ")
         out += ")"
         emitValDef(sym, out)
       }
-      case gbk @ VectorGroupByKey(vector) => emitValDef(sym, "%s.groupByKey".format(quote(vector)))
-      case v @ VectorJoin(left, right) => emitValDef(sym, "join(%s,%s)".format(quote(left), quote(right)))
-      case red @ VectorReduce(vector, f) => emitValDef(sym, "%s.combine(%s)".format(quote(vector), handleClosure(red.closure)))
+      case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
+      case v @ DListJoin(left, right) => emitValDef(sym, "join(%s,%s)".format(quote(left), quote(right)))
+      case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.combine(%s)".format(quote(dlist), handleClosure(red.closure)))
       case GetArgs() => emitValDef(sym, "scoobiInputArgs")
       case _ => super.emitNode(sym, rhs)
     }
@@ -170,7 +170,7 @@ object %s {
         ###wireFormats###
         """.format(className, className))
 
-    emitBlock(y)(stream)
+    emitBlock(y)
 
     stream.println("}")
     stream.println("}")
@@ -191,5 +191,6 @@ object %s {
 
 }
 
-trait ScoobiGen extends VectorBaseCodeGenPkg with ScoobiGenVector
+trait ScoobiGen extends DListBaseCodeGenPkg with ScoobiGenDList
 
+*/

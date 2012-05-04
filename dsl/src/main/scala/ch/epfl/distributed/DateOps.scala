@@ -54,20 +54,20 @@ trait DateOpsExp extends DateOps with BaseExp {
     case DateAdd(d, y, m, days) => freqNormal(d, y, m, days)
     case _ => super.symsFreq(e)
   }
-
-  override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = (e match {
+  
+  override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
     case DateComparison(l, r, c) => dateComparison(f(l), f(r), c)
     case DateObjectApply(s) => dateObjectApply(f(s))
     case DateAdd(d, y, m, days) => dateAdd(f(d), f(y), f(m), f(days))
     case _ => super.mirror(e, f)
-  }).asInstanceOf[Exp[A]]
+  }).asInstanceOf[Def[A]]
 }
 
 trait ScalaGenDateOps extends ScalaGenBase {
   val IR: DateOpsExp
   import IR._
 
-  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case DateObjectApply(str: Exp[String]) => emitValDef(sym, "ch.epfl.distributed.datastruct.Date(" + quote(str) + ")")
     case DateComparison(ls, rd, compare) => emitValDef(sym, quote(ls) + " " + compare + " " + quote(rd))
     case DateAdd(d, y, m, days) => emitValDef(sym, "%s + new ch.epfl.distributed.datastruct.Interval(%s, %s, %s)"

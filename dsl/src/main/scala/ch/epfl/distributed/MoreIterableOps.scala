@@ -3,6 +3,7 @@ package ch.epfl.distributed
 import scala.virtualization.lms.common.{ ArrayOps, IterableOps, ArrayOpsExp, IterableOpsExp }
 import scala.virtualization.lms.internal.ScalaCodegen
 import java.io.PrintWriter
+import scala.reflect.SourceContext
 
 trait MoreIterableOps extends ArrayOps with IterableOps {
   implicit def arrayToMoreArrayOps[T: Manifest](a: Array[T]) = new MoreArrayOpsCls(unit(a))
@@ -35,7 +36,7 @@ trait MoreIterableOpsExp extends MoreIterableOps with ArrayOpsExp with IterableO
   override def iterable_last[T: Manifest](a: Exp[Iterable[T]]) = SingleResultIterableOp(a, "last")
   override def iterable_first[T: Manifest](a: Exp[Iterable[T]]) = SingleResultIterableOp(a, "first")
 
-  override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = (e match {
+  override def mirror[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Exp[A] = (e match {
     case SingleResultIterableOp(a, op) => SingleResultIterableOp(f(a), op)
     case _ => super.mirror(e, f)
   }).asInstanceOf[Exp[A]]
@@ -47,8 +48,8 @@ trait MoreIterableOpsCodeGen extends ScalaCodegen {
   val IR: MoreIterableOpsExp
   import IR._
 
-  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter) = rhs match {
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case SingleResultIterableOp(it, s) => emitValDef(sym, "%s.%s".format(quote(it), s))
-    case _ => super.emitNode(sym, rhs)(stream)
+    case _ => super.emitNode(sym, rhs)
   }
 }
