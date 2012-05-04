@@ -1,0 +1,13 @@
+merge filter / map into flatMap? merge all filter, flatmap, map?
+
+call specialized reducers for primitive types (do not exist yet)
+
+aggregate idea?
+
+determine if reducer is associative
+
+=>
+steno: optimizer for linq pldi 2011
+create while loops with mapPartitions, gets iterator, returns iterator
+cache an RDD, check optimizations with cached objects
+

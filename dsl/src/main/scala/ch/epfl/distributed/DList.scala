@@ -112,6 +112,7 @@ case class FieldRead(val path: String) {
 
 trait DListOpsExp extends DListOps with DListBaseExp with WhileExp {
   def toAtom2[T: Manifest](d: Def[T])(implicit ctx: SourceContext): Exp[T] = super.toAtom(d)
+  def unit2[T:Manifest](x: T) = unit(x)
 
   trait DListNode {
     val directFieldReads = mutable.HashSet[FieldRead]()
@@ -360,8 +361,8 @@ trait PrinterGenDList extends ScalaNestedCodegen {
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case nv @ NewDList(filename) => emitValDef(sym, "New vector created from %s with type %s".format(filename, nv.mA))
-    case vs @ DListSave(vector, filename) => stream.println("Saving vector %s (of type %s) to %s".format(vector, vs.mA, filename))
-    case vm @ DListMap(vector, function) => emitValDef(sym, "mapping vector %s with function %s, type %s => %s".format(vector, quote(vm.func), vm.mA, vm.mB))
+    case vs @ DListSave(vector, filename) => stream.println("Saving vector %s (of type %s) to %s".format(vector, sym.tp, filename))
+    case vm @ DListMap(vector, function) => emitValDef(sym, "mapping vector %s with function %s, type %s".format(vector, quote(vm.func), vm.func.asInstanceOf[Sym[_]].tp))
     case vf @ DListFilter(vector, function) => emitValDef(sym, "filtering vector %s with function %s".format(vector, quote(vf.closure)))
     case vm @ DListFlatMap(vector, function) => emitValDef(sym, "flat mapping vector %s with function %s".format(vector, function))
     case vm @ DListFlatten(v1) => emitValDef(sym, "flattening vectors %s".format(v1))
