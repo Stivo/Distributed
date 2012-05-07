@@ -6,11 +6,10 @@ import scala.collection.mutable
 import java.util.regex.Pattern
 import scala.util.Random
 
-trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with Matchers {
+trait DListAnalysis extends AbstractScalaGenDList with Matchers {
 
-  
   val IR: DListOpsExp
-  
+
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block, TP }
   import IR.{
     NewDList,
@@ -30,9 +29,9 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
   import IR.{ ClosureNode, Closure2Node, freqNormal, Lambda, Lambda2 }
   import IR.{ fresh, reifyEffects, reifyEffectsHere, toAtom }
 
-  def newAnalyzer(block: Block[_], typeHandlerForUse: TypeHandler = typeHandler) = new Analyzer(block, typeHandlerForUse)
+  def newAnalyzer(block: Block[_]) = new Analyzer(block)
 
-  class Analyzer(block: Block[_], typeHandler: TypeHandler) extends BlockVisitor(block) {
+  class Analyzer(block: Block[_]) extends BlockVisitor(block) {
     lazy val nodes = statements.flatMap {
       case SomeDef(x: DListNode) => Some(x)
       case SomeDef(Reflect(x: DListNode, _, _)) => Some(x)
@@ -50,7 +49,7 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
 
     def getInputs(x: DListNode) = {
       val syms = IR.syms(x)
-      syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.defs.flatMap { _ match { case x: DListNode => Some(x) case _ => None } }}
+      syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.defs.flatMap { _ match { case x: DListNode => Some(x) case _ => None } } }
     }
 
     lazy val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
@@ -108,6 +107,70 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
       case _ => Nil
     }
 
+    def getIdForNode(n: DListNode with Def[_]) = {
+      //      nodes.indexOf(n)
+      val op1 = IR.findDefinition(n.asInstanceOf[Def[_]])
+      if (op1.isDefined) {
+        op1.get.syms.head.id
+      } else {
+        statements.flatMap {
+          case TP(Sym(s), Reflect(x, _, _)) if x == n => Some(s)
+          //          case TTPDef(Reflect(s@Def(x),_,_)) if x==n => Some(s)
+          case _ => None
+        }.head
+      }
+    }
+
+    var addComments = true
+
+    def exportToGraph = {
+      val buf = Buffer[String]()
+      buf += "digraph g {"
+      for (node <- nodes) {
+        var comment = ""
+        if (addComments && !node.metaInfos.isEmpty) {
+          comment += "\\n" + node.metaInfos
+        }
+        buf += """%s [label="%s(%s)%s"];"""
+          .format(getIdForNode(node), node.toString.takeWhile(_ != '('), getIdForNode(node),
+            comment)
+      }
+      for (node <- nodes; input1 <- getInputs(node)) {
+        val readPaths = (node.directFieldReads ++ input1.successorFieldReads).map(_.path)
+        val readPathsSorted = readPaths.toList.distinct.sorted
+        buf += """%s -> %s [label="%s"]; """.format(getIdForNode(input1), getIdForNode(node),
+          readPathsSorted.mkString(","))
+      }
+      buf += "}"
+      buf.mkString("\n")
+    }
+
+  }
+}
+
+trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
+  val IR: DListOpsExp
+
+  import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block, TP }
+  import IR.{
+    NewDList,
+    DListSave,
+    DListMap,
+    DListFilter,
+    DListFlatMap,
+    DListFlatten,
+    DListGroupByKey,
+    DListJoin,
+    DListReduce,
+    ComputationNode,
+    DListNode,
+    GetArgs
+  }
+
+  def newFieldAnalyzer(block: Block[_], typeHandlerForUse: TypeHandler = typeHandler) = new FieldAnalyzer(block, typeHandlerForUse)
+
+  class FieldAnalyzer(block: Block[_], typeHandler: TypeHandler) extends Analyzer(block) {
+
     def pathToInput(node: Any, input: Sym[_], prefix: String = ""): Option[FieldRead] = {
       node match {
         case SomeAccess(nextNode, pathSegment) => pathToInput(nextNode, input, pathSegment + prefix)
@@ -149,7 +212,7 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
         case v @ DListMap(in, func) if !v.metaInfos.contains("narrowed")
           && !SimpleType.unapply(v.getClosureTypes._2).isDefined
           && hasObjectCreationInClosure(v) => {
-            /*
+          /*
           // backup TTPs, or create new transformer?
           val transformer = new Transformer(state)
           // tag this map to recognize it after transformations
@@ -176,7 +239,7 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
           v.metaInfos.remove(id)
           a2.analyzeFunction(candidates.head)
           */
-            analyzeFunction(v)
+          analyzeFunction(v)
         }
 
         case v @ DListMap(in, func) => analyzeFunction(v)
@@ -255,45 +318,6 @@ trait DListAnalysis extends AbstractScalaGenDList with DListTransformations with
       nodes.find { case Def(s: IR.SimpleStruct[_]) => true case _ => false }.isDefined
     }
 
-    
-    def getIdForNode(n: DListNode with Def[_]) = {
-      //      nodes.indexOf(n)
-      val op1 = IR.findDefinition(n.asInstanceOf[Def[_]])
-      if (op1.isDefined) {
-        op1.get.syms.head.id
-      } else {
-        statements.flatMap {
-          case TP(Sym(s), Reflect(x, _, _)) if x == n => Some(s)
-          //          case TTPDef(Reflect(s@Def(x),_,_)) if x==n => Some(s)
-          case _ => None
-        }.head
-      }
-    }
-
-    var addComments = true
-
-    def exportToGraph = {
-      val buf = Buffer[String]()
-      buf += "digraph g {"
-      for (node <- nodes) {
-        var comment = ""
-        if (addComments && !node.metaInfos.isEmpty) {
-          comment += "\\n" + node.metaInfos
-        }
-        buf += """%s [label="%s(%s)%s"];"""
-          .format(getIdForNode(node), node.toString.takeWhile(_ != '('), getIdForNode(node),
-            comment)
-      }
-      for (node <- nodes; input1 <- getInputs(node)) {
-        val readPaths = (node.directFieldReads ++ input1.successorFieldReads).map(_.path)
-        val readPathsSorted = readPaths.toList.distinct.sorted
-        buf += """%s -> %s [label="%s"]; """.format(getIdForNode(input1), getIdForNode(node),
-          readPathsSorted.mkString(","))
-      }
-      buf += "}"
-      buf.mkString("\n")
-    }
-     
   }
-  
+
 }

@@ -5,11 +5,10 @@ import scala.virtualization.lms.common.BooleanOps
 import scala.collection.mutable
 import scala.virtualization.lms.common.WorklistTransformer
 import scala.virtualization.lms.common.ForwardTransformer
+import scala.virtualization.lms.internal.Utils
 
-trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with Matchers {
+trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with Matchers with DListAnalysis with Utils {
 
-  
-  
   val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const }
   import IR.{
@@ -28,53 +27,225 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
   import IR.{ findDefinition }
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda }
   import IR.{ Struct }
-  
+
+  //  class ReusableWorklistTransfomer extends WorklistTransformer {
+  //    def reset() {
+  //      nextSubst = Map.empty
+  //    }
+  //  }
+
+  abstract class TransformationRunner {
+    val wt = new WorklistTransformer() { val IR: DListTransformations.this.IR.type = DListTransformations.this.IR }
+    def run[T: Manifest](y: Block[T]) = {
+      registerTransformations(new Analyzer(y))
+      if (wt.nextSubst.isEmpty) {
+        y
+      } else {
+        wt.run(y)
+      }
+    }
+    def registerTransformations(analyzer: Analyzer)
+
+    def getConsumers(analyzer: Analyzer, x: Sym[_]) = {
+      analyzer.statements.filter(_.syms.contains(x))
+    }
+  }
+
+  class NarrowerInsertionTransformation extends TransformationRunner {
+    import wt.IR._
+
+    def makeNarrower[T: Manifest](in: Exp[DList[T]]) = {
+      val narrower = dlist_map(wt(in), { x: Rep[T] => x })
+      findDefinition(narrower.asInstanceOf[Sym[_]]).get.defs
+        .head.asInstanceOf[DListNode].metaInfos("narrower") = true
+      narrower
+    }
+    def registerTransformations(analyzer: Analyzer) {
+      analyzer.narrowBefore.foreach {
+        case gbk @ DListGroupByKey(x) =>
+          val stm = findDefinition(gbk).get
+          class GroupByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]]) {
+            val mapNew = makeNarrower(in)
+            val gbkNew = dlist_groupByKey(mapNew)
+            wt.register(stm.syms.head)(gbkNew)
+          }
+          new GroupByKeyTransformer(gbk.dlist)(gbk.mKey, gbk.mValue)
+
+        case j @ DListJoin(l, r) =>
+          val stm = findDefinition(j).get
+          class DListJoinTransformer[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]]) {
+            val mapNewLeft = makeNarrower(left)
+            val mapNewRight = makeNarrower(right)
+
+            val joinNew = dlist_join(mapNewLeft, mapNewRight)
+            wt.register(stm.syms.head)(joinNew)
+          }
+          new DListJoinTransformer(l, r)(j.mK, j.mV1, j.mV2)
+        case _ =>
+      }
+    }
+
+  }
+
+  class NarrowMapsTransformation(target: IR.Lambda[_, _], fieldReads: List[FieldRead], typeHandler: TypeHandler) extends TransformationRunner {
+    def this(target: DListNode with ClosureNode[_, _], typeHandler: TypeHandler) = this(
+      target.closure match {
+        case Def(l @ IR.Lambda(_, _, _)) => l
+      }, target.successorFieldReads.toList, typeHandler)
+
+    def registerTransformations(analyzer: Analyzer) {
+      val targetLambda = analyzer.statements.filter(_.defs.contains(target)).head.syms.head
+
+      val targetSym = target.y.res
+
+      val fields = fieldReads.map(_.path)
+
+      case class Node(val path: String, val children: mutable.Map[String, Node] = mutable.HashMap()) {
+        def resolve(pathToChild: String): Option[Node] = {
+          val newS = pathToChild.drop(5)
+          val arg = if (newS.size >= 1) newS.drop(1) else ""
+          resolveInternal(arg)
+        }
+        private def resolveInternal(pathToChild: String): Option[Node] = {
+          if (!pathToChild.isEmpty) {
+            val parts = (pathToChild.split("\\.", 2).toList ++ List("")).take(2)
+            if (children.contains(parts.head)) {
+              children(parts.head).resolveInternal(parts.last)
+            } else {
+              None
+            }
+          } else {
+            Some(this)
+          }
+        }
+      }
+      val out = new Node("input")
+
+      for (x <- fields) {
+        var curNode = out
+        for (y <- x.split("\\.").drop(1)) {
+          if (!curNode.children.contains(y)) {
+            val newNode = Node(y)
+            curNode.children(y) = newNode
+          }
+          curNode = curNode.children(y)
+        }
+      }
+
+      def build[C](path: String, readFromSym: Exp[C]): Exp[C] = {
+        import typeHandler.{ TypeInfo, FieldInfo }
+        val node = out.resolve(path).get
+        val typeInfo = typeHandler.getTypeAt(path, target.y.res.tp)
+        printdbg("Typeinfo for path " + path + " is " + typeInfo)
+        typeInfo match {
+          case ti @ TypeInfo(name, fields) => {
+            val elems = for ((childName, node) <- node.children)
+              yield (childName, build(path + "." + childName, readFromSym));
+            printdbg("Building new Struct with name " + name + " and elems " + elems + " for type " + ti)
+            IR.toAtom2(IR.SimpleStruct(IR.ClassTag(name), elems.toMap)(ti.m))(ti.m, FakeSourceContext())
+          }
+          case fi @ FieldInfo(name, niceType, position) => {
+            val newSym = IR.field(readFromSym, name)(fi.m, FakeSourceContext())
+            //              val newSym = IR.toAtom2(IR.Field(readFromSym, name, fi.m))(fi.m, FakeSourceContext())
+            if (node.children.isEmpty) {
+              newSym
+            } else {
+              val elems = for ((childName, node) <- node.children)
+                yield (childName, build(path + "." + childName, newSym));
+              val typ = fi.getType
+              printdbg("Building new Struct with name " + niceType + " and elems " + elems + " for field " + fi)
+              IR.toAtom2(IR.SimpleStruct(IR.ClassTag(niceType), elems.toMap)(typ.m))(typ.m, FakeSourceContext())
+            }
+
+          }
+        }
+      }.asInstanceOf[Exp[C]]
+      def h = wt.IR.mtype _
+      class LambdaConstructor[A: Manifest, B: Manifest](target: Lambda[A, B]) {
+        val newResult = build("input", wt(targetSym))
+        val newLam = Lambda(target.f, target.x, wt.IR.Block(wt(newResult)))(wt.IR.mtype(target.mA), wt.IR.mtype(target.mB)).asInstanceOf[Lambda[A, B]]
+        val newLamAtom = IR.toAtom2(newLam)(target.m, FakeSourceContext())
+      }
+      val lc = new LambdaConstructor(target)(wt.IR.mtype(target.mA), wt.IR.mtype(target.mB))
+      //        println("Registering "+targetSym+" -> "+newResult)
+      //        wt.register(targetSym)(newResult)
+      wt.register(targetLambda)(lc.newLamAtom)
+    }
+  }
+
+  //  class NarrowerInsertionTransformer() {
+  //    def run[T: Manifest](y: Block[T]) = {
+  //      wt = new WorklistTransformer() { val IR: DListTransformations.this.IR.type = DListTransformations.this.IR }
+  //      
+  //      var a = newAnalyzer(y)
+  //      a.narrowBefore.foreach(x => println(" this is one "+x))
+  //      
+  //      val gbks = a.narrowBefore.flatMap { case g @ DListGroupByKey(x) => Some(g); case _ => None }
+  //      if (gbks.isEmpty) {
+  //        y
+  //      } else {
+  //        for (gbk <- gbks) {
+  //          val stm = IR.findDefinition(gbk).get
+  //          class GroupByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]]) {
+  //            val mapNew = IR.dlist_map(wt(in), { x: IR.Rep[(K, V)] => x })
+  //            IR.findDefinition(mapNew.asInstanceOf[Sym[_]]).get.defs
+  //              .head.asInstanceOf[DListNode].metaInfos("narrower") = true
+  //            val gbkNew = IR.dlist_groupByKey(mapNew)
+  //            wt.register(stm.syms.head)(gbkNew)
+  //          }
+  //          new GroupByKeyTransformer(gbk.dlist)(gbk.mKey, gbk.mValue)
+  //          ()
+  //        }
+  //        wt.run(y)
+  //      }
+  //    }
+  //  }
+
   /*
    * insert identity mapper before a save
    * - try to keep existing interface?
    */
-  class TransformationState(val block : Block[_])
-  
-//  class SimpleWorklistTransformer extends WorklistTransformer {
-//    
-////    def register(x : Exp[A], y: Transformation) {
-////      
-////    }
-//    
-//  }
-  
-  class Transformer(var state : TransformationState) {
-    
-//	  def runOnce(transformation : Transformation) {
-//	     val visitor = new BlockVisitor(state.block)
-//	     val nodesToUpdate = visitor.statements.flatMap{_.syms}.filter(x => transformation.appliesToNode(x, this))
-//	     if (!nodesToUpdate.isEmpty) {
-//	       val wt = new SimpleWorklistTransformer() {
-//	         val IR = DListTransformations.this.IR
-//	       }
-//	       for (toUpdate <- nodesToUpdate) {
-//	    	   wt.register(toUpdate.asInstanceOf[wt.IR.Exp[_]])(transformation(toUpdate, wt, this).asInstanceOf[wt.IR.Exp[_]])(toUpdate.tp)
-//	       }
-//	     }
-//	  }
-    
+  class TransformationState(val block: Block[_])
+
+  //  class SimpleWorklistTransformer extends WorklistTransformer {
+  //    
+  ////    def register(x : Exp[A], y: Transformation) {
+  ////      
+  ////    }
+  //    
+  //  }
+
+  class Transformer(var state: TransformationState) {
+
+    //	  def runOnce(transformation : Transformation) {
+    //	     val visitor = new BlockVisitor(state.block)
+    //	     val nodesToUpdate = visitor.statements.flatMap{_.syms}.filter(x => transformation.appliesToNode(x, this))
+    //	     if (!nodesToUpdate.isEmpty) {
+    //	       val wt = new SimpleWorklistTransformer() {
+    //	         val IR = DListTransformations.this.IR
+    //	       }
+    //	       for (toUpdate <- nodesToUpdate) {
+    //	    	   wt.register(toUpdate.asInstanceOf[wt.IR.Exp[_]])(transformation(toUpdate, wt, this).asInstanceOf[wt.IR.Exp[_]])(toUpdate.tp)
+    //	       }
+    //	     }
+    //	  }
+
   }
-  
-  trait Transformation {
+
+  trait TransformationOld {
     def appliesToNode(inExp: Exp[_], t: Transformer): Boolean
 
-//    def applyToNode(inExp: Exp[_], transformer: Transformer): (List[TTP], List[(Exp[_], Exp[_])])
+    //    def applyToNode(inExp: Exp[_], transformer: Transformer): (List[TTP], List[(Exp[_], Exp[_])])
 
-    def apply[A](oldNode : Exp[A], ft: ForwardTransformer, t: Transformer) : ft.IR.Exp[A]
-    
+    def apply[A](oldNode: Exp[A], ft: ForwardTransformer, t: Transformer): ft.IR.Exp[A]
+
     override def toString =
       this.getClass.getSimpleName.replaceAll("Transformation", "")
         .split("(?=[A-Z])").mkString(" ").trim
 
   }
 
-  
-/*  
+  /*  
   class TransformationState(val ttps: List[TTP], val results: List[Exp[Any]]) {
     def printAll(s: String = null) = {
       if (s != null)

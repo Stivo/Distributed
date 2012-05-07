@@ -27,7 +27,7 @@ trait DListBase extends Base with LiftAll
 trait DListBaseExp extends DListOps
   with StructExp with StructExpOpt
   with FunctionsExp
-  
+
 trait DListBaseCodeGenPkg extends ScalaGenDSLOps
   with SimplifyTransform with ScalaGenIfThenElseFat
   with ScalaGenEqual with ScalaGenIfThenElse with ScalaGenVariables with ScalaGenWhile with ScalaGenFunctions
@@ -100,7 +100,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
 
   trait ClosureNode[A, B] extends DListNode {
     val in: Exp[DList[_]]
-    def closure : Exp[A => B] = null
+    def closure: Exp[A => B] = null
     def getClosureTypes: (Manifest[A], Manifest[B])
   }
 
@@ -219,7 +219,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   def copyMetaInfo(from: Any, to: Any) = {
     def copyMetaInfoHere[A <: DListNode](from: DListNode, to: A) = { to.metaInfos ++= from.metaInfos; to }
     (from, to) match {
-      case (x: DListNode, Def(y: DListNode)) => copyMetaInfoHere(x, y)
+      case (x: DListNode, y: DListNode) => copyMetaInfoHere(x, y)
       case (Def(x: DListNode), Def(y: DListNode)) => copyMetaInfoHere(x, y)
       case _ =>
     }
@@ -231,7 +231,8 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       case vm @ NewDList(path) => NewDList(f(path))(vm.mA)
       case vm @ DListMap(dlist, func) => DListMap(f(dlist), f(func))(vm.mA, vm.mB)
       case vs @ DListSave(dlist, path) => DListSave(f(dlist), f(path))(vs.mA)
-      case _ => super.mirrorDef(e,f)
+      case v @ DListJoin(left, right) => DListJoin(f(left), f(right))(v.mK, v.mV1, v.mV2)
+      case _ => super.mirrorDef(e, f)
     }
     copyMetaInfo(e, out)
     out.asInstanceOf[Def[A]]
@@ -299,34 +300,35 @@ trait DListImplOps extends DListOps with FunctionsExp {
 trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
   val IR: DListOpsExp
   import IR.{ TP, Stm, SimpleStruct, Def, Sym, Exp, Block, StructTag, ClassTag }
-  import IR.{findDefinition, syms, infix_rhs}
-  class BlockVisitor(block : Block[_]) {
-     def visitAll(inputSym : Exp[Any]) : List[Stm] = {
-        def getInputs(x : Exp[Any]) = x match {
-          case x : Sym[Any] =>
+  import IR.{ findDefinition, syms, infix_rhs }
+  class BlockVisitor(block: Block[_]) {
+    def visitAll(inputSym: Exp[Any]): List[Stm] = {
+      def getInputs(x: Exp[Any]) = x match {
+        case x: Sym[Any] =>
           findDefinition(x) match {
             case Some(x) => syms(infix_rhs(x))
             case None => Nil
           }
-          case _ => Nil
-        } 
-        
-        var out = List[Stm]()
-        val inputs = getInputs(inputSym)
-        for (input <- inputs) input match {
-          case s : Sym[_] => {
-            val stm = findDefinition(s)
-            out ++= (visitAll(s) ++ stm)
-          }
-          case _ => 
-        }
-        out.distinct
+        case _ => Nil
       }
 
+      var out = List[Stm]()
+      val inputs = getInputs(inputSym)
+      for (input <- inputs) input match {
+        case s: Sym[_] => {
+          val stm = findDefinition(s)
+          out ++= (visitAll(s) ++ stm)
+        }
+        case _ =>
+      }
+      out.distinct
+    }
+
     lazy val statements = visitAll(block.res)
+    lazy val defs = statements.flatMap(_.defs)
   }
-  
-  class TypeHandler(block : Block[_]) extends BlockVisitor(block) {
+
+  class TypeHandler(block: Block[_]) extends BlockVisitor(block) {
     trait PartInfo[A] {
       def m: Manifest[A]
       def niceName: String
@@ -334,7 +336,7 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
     case class FieldInfo[A: Manifest](val name: String, val niceType: String, position: Int) extends PartInfo[A] {
       val m = manifest[A]
       def niceName = niceType
-//      lazy val containingType = typeInfos2.map(_._2).filter(_.fields.size > position).find(_.fields(position) == this).get
+      //      lazy val containingType = typeInfos2.map(_._2).filter(_.fields.size > position).find(_.fields(position) == this).get
       def getType = typeInfos2(niceType)
     }
     case class TypeInfo[A: Manifest](val name: String, val fields: List[FieldInfo[_]]) extends PartInfo[A] {
@@ -348,11 +350,11 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
       case _ => None
     }
 
-    def getNameForTag(t : StructTag[_]) = t match {
+    def getNameForTag(t: StructTag[_]) = t match {
       case ClassTag(n) => n
       case _ => throw new RuntimeException("Add name for this tag type")
     }
-    
+
     val remappings = objectCreations.map {
       s =>
         (s.m, getNameForTag(s.tag))
@@ -363,10 +365,10 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
       out
     }
     // Phi's do not have the correct type.
-//    def getType(s: Exp[_]) = s match {
-//      case Def(Phi(_, _, _, _, x)) => x.Type
-//      case x => x.Type
-//    }
+    //    def getType(s: Exp[_]) = s match {
+    //      case Def(Phi(_, _, _, _, x)) => x.Type
+    //      case x => x.Type
+    //    }
     val typeInfos = objectCreations.map {
       s =>
         (s.tag, s.elems) //.mapValues(x => cleanUpType(getType(x))))
@@ -422,10 +424,7 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
   var typeHandler: TypeHandler = null
 
   override def remap[A](m: Manifest[A]): String = {
-    println(m)
-    println(typeHandler.remappings)
     val remappings = typeHandler.remappings.filter(!_._2.startsWith("tuple2s"))
-    println(remappings)
     var out = m.toString
     remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
 
@@ -446,9 +445,9 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
     }
     out
   }
-  
-  def emitProgram[A,B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)]
-  
+
+  def emitProgram[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)]
+
 }
 
 trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransformations with DListAnalysis {
@@ -477,57 +476,55 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     case nv @ NewDList(filename) => emitValDef(sym, "New dlist created from %s with type %s".format(filename, nv.mA))
     case vs @ DListSave(dlist, filename) => stream.println("Saving dlist %s (of type %s) to %s".format(dlist, remap(vs.mA), filename))
     case vm @ DListMap(dlist, func) => emitValDef(sym, "mapping dlist %s with function %s, type %s => %s".format(dlist, quote(func), vm.mA, vm.mB))
-//    case vf @ DListFilter(dlist, function) => emitValDef(sym, "filtering dlist %s with function %s".format(dlist, function))
-//    case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "flat mapping dlist %s with function %s".format(dlist, function))
-//    case vm @ DListFlatten(v1) => emitValDef(sym, "flattening dlists %s".format(v1))
-//    case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "grouping dlist by key")
-//    case gbk @ DListJoin(left, right) => emitValDef(sym, "Joining %s with %s".format(left, right))
-//    case red @ DListReduce(dlist, f) => emitValDef(sym, "reducing dlist")
+    //    case vf @ DListFilter(dlist, function) => emitValDef(sym, "filtering dlist %s with function %s".format(dlist, function))
+    //    case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "flat mapping dlist %s with function %s".format(dlist, function))
+    //    case vm @ DListFlatten(v1) => emitValDef(sym, "flattening dlists %s".format(v1))
+    //    case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "grouping dlist by key")
+    //    case gbk @ DListJoin(left, right) => emitValDef(sym, "Joining %s with %s".format(left, right))
+    //    case red @ DListReduce(dlist, f) => emitValDef(sym, "reducing dlist")
     case GetArgs() => emitValDef(sym, "getting the arguments")
     case IR.Lambda(_, _, _) if inlineClosures =>
     case IR.Lambda2(_, _, _, _) if inlineClosures =>
     case _ => super.emitNode(sym, rhs)
   }
 
-  def emitProgram[A,B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
-    
+  def emitProgram[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
+
     val x = fresh[A]
     val y = reifyBlock(f(x))
 
     typeHandler = new TypeHandler(y)
-    
+
     val analyzer = newAnalyzer(y)
-    println(analyzer.nodes)
-    analyzer.makeFieldAnalysis
-    println(analyzer.exportToGraph)
+    //    println(analyzer.nodes)
+    //    analyzer.makeFieldAnalysis
+    //    println(analyzer.exportToGraph)
     val sA = remap(mA)
     val sB = remap(mB)
 
     withStream(stream) {
-      stream.println("/*****************************************\n"+
-                     "  Emitting Generated Code                  \n"+
-                     "*******************************************/")
-                   
-      // TODO: separate concerns, should not hard code "pxX" name scheme for static data here
-//      stream.println("class "+className+" extends (("+sA+")=>("+sB+")) {")
-//      stream.println("def apply("+quote(x)+":"+sA+"): "+sB+" = {")
+      stream.println("/*****************************************\n" +
+        "  Emitting Generated Code                  \n" +
+        "*******************************************/")
 
-      
+      // TODO: separate concerns, should not hard code "pxX" name scheme for static data here
+      //      stream.println("class "+className+" extends (("+sA+")=>("+sB+")) {")
+      //      stream.println("def apply("+quote(x)+":"+sA+"): "+sB+" = {")
+
       emitBlock(y)
       stream.println(quote(getBlockResult(y)))
-    
-//      stream.println("}")
-//    
-//      stream.println("}")
-//      stream.println("/*****************************************\n"+
-//                     "  End of Generated Code                  \n"+
-//                     "*******************************************/")
+
+      //      stream.println("}")
+      //    
+      //      stream.println("}")
+      //      stream.println("/*****************************************\n"+
+      //                     "  End of Generated Code                  \n"+
+      //                     "*******************************************/")
     }
 
     Nil
   }
 
-  
   /*
   override def fattenAll(e: List[TP[Any]]): List[TTP] = {
     val out = super.fattenAll(e)
@@ -542,21 +539,21 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     val sw = new StringWriter()
     val pw = new PrintWriter(sw)
     def remapHere(x: Manifest[_]) = if (typesInInlinedClosures) ": " + remap(x) else ""
-      withStream(pw) {
-    closure match {
-      case Def(Lambda(fun, x, y)) => {
-        pw.println("{ %s %s => ".format(quote(x), remapHere(x.tp)))
-        emitBlock(y)
-        pw.println("%s %s".format(quote(getBlockResult(y)), remapHere(y.tp)))
-        pw.print("}")
+    withStream(pw) {
+      closure match {
+        case Def(Lambda(fun, x, y)) => {
+          pw.println("{ %s %s => ".format(quote(x), remapHere(x.tp)))
+          emitBlock(y)
+          pw.println("%s %s".format(quote(getBlockResult(y)), remapHere(y.tp)))
+          pw.print("}")
+        }
+        case Def(Lambda2(fun, x1, x2, y)) => {
+          pw.println("{ (%s %s, %s %s) => ".format(quote(x1), remapHere(x1.tp), quote(x2), remapHere(x2.tp)))
+          emitBlock(y)
+          pw.println("%s %s".format(quote(getBlockResult(y)), remapHere(y.tp)))
+          pw.print("}")
+        }
       }
-      case Def(Lambda2(fun, x1, x2, y)) => {
-        pw.println("{ (%s %s, %s %s) => ".format(quote(x1), remapHere(x1.tp), quote(x2), remapHere(x2.tp)))
-        emitBlock(y)
-        pw.println("%s %s".format(quote(getBlockResult(y)), remapHere(y.tp)))
-        pw.print("}")
-      }
-    }
     }
     pw.flush
     sw.toString
@@ -577,7 +574,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   var narrowExistingMaps = true
   var insertNarrowingMaps = true
   var mapMerge = true
-/*
+  /*
   def mapNarrowing(transformer: Transformer) {
     // replace maps with narrower ones
     var oneFound = false
@@ -706,15 +703,19 @@ trait TypeFactory extends ScalaGenDList {
     val out = rhs match {
       case IR.Field(tuple, x, tp) => emitValDef(sym, "%s.%s".format(quote(tuple), x))
       //case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
-      case IR.SimpleStruct(IR.ClassTag("tuple2s"), elems) => {
+      case IR.SimpleStruct(x: IR.ClassTag[_], elems) if (x.name == "tuple2s") => {
         emitValDef(sym, "(%s, %s)".format(quote(elems("_1")), quote(elems("_2")))) //fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
         //emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
       }
       case IR.SimpleStruct(IR.ClassTag(name), fields) => {
-        val typeInfo = typeHandler.typeInfos2(name)
-        val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)
-        val typeName = makeTypeFor(name, fieldsList.map(_._1))
-        emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
+        try {
+          val typeInfo = typeHandler.typeInfos2(name)
+          val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)
+          val typeName = makeTypeFor(name, fieldsList.map(_._1))
+          emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
+        } catch {
+          case e => emitValDef(sym, "Exception " + e + " when accessing " + fields + " of " + name)
+        }
       }
       case IR.ObjectCreation(name, fields) if (name.startsWith("tuple2s")) => {
         emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
@@ -725,7 +726,7 @@ trait TypeFactory extends ScalaGenDList {
         val typeName = makeTypeFor(name, fieldsList.map(_._1))
         emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
       }
-      
+
       case _ => super.emitNode(sym, rhs)
     }
   }
@@ -734,7 +735,7 @@ trait TypeFactory extends ScalaGenDList {
 
 trait CaseClassTypeFactory extends TypeFactory {
   def makeTypeFor(name: String, fields: Iterable[String]): String = {
-    
+
     // fields is a sorted list of the field names
     // typeInfo is the type with all fields and all infos
     val typeInfo = typeHandler.typeInfos2(name)
@@ -767,7 +768,7 @@ trait CaseClassTypeFactory extends TypeFactory {
           .map(x => """%s sb.append(",")""".format(if (x.isEmpty) "" else "sb.append(%s); ".format(x)))
           .mkString(";\n"))
     }
-    
+
     typeName
   }
 

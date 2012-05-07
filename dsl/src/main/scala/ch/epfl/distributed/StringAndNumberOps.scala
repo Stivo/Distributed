@@ -11,7 +11,7 @@ import scala.virtualization.lms.util.OverloadHack
 
 trait StringAndNumberOps extends PrimitiveOps with StringOps with OverloadHack {
   def infix_toLong(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Long](s1)
-//  def infix_toDouble(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Double](s1)
+  //  def infix_toDouble(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Double](s1)
   def infix_toInt(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Int](s1)
   def infix_toByte(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Byte](s1)
   def infix_toFloat(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Float](s1)
@@ -87,7 +87,7 @@ trait StringPatternOpsExp extends StringOps with StringOpsExp {
 }
 
 trait StringAndNumberOpsCodeGen extends ScalaCodegen {
-  
+
   val IR: StringAndNumberOpsExp
   import IR._
   //  override def emitNode(sym: Sym[Any], rhs: Def[Any])(implicit stream: PrintWriter): Unit = rhs match {

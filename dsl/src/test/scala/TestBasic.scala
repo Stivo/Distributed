@@ -9,9 +9,9 @@ import scala.collection.mutable
 import java.io.File
 import scala.collection.immutable
 trait ComplexBase extends Base {
-  
+
   class Complex
-  
+
   def Complex(re: Rep[Double], im: Rep[Double]): Rep[Complex]
   def infix_re(c: Rep[Complex]): Rep[Double]
   def infix_im(c: Rep[Complex]): Rep[Double]
@@ -19,31 +19,45 @@ trait ComplexBase extends Base {
 
 trait ComplexStructExp extends ComplexBase with StructExp {
 
-  def Complex(re: Rep[Double], im: Rep[Double]) = struct[Complex](ClassTag[Complex]("Complex"), immutable.ListMap("re"->re, "im"->im))
+  def Complex(re: Rep[Double], im: Rep[Double]) = struct[Complex](ClassTag[Complex]("Complex"), immutable.ListMap("re" -> re, "im" -> im))
   def infix_re(c: Rep[Complex]): Rep[Double] = field[Double](c, "re")
   def infix_im(c: Rep[Complex]): Rep[Double] = field[Double](c, "im")
-  
+
 }
 
-trait DListsProg extends DListProgram with ComplexBase{
+trait DListsProg extends DListProgram with ComplexBase {
 
- 
   def simple(x: Rep[Unit]) = {
     val words1 = DList(getArgs(0))
     words1.map(x => (Complex(x.toDouble, 5.0), unit("asdf")))
-    .map(_._1.im)
-//    .save(getArgs(1))
-    words1.map(x => (x, unit(1))).groupByKey.save(getArgs(1))
-//    words1
-//    //.filter(_.matches("\\d+"))
-//    .map(_.toInt)
-   
-    
+      .map(x => (x._1.im))
+    //    .save(getArgs(1))
+
+    val tupled = words1
+    tupled.map(x => (x, unit(1))).groupByKey.save(getArgs(1))
+    //    tupled.map(x => (x, unit(1))).groupByKey.save(getArgs(2))
+
+    //    words1
+    //    //.filter(_.matches("\\d+"))
+    //    .map(_.toInt)
+
     //)(0)
     unit(())
   }
 
-  
+  def testJoin(x: Rep[Unit]) = {
+    val words1 = DList(getArgs(0) + "1")
+    val words2 = DList(getArgs(0) + "2")
+    val words1Tupled = words1.map(x => (x, Complex(x.toDouble, 3.0)))
+    val words2Tupled = words2.map(x => (x, Complex(2.5, x.toDouble)))
+    val joined = words1Tupled.join(words2Tupled)
+    joined.map(x => x._1 + " " + x._2._1.re + " " + x._2._2.im)
+      //    joined
+      .save(getArgs(1))
+    //    joined
+    unit(())
+  }
+
   /*
   def simple2(x: Rep[Unit]) = {
     val words1 = DList(getArgs(0))
@@ -110,12 +124,12 @@ class TestDLists2 extends Suite with CodeGenerator {
       val dsl = new DListsProg with DListProgramExp with ComplexStructExp
 
       val pw = setUpPrintWriter
-      val codegen =  new BaseCodeGenerator with ScoobiGenDList { val IR: dsl.type = dsl }
+      val codegen = new BaseCodeGenerator with ScoobiGenDList { val IR: dsl.type = dsl }
       codegen.withStream(pw) {
-      codegen.emitSource(dsl.simple, "g", pw)
+        codegen.emitSource(dsl.testJoin, "g", pw)
       }
       writeToProject(pw, "scoobi", "ScoobiGenerated")
-      println(getContent(pw))
+      //      println(getContent(pw))
       release(pw)
       println("-- end")
     } catch {
@@ -124,6 +138,6 @@ class TestDLists2 extends Suite with CodeGenerator {
         println(e.getMessage)
     }
   }
- 
+
 }
 

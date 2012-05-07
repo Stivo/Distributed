@@ -54,7 +54,7 @@ trait DateOpsExp extends DateOps with BaseExp {
     case DateAdd(d, y, m, days) => freqNormal(d, y, m, days)
     case _ => super.symsFreq(e)
   }
-  
+
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
     case DateComparison(l, r, c) => dateComparison(f(l), f(r), c)
     case DateObjectApply(s) => dateObjectApply(f(s))

@@ -34,8 +34,8 @@ trait Matchers extends AbstractScalaGenDList {
   }
 
   object ClosureNode {
-    def unapply(any: Any) : Option[ClosureNode[_,_]] = any match {
-//      case SomeDef(cn: ClosureNode[_, _]) => Some(cn)
+    def unapply(any: Any): Option[ClosureNode[_, _]] = any match {
+      //      case SomeDef(cn: ClosureNode[_, _]) => Some(cn)
       case cn: ClosureNode[_, _] => Some(cn)
       case _ => None
     }
