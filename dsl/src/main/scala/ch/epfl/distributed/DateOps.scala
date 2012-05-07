@@ -68,7 +68,7 @@ trait ScalaGenDateOps extends ScalaGenBase {
   import IR._
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
-    case DateObjectApply(str: Exp[String]) => emitValDef(sym, "ch.epfl.distributed.datastruct.Date(" + quote(str) + ")")
+    case DateObjectApply(str) => emitValDef(sym, "ch.epfl.distributed.datastruct.Date(" + quote(str) + ")")
     case DateComparison(ls, rd, compare) => emitValDef(sym, quote(ls) + " " + compare + " " + quote(rd))
     case DateAdd(d, y, m, days) => emitValDef(sym, "%s + new ch.epfl.distributed.datastruct.Interval(%s, %s, %s)"
       .format(quote(d), quote(y), quote(m), quote(days)))

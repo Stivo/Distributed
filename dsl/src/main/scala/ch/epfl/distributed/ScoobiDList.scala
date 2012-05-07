@@ -47,8 +47,7 @@ trait ScoobiGenDList extends ScalaGenBase
       case vm @ DListFilter(dlist, function) => emitValDef(sym, "%s.filter(%s)".format(quote(dlist), handleClosure(vm.closure)))
       case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "%s.flatMap(%s)".format(quote(dlist), handleClosure(vm.closure)))
       case vm @ DListFlatten(v1) => {
-        var out = "(" + v1.map(quote(_)).mkString(" ++ ")
-        out += ")"
+        var out = v1.map(quote(_)).mkString("(", " ++ ", ")")
         emitValDef(sym, out)
       }
       case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
@@ -61,7 +60,7 @@ trait ScoobiGenDList extends ScalaGenBase
     out
   }
 
-  override val inlineClosures = true
+  override val inlineClosures = false
   override val typesInInlinedClosures = true
 
   val allOff = false

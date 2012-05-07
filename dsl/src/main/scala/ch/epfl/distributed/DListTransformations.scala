@@ -28,12 +28,6 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda }
   import IR.{ Struct }
 
-  //  class ReusableWorklistTransfomer extends WorklistTransformer {
-  //    def reset() {
-  //      nextSubst = Map.empty
-  //    }
-  //  }
-
   abstract class TransformationRunner {
     val wt = new WorklistTransformer() { val IR: DListTransformations.this.IR.type = DListTransformations.this.IR }
     def run[T: Manifest](y: Block[T]) = {
@@ -607,16 +601,6 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
     }
   }
 
-  class TypeTransformations(val typeHandler: TypeHandler) extends SimpleTransformation {
-    lazy val set = typeHandler.typeInfos.keySet
-    def doTransformationPure(inExp: Exp[_]) = inExp match {
-      case Def(t @ IR.SimpleStruct(x, y)) if set.contains(x.mkString("_")) => {
-        val name = x.mkString("_")
-        new IR.ObjectCreation(name, y)(t.m)
-      }
-      case _ => null
-    }
-  }
 */
 
 }

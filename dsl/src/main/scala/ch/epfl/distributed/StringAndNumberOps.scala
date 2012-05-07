@@ -59,7 +59,6 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
 
 trait StringPatternOpsExp extends StringOps with StringOpsExp {
 
-  /*
   var disablePatterns = false
 
   case class StringPattern(regex: Exp[String]) extends Def[java.util.regex.Pattern]
@@ -77,13 +76,13 @@ trait StringPatternOpsExp extends StringOps with StringOpsExp {
     else
       StringMatchesPattern(s, StringPattern(regex))
 
-  override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = (e match {
+  override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit ctx: SourceContext): Def[A] = (e match {
     case StringPattern(regex) => StringPattern(f(regex))
     case StringSplitPattern(s, pat, l) => StringSplitPattern(f(s), f(pat), f(l))
     case StringMatchesPattern(s, pat) => StringMatchesPattern(f(s), f(pat))
-    case _ => super.mirror(e, f)
-  }).asInstanceOf[Exp[A]]
- */
+    case _ => super.mirrorDef(e, f)
+  }).asInstanceOf[Def[A]]
+
 }
 
 trait StringAndNumberOpsCodeGen extends ScalaCodegen {
@@ -107,12 +106,12 @@ trait StringAndNumberOpsCodeGen extends ScalaCodegen {
 trait StringPatternOpsCodeGen extends ScalaCodegen {
   val IR: StringPatternOpsExp
   import IR._
-  /*
+
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case StringSplitPattern(s, pattern, limit) => emitValDef(sym, "%s.split(%s, %s)".format(quote(pattern), quote(s), quote(limit)))
     case StringPattern(s) => emitValDef(sym, "java.util.regex.Pattern.compile(%s)".format(quote(s)))
     case StringMatchesPattern(s, pattern) => emitValDef(sym, "%s.matcher(%s).matches()".format(quote(pattern), quote(s)))
     case _ => super.emitNode(sym, rhs)
   }
-  */
+
 }

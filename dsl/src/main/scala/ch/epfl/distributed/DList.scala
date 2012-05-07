@@ -16,30 +16,6 @@ import java.util.regex.Pattern
 
 trait DList[+A]
 
-trait DListBase extends Base with LiftAll
-  with Equal with IfThenElse with Variables with While with Functions
-  with ImplicitOps with NumericOps with OrderingOps with StringOps
-  with BooleanOps with PrimitiveOps with MiscOps with TupleOps
-  with MathOps with CastingOps with ObjectOps with ArrayOps
-  with MoreIterableOps
-  with StringAndNumberOps with IterableOps with ListOps with DateOps
-
-trait DListBaseExp extends DListOps
-  with StructExp with StructExpOpt
-  with FunctionsExp
-
-trait DListBaseCodeGenPkg extends ScalaGenDSLOps
-  with SimplifyTransform with ScalaGenIfThenElseFat
-  with ScalaGenEqual with ScalaGenIfThenElse with ScalaGenVariables with ScalaGenWhile with ScalaGenFunctions
-  with ScalaGenImplicitOps with ScalaGenNumericOps with ScalaGenOrderingOps with ScalaGenStringOps
-  with ScalaGenBooleanOps with ScalaGenPrimitiveOps with ScalaGenMiscOps with ScalaGenTupleOps
-  with ScalaGenMathOps with ScalaGenCastingOps with ScalaGenObjectOps with ScalaGenArrayOps with ScalaGenRangeOps
-  with ScalaGenDateOps
-  //with ScalaGenFatStruct
-  with ScalaGenStruct with GenericFatCodegen
-  with StringPatternOpsCodeGen with MoreIterableOpsCodeGen
-  with StringAndNumberOpsCodeGen with ScalaGenListOps with ScalaGenIterableOps { val IR: DListOpsExp }
-
 trait DListOps extends Base with Variables {
   def getArgs = get_args()
 
@@ -48,6 +24,7 @@ trait DListOps extends Base with Variables {
   }
 
   implicit def repDListToDListOps[A: Manifest](dlist: Rep[DList[A]]) = new dlistOpsCls(dlist)
+  implicit def varDListToDListOps[A: Manifest](dlist: Var[DList[A]]) = new dlistOpsCls(readVar(dlist))
   class dlistOpsCls[A: Manifest](dlist: Rep[DList[A]]) {
     def flatMap[B: Manifest](f: Rep[A] => Rep[Iterable[B]]) = dlist_flatMap(dlist, f)
     def map[B: Manifest](f: Rep[A] => Rep[B]) = dlist_map(dlist, f)
@@ -57,11 +34,13 @@ trait DListOps extends Base with Variables {
   }
 
   implicit def repDListToDListIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, Iterable[V])]]) = new dlistIterableTupleOpsCls(x)
+  implicit def varDListToDListIterableTupleOpsCls[K: Manifest, V: Manifest](x: Var[DList[(K, Iterable[V])]]) = new dlistIterableTupleOpsCls(readVar(x))
   class dlistIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, Iterable[V])]]) {
     def reduce(f: (Rep[V], Rep[V]) => Rep[V]) = dlist_reduce[K, V](x, f)
   }
 
   implicit def repDListToDListTupleOps[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) = new dlistTupleOpsCls(x)
+  implicit def varDListToDListTupleOps[K: Manifest, V: Manifest](x: Var[DList[(K, V)]]) = new dlistTupleOpsCls(readVar(x))
   class dlistTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) {
     def groupByKey = dlist_groupByKey[K, V](x)
     def join[V2: Manifest](right: Rep[DList[(K, V2)]]) = dlist_join(x, right)
@@ -199,10 +178,6 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
 
   case class Narrowing(struct: DList[Rep[SimpleStruct[_]]], fields: List[String]) extends Def[DList[Rep[SimpleStruct[_]]]]
 
-  case class ObjectCreation[A: Manifest](className: String, fields: Map[String, Rep[_]]) extends Def[A] {
-    val mA = manifest[A]
-  }
-
   override def get_args() = GetArgs()
   override def dlist_new[A: Manifest](file: Exp[String]) = NewDList[A](file)
   override def dlist_map[A: Manifest, B: Manifest](dlist: Exp[DList[A]], f: Exp[A] => Exp[B]) = DListMap[A, B](dlist, doLambda(f))
@@ -221,7 +196,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def copyMetaInfoHere[A <: DListNode](from: DListNode, to: A) = { to.metaInfos ++= from.metaInfos; to }
     (from, to) match {
       case (x: DListNode, y: DListNode) => copyMetaInfoHere(x, y)
-      case (Def(x: DListNode), Def(y: DListNode)) => copyMetaInfoHere(x, y)
+      case (x: DListNode, Def(y: DListNode)) => copyMetaInfoHere(x, y)
       case _ =>
     }
   }
@@ -306,7 +281,7 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
   class BlockVisitor(block: Block[_]) {
     def visitAll(inputSym: Exp[Any]): List[Stm] = {
       def getInputs(x: Exp[Any]) = x match {
-        case x: Sym[Any] =>
+        case x: Sym[_] =>
           findDefinition(x) match {
             case Some(x) => syms(infix_rhs(x))
             case None => Nil
@@ -442,7 +417,10 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
 
   override def remap[A](m: Manifest[A]): String = {
     val remappings = typeHandler.remappings.filter(!_._2.startsWith("tuple2s"))
-    var out = m.toString
+    var out = super.remap[A](m)
+    if (out.startsWith("ch.epfl.distributed.DList")) {
+      out = out.substring("ch.epfl.distributed.".length)
+    }
     remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
 
     // hack for problem with constant tuples in nested tuples
@@ -512,10 +490,6 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
 
     typeHandler = new TypeHandler(y)
 
-    val analyzer = newAnalyzer(y)
-    //    println(analyzer.nodes)
-    //    analyzer.makeFieldAnalysis
-    //    println(analyzer.exportToGraph)
     val sA = remap(mA)
     val sB = remap(mB)
 
@@ -733,15 +707,6 @@ trait TypeFactory extends ScalaGenDList {
         } catch {
           case e => emitValDef(sym, "Exception " + e + " when accessing " + fields + " of " + name)
         }
-      }
-      case IR.ObjectCreation(name, fields) if (name.startsWith("tuple2s")) => {
-        emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
-      }
-      case IR.ObjectCreation(name, fields) => {
-        val typeInfo = typeHandler.typeInfos2(name)
-        val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)
-        val typeName = makeTypeFor(name, fieldsList.map(_._1))
-        emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
       }
 
       case _ => super.emitNode(sym, rhs)

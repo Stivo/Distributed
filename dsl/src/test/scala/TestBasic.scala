@@ -58,6 +58,18 @@ trait DListsProg extends DListProgram with ComplexBase {
     unit(())
   }
 
+  def testWhile(x: Rep[Unit]) = {
+    val nums = DList(getArgs(0)).map(_.toInt)
+    var x = 0
+    var quad = nums
+    while (x < 5) {
+      quad = quad.map(x => x+unit(2))
+      x = x+ 1
+    }
+    quad.save(getArgs(1))
+    unit(())
+  }
+  
   /*
   def simple2(x: Rep[Unit]) = {
     val words1 = DList(getArgs(0))
@@ -124,10 +136,8 @@ class TestDLists2 extends Suite with CodeGenerator {
 
       val dsl = new DListsProg with DListProgramExp with ComplexStructExp
 
-      val codegen = new BaseCodeGenerator with ScoobiGenDList { val IR: dsl.type = dsl }
-      codegen.withStream(pw) {
-        codegen.emitSource(dsl.testJoin, "g", pw)
-      }
+      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
+      codegen.emitSource(dsl.testJoin, "g", pw)
       writeToProject(pw, "scoobi", "ScoobiGenerated")
       //      println(getContent(pw))
       release(pw)
