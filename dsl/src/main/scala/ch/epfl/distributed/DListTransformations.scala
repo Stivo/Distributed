@@ -167,39 +167,9 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
         val newLamAtom = IR.toAtom2(newLam)(target.m, FakeSourceContext())
       }
       val lc = new LambdaConstructor(target)(wt.IR.mtype(target.mA), wt.IR.mtype(target.mB))
-      //        println("Registering "+targetSym+" -> "+newResult)
-      //        wt.register(targetSym)(newResult)
       wt.register(targetLambda)(lc.newLamAtom)
     }
   }
-
-  //  class NarrowerInsertionTransformer() {
-  //    def run[T: Manifest](y: Block[T]) = {
-  //      wt = new WorklistTransformer() { val IR: DListTransformations.this.IR.type = DListTransformations.this.IR }
-  //      
-  //      var a = newAnalyzer(y)
-  //      a.narrowBefore.foreach(x => println(" this is one "+x))
-  //      
-  //      val gbks = a.narrowBefore.flatMap { case g @ DListGroupByKey(x) => Some(g); case _ => None }
-  //      if (gbks.isEmpty) {
-  //        y
-  //      } else {
-  //        for (gbk <- gbks) {
-  //          val stm = IR.findDefinition(gbk).get
-  //          class GroupByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]]) {
-  //            val mapNew = IR.dlist_map(wt(in), { x: IR.Rep[(K, V)] => x })
-  //            IR.findDefinition(mapNew.asInstanceOf[Sym[_]]).get.defs
-  //              .head.asInstanceOf[DListNode].metaInfos("narrower") = true
-  //            val gbkNew = IR.dlist_groupByKey(mapNew)
-  //            wt.register(stm.syms.head)(gbkNew)
-  //          }
-  //          new GroupByKeyTransformer(gbk.dlist)(gbk.mKey, gbk.mValue)
-  //          ()
-  //        }
-  //        wt.run(y)
-  //      }
-  //    }
-  //  }
 
   /*
    * insert identity mapper before a save

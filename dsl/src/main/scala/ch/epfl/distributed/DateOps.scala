@@ -56,9 +56,9 @@ trait DateOpsExp extends DateOps with BaseExp {
   }
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
-    case DateComparison(l, r, c) => dateComparison(f(l), f(r), c)
-    case DateObjectApply(s) => dateObjectApply(f(s))
-    case DateAdd(d, y, m, days) => dateAdd(f(d), f(y), f(m), f(days))
+    case DateComparison(l, r, c) => DateComparison(f(l), f(r), c)
+    case DateObjectApply(s) => DateObjectApply(f(s))
+    case DateAdd(d, y, m, days) => DateAdd(f(d), f(y), f(m), f(days))
     case _ => super.mirrorDef(e, f)
   }).asInstanceOf[Def[A]]
 }

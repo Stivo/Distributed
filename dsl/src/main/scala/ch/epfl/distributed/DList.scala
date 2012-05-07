@@ -141,11 +141,12 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def getTypes = (makeDListManifest[A], makeDListManifest[B])
   }
 
-  case class DListFilter[A: Manifest](in: Exp[DList[A]], func: Exp[A] => Exp[Boolean])
+  case class DListFilter[A: Manifest](in: Exp[DList[A]], func: Exp[A => Boolean])
       extends Def[DList[A]] with PreservingTypeComputation[DList[A]] with ClosureNode[A, Boolean] {
     val mA = manifest[A]
     def getClosureTypes = (mA, Manifest.Boolean)
     def getType = makeDListManifest[A]
+    override def closure = func
   }
 
   case class DListFlatMap[A: Manifest, B: Manifest](in: Exp[DList[A]], func: Exp[A] => Exp[Iterable[B]])
@@ -206,7 +207,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   override def dlist_new[A: Manifest](file: Exp[String]) = NewDList[A](file)
   override def dlist_map[A: Manifest, B: Manifest](dlist: Exp[DList[A]], f: Exp[A] => Exp[B]) = DListMap[A, B](dlist, doLambda(f))
   override def dlist_flatMap[A: Manifest, B: Manifest](dlist: Rep[DList[A]], f: Rep[A] => Rep[Iterable[B]]) = DListFlatMap(dlist, f)
-  override def dlist_filter[A: Manifest](dlist: Rep[DList[A]], f: Exp[A] => Exp[Boolean]) = DListFilter(dlist, f)
+  override def dlist_filter[A: Manifest](dlist: Rep[DList[A]], f: Exp[A] => Exp[Boolean]) = DListFilter(dlist, doLambda(f))
   override def dlist_save[A: Manifest](dlist: Exp[DList[A]], file: Exp[String]) = {
     val save = new DListSave[A](dlist, file)
     reflectEffect(save)
@@ -230,6 +231,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       case GetArgs() => GetArgs()
       case vm @ NewDList(path) => NewDList(f(path))(vm.mA)
       case vm @ DListMap(dlist, func) => DListMap(f(dlist), f(func))(vm.mA, vm.mB)
+      case vm @ DListFilter(dlist, func) => DListFilter(f(dlist), f(func))(vm.mA)
       case vs @ DListSave(dlist, path) => DListSave(f(dlist), f(path))(vs.mA)
       case v @ DListJoin(left, right) => DListJoin(f(left), f(right))(v.mK, v.mV1, v.mV2)
       case _ => super.mirrorDef(e, f)
@@ -386,37 +388,52 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
     }.toMap
 
     def getTypeAt(path: String, mIn: Manifest[_]): PartInfo[_] = {
+      //      println()
+      //      println("#### "+path+" in "+mIn)
       val pathParts = path.split("\\.").drop(1).toList
       val m = mIn.asInstanceOf[Manifest[Any]]
       var typeNow: Any = m
-      //      println("===> Asking for type "+path+" of "+mIn)
-      pathParts match {
-        case Nil =>
-        case x :: _ if remappings.contains(m) => typeNow = typeInfos2(remappings(m)).getField(x).get
-        case "_1" :: _ => typeNow = m.typeArguments(0)
-        case "_2" :: _ => typeNow = m.typeArguments(1)
-        case _ => throw new RuntimeException("did not find type for " + path + " in " + m)
+      var restPath = pathParts
+      val step1 = mIn match {
+        // if m is a tuple:
+        case x: Manifest[(_, _)] if (x.toString.startsWith("scala.Tuple2")) =>
+          pathParts match {
+            case Nil =>
+              val f1 = new FieldInfo("_1", cleanUpType(x.typeArguments(0)), 0)(x.typeArguments(0))
+              val f2 = new FieldInfo("_2", cleanUpType(x.typeArguments(1)), 1)(x.typeArguments(1))
+              new TypeInfo("tuple2s", f1 :: f2 :: Nil)(x)
+            case "_1" :: _ => {
+              restPath = restPath.drop(1)
+              new FieldInfo("_1", cleanUpType(x.typeArguments(0)), 0)(x.typeArguments(0))
+            }
+            case "_2" :: _ => {
+              restPath = restPath.drop(1)
+              new FieldInfo("_2", cleanUpType(x.typeArguments(1)), 1)(x.typeArguments(1))
+            }
+          }
+        // if m is a normal type: just look up the type for this manifest
+        case x => typeInfos2(cleanUpType(x))
       }
-      val out: PartInfo[_] = typeNow match {
-        case x: TypeInfo[_] => x
-        case x: Manifest[_] if remappings.contains(m) => typeInfos2(remappings(m))
-        case x: FieldInfo[_] => x
-        case x: Manifest[(_, _)] => {
-          val f1 = new FieldInfo("_1", cleanUpType(x.typeArguments(0)), 0)(x.typeArguments(0))
-          val f2 = new FieldInfo("_2", cleanUpType(x.typeArguments(1)), 1)(x.typeArguments(1))
-          new TypeInfo("tuple2s", f1 :: f2 :: Nil)
+
+      //      println("Step 1"+step1+", rest is "+restPath)
+      def getRest(restPath: List[String], x: PartInfo[_]): PartInfo[_] = {
+        //        println("Looking up rest of the path "+restPath+" for "+x)
+        restPath match {
+          case Nil => x
+          case field :: _ =>
+            val typeInfo = x match {
+              case f: FieldInfo[_] => typeInfos2(f.niceType)
+              case f: TypeInfo[_] => f
+            }
+            getRest(restPath.drop(1), typeInfo.getField(field).get)
         }
-        case _ => throw new RuntimeException("could not use result type " + typeNow + " for " + path + " in " + m)
       }
-      def restOfPath(path: List[String], partInfo: PartInfo[_]): PartInfo[_] = {
-        path match {
-          case Nil => partInfo
-          case x :: rest => restOfPath(rest, partInfo.asInstanceOf[FieldInfo[_]].getType.getField(x).get)
-        }
-      }
-      val ret = restOfPath(pathParts.drop(1), out)
-      //      println("Returning "+ret)
-      ret
+
+      val out = getRest(restPath, step1)
+      //      println("----- Returning "+out)
+      //      println()
+      out
+
     }
 
   }

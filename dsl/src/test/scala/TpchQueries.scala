@@ -1,4 +1,4 @@
-/*import java.io.PrintWriter
+import java.io.PrintWriter
 import java.io.StringWriter
 import java.io.FileWriter
 import ch.epfl.distributed._
@@ -6,7 +6,7 @@ import org.scalatest._
 import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps, LiftNumeric }
 import scala.util.Random
 
-trait TpchQueriesApp extends DListImplOps with ApplicationOps with SparkDListOps {
+trait TpchQueriesApp extends DListProgram with ApplicationOps {
 
   def loadTest(x: Rep[Unit]) = {
     val read = DList(getArgs(0))
@@ -68,16 +68,18 @@ trait TpchQueriesApp extends DListImplOps with ApplicationOps with SparkDListOps
         val isHigh = prio.startsWith("1") || prio.startsWith("2");
         val count = if (isHigh) 1 else 0
         val part2: Rep[(Int, Int)] = (count, 1 - count)
-        (x._2._1.l_shipmode, part2)
+        (x._2._1.l_shipmode, count)
     }
     // aggregate and save
-    val reduced = joinedTupled.groupByKey.reduce((x, y) => (x._1 + y._1, x._2 + y._2))
-    reduced.map {
-      x =>
-        "shipmode " + x._1 + ": high " + x._2._1 + ", low " + x._2._2
-    }.save(getArgs(1))
+    joinedTupled.save(getArgs(1))
+    //    val reduced = joinedTupled.groupByKey.reduce((x, y) => (x._1 + y._1, x._2 + y._2))
+    //    reduced.map {
+    //      x =>
+    //        "shipmode " + x._1 + ": high " + x._2._1 + ", low " + x._2._2
+    //    }.save(getArgs(1))
   }
 
+  /*
   def tupleProblem(x: Rep[Unit]) = {
     val lineitems = DList(getArgs(0) + "/lineitem.tbl")
       .map(x => LineItem.parse(x, "\\|"))
@@ -85,6 +87,7 @@ trait TpchQueriesApp extends DListImplOps with ApplicationOps with SparkDListOps
     tupled
       .save(getArgs(3))
   }
+  */
 
 }
 
@@ -93,6 +96,7 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
   val appname = "TpchQueries"
   val unoptimizedAppname = appname + "_Orig"
 
+  /*
   def testSpark {
     try {
       println("-- begin")
@@ -121,26 +125,27 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
         println(e.getMessage)
     }
   }
-
+  */
   def testScoobi {
     try {
       println("-- begin")
 
-      val dsl = new TpchQueriesApp with DListImplOps with ApplicationOpsExp with SparkDListOpsExp
-
       var pw = setUpPrintWriter
-      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
+
+      val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp
+      val codegen = new BaseCodeGenerator with ScoobiGenDList { val IR: dsl.type = dsl }
+
       codegen.emitSource(dsl.query12, appname, pw)
       writeToProject(pw, "scoobi", appname)
       release(pw)
 
-      val typesDefined = codegen.types.keys
-      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
-      codegenUnoptimized.skipTypes ++= typesDefined
-      pw = setUpPrintWriter
-      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
-      writeToProject(pw, "scoobi", unoptimizedAppname)
-      release(pw)
+      //      val typesDefined = codegen.types.keys
+      //      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
+      //      codegenUnoptimized.skipTypes ++= typesDefined
+      //      pw = setUpPrintWriter
+      //      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
+      //      writeToProject(pw, "scoobi", unoptimizedAppname)
+      //      release(pw)
 
       println("-- end")
     } catch {
@@ -151,4 +156,3 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
   }
 
 }
-*/

@@ -212,34 +212,25 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
         case v @ DListMap(in, func) if !v.metaInfos.contains("narrowed")
           && !SimpleType.unapply(v.getClosureTypes._2).isDefined
           && hasObjectCreationInClosure(v) => {
-          /*
-          // backup TTPs, or create new transformer?
-          val transformer = new Transformer(state)
+
           // tag this map to recognize it after transformations
           val id = "id_" + Random.nextString(20)
           v.metaInfos(id) = true
           // create narrowing transformation for this map
-          val narrowMapTransformation = new MapNarrowTransformationNew(v, typeHandler)
-          transformer.transformations = List(narrowMapTransformation)
+          val narrowMapTransformation = new NarrowMapsTransformation(v, typeHandler)
+          val newBlock = narrowMapTransformation.run(block)
           // run transformation
-          if (!transformer.doOneTransformation) {
-            println("Transformation failed for " + node + " during field analysis")
-          }
-          val pullDeps = new PullDependenciesTransformation()
-          transformer.doTransformation(pullDeps, 500)
-          transformer.doTransformation(new FieldOnStructReadTransformation, 500)
-          transformer.doTransformation(pullDeps, 500)
+
+          // TODO is it needed? transformer.doTransformation(new FieldOnStructReadTransformation, 500)
           // analyze field reads of the new function
-          val a2 = newAnalyzer(transformer.currentState, typeHandler)
-          val candidates = transformer.currentState.ttps.flatMap {
-            case TTPDef(vm @ DListMap(_, _)) if (vm.metaInfos.contains(id)) => Some(vm)
+          val a2 = newFieldAnalyzer(newBlock, typeHandler)
+          val candidates = a2.nodes.flatMap {
+            case vm @ DListMap(_, _) if (vm.metaInfos.contains(id)) => Some(vm)
             case _ => None
           }
           // remove the tag, not needed afterwards
           v.metaInfos.remove(id)
           a2.analyzeFunction(candidates.head)
-          */
-          analyzeFunction(v)
         }
 
         case v @ DListMap(in, func) => analyzeFunction(v)
@@ -253,7 +244,7 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
             case x => Nil -> null
           }
           reads.foreach { case (targets, read) => targets.foreach { _.successorFieldReads += read } }
-          visitAll("input._1", v.mIn1)
+          visitAll("input", v.mIn1).filter(_.path.startsWith("input._1"))
 
         case v @ DListReduce(in, func) =>
           // analyze function

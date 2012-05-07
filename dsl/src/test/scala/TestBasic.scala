@@ -120,10 +120,10 @@ class TestDLists2 extends Suite with CodeGenerator {
   def testScoobi {
     try {
       println("-- begin")
+      val pw = setUpPrintWriter
 
       val dsl = new DListsProg with DListProgramExp with ComplexStructExp
 
-      val pw = setUpPrintWriter
       val codegen = new BaseCodeGenerator with ScoobiGenDList { val IR: dsl.type = dsl }
       codegen.withStream(pw) {
         codegen.emitSource(dsl.testJoin, "g", pw)

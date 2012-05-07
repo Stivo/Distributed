@@ -11,7 +11,7 @@ import scala.virtualization.lms.util.OverloadHack
 
 trait StringAndNumberOps extends PrimitiveOps with StringOps with OverloadHack {
   def infix_toLong(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Long](s1)
-  //  def infix_toDouble(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Double](s1)
+  def infix_toDouble(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Double](s1)
   def infix_toInt(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Int](s1)
   def infix_toByte(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Byte](s1)
   def infix_toFloat(s1: Rep[String])(implicit ctx: SourceContext) = string_toNumber[Float](s1)
@@ -26,10 +26,10 @@ trait StringAndNumberOps extends PrimitiveOps with StringOps with OverloadHack {
   def string_toNumber[A <: AnyVal: Manifest](s: Rep[String])(implicit ctx: SourceContext): Rep[A]
   def string_toChar(s: Rep[String])(implicit ctx: SourceContext): Rep[Char]
   //  def long_modulo( l : Rep[Long], mod : Rep[Long])(implicit ctx: SourceContext) : Rep[Long]
-  implicit def repStringToStringOps(s: Rep[String]) = new stringOpsCls(s)
-  class stringOpsCls(s: Rep[String]) {
-    def +(other: Rep[Any]) = string_plus(s, other)
-  }
+  //  implicit def repStringToStringOps(s: Rep[String]) = new stringOpsCls(s)
+  //  class stringOpsCls(s: Rep[String]) {
+  //    def +(other: Rep[Any]) = string_plus(s, other)
+  //  }
 
 }
 
@@ -50,8 +50,8 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
   def string_toChar(s: Rep[String])(implicit ctx: SourceContext) = StringToChar(s)
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
-    case n @ StringToNumber(s) => string_toNumber(f(s))(n.m, null)
-    case n @ StringToChar(s) => string_toChar(f(s))
+    case n @ StringToNumber(s) => StringToNumber(f(s))(n.m)
+    case n @ StringToChar(s) => StringToChar(f(s))
     case _ => super.mirrorDef(e, f)
   }).asInstanceOf[Def[A]]
 

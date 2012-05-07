@@ -122,8 +122,6 @@ trait ScoobiGenDList extends ScalaGenBase
     // emit for each case class: implicit val wireFormat2 = mkCaseWireFormatGen(N2_0_1.apply _, N2_0_1.unapply _)
   }
 
-  override val verbosity = 3
-  
   def narrowNarrowers[A: Manifest](b: Block[A]) = {
     var curBlock = b
     //    emitBlock(curBlock)
@@ -215,43 +213,12 @@ object %s {
     val nit = new NarrowerInsertionTransformation()
     y = nit.run(y)
     y = narrowNarrowers(y)
-    /*
-    val wt = new WorklistTransformer() {val IR : ScoobiGenDList.this.IR.type = ScoobiGenDList.this.IR}
-    var a = newAnalyzer(y)
-    a.narrowBefore.foreach(x => println(" this is one "+x))
-    val gbks = a.narrowBefore.flatMap{ case g@DListGroupByKey(x) => Some(g); case _ => None}
-    for (gbk <- gbks) {
-    	val stm = IR.findDefinition(gbk).get
-    	class GroupByKeyTransformer[K: Manifest,V: Manifest](in : Exp[DList[(K,V)]]) {
-    	val mapNew = IR.dlist_map(wt(in), { x: IR.Rep[(K,V)] => x })
-    	IR.findDefinition(mapNew.asInstanceOf[Sym[_]]).get.defs
-    		.head.asInstanceOf[DListNode].metaInfos("narrower") = true
-    	val gbkNew = IR.dlist_groupByKey(mapNew)
-    	wt.register(stm.syms.head)(gbkNew)
-    	}
-    	new GroupByKeyTransformer(gbk.dlist)(gbk.mKey, gbk.mValue)
-    	()
-    }
-    y = wt.run(y)
-    */
+
     var a = newFieldAnalyzer(y)
     a.makeFieldAnalysis
     val dot = new FileWriter("test.dot")
     dot.write(a.exportToGraph)
     dot.close()
-    //    val firstSave = a.saves.head
-    //    println(firstSave)
-    //    println(availableDefs)
-    //    val stm = IR.findDefinition(firstSave).get
-    //    val sym = stm.syms.head
-
-    //    def cast(a : Any) = a.asInstanceOf[wt.IR.Exp[_]]
-    //    
-    //    wt.register(sym)(IR.toAtom2(new DListSave(
-    //        IR.dlist_map(wt(firstSave.dlist), { x: IR.Rep[_] => x })
-    //        , wt(firstSave.path))))
-
-    //    y = wt.run(y)
 
     withStream(stream) {
       emitBlock(y)

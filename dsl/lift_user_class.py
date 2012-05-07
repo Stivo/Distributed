@@ -76,11 +76,11 @@ import java.io.PrintWriter
 import scala.collection.immutable.ListMap
 import scala.virtualization.lms.common.ScalaGenFat
 import scala.virtualization.lms.util.OverloadHack
-import scala.virtualization.lms.common.{ Base, StructExp, EffectExp, BaseFatExp, Variables, StringOps, ArrayOps }
+import scala.virtualization.lms.common.{ Base, StructExp, EffectExp, BaseFatExp, Variables, StringOps, ArrayOps, LiftPrimitives }
 import ch.epfl.distributed.{ StringAndNumberOps, DateOps}
 import ch.epfl.distributed.datastruct.Date
 
-trait ParserOps extends StringOps with ArrayOps with StringAndNumberOps with DateOps
+trait ParserOps extends StringOps with ArrayOps with StringAndNumberOps with DateOps with LiftPrimitives
 """
 
     out.append(l)
@@ -189,7 +189,8 @@ def fromArray(input: Rep[Array[String]]) %s = {
     #for f in fields:
     # l = l + " case class " + clazz + f.capitalize() + "(__x: Exp[" + clazz + "]) extends Def[" + types[f] + "]\n"
     #l = l + "\n"
-    l = l + " def " + lclazz + "_obj_new(" + expify(fields, types) + ") = struct["+clazz+"](\"" + clazz + "\"::Nil," + mapify(fields) + ")\n"
+    newStruct = """struct[%s](ClassTag[%s]("%s"), """ % (clazz, clazz, clazz)
+    l = l + " def " + lclazz + "_obj_new(" + expify(fields, types) + ") = "+newStruct + mapify(fields) + ")\n"
     for f in fields:
         l = l + " def " + lclazz + "_" + f + "(__x: Rep[" + clazz + "]) = field["+ types[f] +"](__x, \"" + f + "\")\n"
     #emit Mirror
