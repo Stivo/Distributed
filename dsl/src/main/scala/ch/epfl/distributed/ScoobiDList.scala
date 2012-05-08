@@ -109,6 +109,8 @@ trait ScoobiGenDList extends ScalaGenBase
     y
   }
 
+  val collectionName = "DList"
+
   override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, streamIn: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
 
     val capture = new StringWriter

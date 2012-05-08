@@ -14,10 +14,14 @@ trait SparkProgram extends DListOpsExp with DListImplOps with SparkDListOpsExp
 trait SparkDListOps extends DListOps {
   implicit def repVecToSparkVecOps[A: Manifest](dlist: Rep[DList[A]]) = new dlistSparkOpsCls(dlist)
   class dlistSparkOpsCls[A: Manifest](dlist: Rep[DList[A]]) {
-    def cache = dlist_cache(dlist)
+    def cache() = dlist_cache(dlist)
+    def collect() = dlist_collect(dlist)
+    def takeSample(withReplacement: Rep[Boolean], num: Rep[Int], seed: Rep[Int]) = dlist_takeSample(dlist, withReplacement, num, seed)
   }
 
   def dlist_cache[A: Manifest](dlist: Rep[DList[A]]): Rep[DList[A]]
+  def dlist_collect[A: Manifest](dlist: Rep[DList[A]]): Rep[Iterable[A]]
+  def dlist_takeSample[A: Manifest](dlist: Rep[DList[A]], withReplacement: Rep[Boolean], num: Rep[Int], seed: Rep[Int]): Rep[Iterable[A]]
 }
 
 trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
@@ -35,12 +39,27 @@ trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
     def getType = manifest[DList[A]]
   }
 
+  case class DListCollect[A: Manifest](in: Exp[DList[A]]) extends Def[Iterable[A]] with DListNode {
+    val mA = manifest[A]
+    def getType = manifest[DList[A]]
+  }
+
+  case class DListTakeSample[A: Manifest](dlist: Exp[DList[A]], withReplacement: Exp[Boolean], num: Exp[Int], seed: Exp[Int]) extends Def[Iterable[A]] with DListNode {
+    val mA = manifest[A]
+  }
+
   override def dlist_cache[A: Manifest](in: Rep[DList[A]]) = DListCache[A](in)
+
+  override def dlist_collect[A: Manifest](dlist: Exp[DList[A]]) = DListCollect[A](dlist)
+
+  override def dlist_takeSample[A: Manifest](dlist: Exp[DList[A]], withReplacement: Exp[Boolean], num: Exp[Int], seed: Exp[Int]) = DListTakeSample(dlist, withReplacement, num, seed)
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
     val out = (e match {
       case v @ DListReduceByKey(dlist, func) => DListReduceByKey(f(dlist), f(func))(v.mKey, v.mValue)
       case v @ DListCache(in) => DListCache(f(in))(v.mA)
+      case v @ DListCollect(in) => DListCollect(f(in))(v.mA)
+      case v @ DListTakeSample(in, r, n, s) => DListTakeSample(f(in), f(r), f(n), f(s))(v.mA)
       case _ => super.mirrorDef(e, f)
     })
     copyMetaInfo(e, out)
@@ -91,6 +110,8 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
     DListNode,
     DListReduceByKey,
     DListCache,
+    DListCollect,
+    DListTakeSample,
     GetArgs
   }
   import IR.{ TTP, TP, SubstTransformer, Field }
@@ -145,6 +166,10 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
         (part1 ++ part2 ++ part3).toSet
       }
 
+      case v @ DListCollect(in) => visitAll("input", v.mA)
+    		  
+      case v @ DListTakeSample(in,_,_,_) => visitAll("input", v.mA)
+
       case v @ DListCache(in) => node.successorFieldReads.toSet
 
       case _ => super.computeFieldReads(node)
@@ -168,8 +193,10 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     DListGroupByKey,
     DListJoin,
     DListReduce,
+    DListCollect,
     ComputationNode,
     DListNode,
+    DListTakeSample,
     GetArgs
   }
   import IR.{ TTP, TP, SubstTransformer, Field }
@@ -193,6 +220,8 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
       case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(dlist), handleClosure(red.closure)))
       case red @ DListReduceByKey(dlist, f) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(dlist), handleClosure(red.closure)))
       case v @ DListCache(dlist) => emitValDef(sym, "%s.cache()".format(quote(dlist)))
+      case v @ DListCollect(dlist) => emitValDef(sym, "%s.collect()".format(quote(dlist)))
+      case v @ DListTakeSample(in, r, n, s) => emitValDef(sym, "%s.takeSample(%s, %s, %s)".format(quote(in), quote(r), quote(n), quote(s)))
       case GetArgs() => emitValDef(sym, "sparkInputArgs.drop(1); // First argument is for spark context")
       case _ => super.emitNode(sym, rhs)
     }
@@ -200,7 +229,7 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     out
   }
 
-  override val inlineClosures = true
+  override val inlineClosures = false
 
   var reduceByKey = true
 
@@ -216,8 +245,8 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     var y = block
     // merge groupByKey with reduce to reduceByKey
     if (reduceByKey) {
-	    val rbkt = new ReduceByKeyTransformation()
-	    y = rbkt.run(y)
+      val rbkt = new ReduceByKeyTransformation()
+      y = rbkt.run(y)
     }
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
@@ -225,6 +254,8 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     y
 
   }
+
+  val collectionName = "RDD"
 
   override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
 
@@ -277,7 +308,7 @@ object %s {
 
     stream.flush
 
-    writeGraphToFile(y, "test.dot", true)
+    //writeGraphToFile(y, "test.dot", true)
 
     Nil
   }

@@ -363,11 +363,13 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
 
   var typeHandler: TypeHandler = null
 
+  def collectionName: String
+
   override def remap[A](m: Manifest[A]): String = {
     val remappings = typeHandler.remappings.filter(!_._2.startsWith("tuple2s"))
     var out = super.remap[A](m)
     if (out.startsWith("ch.epfl.distributed.DList")) {
-      out = out.substring("ch.epfl.distributed.".length)
+      out = out.replaceAll("ch.epfl.distributed.DList", collectionName)
     }
     remappings.foreach(x => out = out.replaceAll(Pattern.quote(x._1.toString), x._2))
 
