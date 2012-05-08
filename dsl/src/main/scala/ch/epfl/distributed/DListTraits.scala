@@ -26,11 +26,11 @@ trait DListProgramExp extends DListOpsExp
   with FatExpressions with LoopsFatExp with IfThenElseFatExp
 
 trait DListBaseCodeGenPkg extends ScalaCodeGenPkg
-    with SimplifyTransform with GenericFatCodegen with LoopFusionOpt
-    with FatScheduling with BlockTraversal with ScalaGenIfThenElseFat
-    //with LivenessOpt
-    with StringAndNumberOpsCodeGen with StringPatternOpsCodeGen
-    with MoreIterableOpsCodeGen with ScalaGenDateOps { val IR: DListOpsExp }
+  with SimplifyTransform with GenericFatCodegen with LoopFusionOpt
+  with FatScheduling with BlockTraversal with ScalaGenIfThenElseFat
+  //with LivenessOpt
+  with StringAndNumberOpsCodeGen with StringPatternOpsCodeGen
+  with MoreIterableOpsCodeGen with ScalaGenDateOps { val IR: DListOpsExp }
 
 trait PrinterGenerator extends DListBaseCodeGenPkg
     with ScalaGenDList //	with ScalaGenArrayOps with ScalaGenPrimitiveOps with ScalaGenStringOps

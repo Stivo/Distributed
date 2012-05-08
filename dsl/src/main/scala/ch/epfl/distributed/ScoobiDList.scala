@@ -52,7 +52,7 @@ trait ScoobiGenDList extends ScalaGenBase
       }
       case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
       case v @ DListJoin(left, right) => emitValDef(sym, "join(%s,%s)".format(quote(left), quote(right)))
-      //      case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.combine(%s)".format(quote(dlist), handleClosure(red.closure)))
+      case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.combine(%s)".format(quote(dlist), handleClosure(f)))
       case GetArgs() => emitValDef(sym, "scoobiInputArgs")
       case _ => super.emitNode(sym, rhs)
     }
@@ -70,46 +70,26 @@ trait ScoobiGenDList extends ScalaGenBase
     mapMerge = false
   }
 
-  /*
-  override def transformTree(state: TransformationState): TransformationState = {
-    val transformer = new Transformer(state)
-    var pullDeps = newPullDeps
-    transformer.doTransformation(pullDeps, 500)
-
-    // perform scoobi optimizations
-    if (mapMerge) {
-      //      transformer.currentState.printAll("Before map merge")
-      transformer.doTransformation(new MapMergeTransformation, 500)
-      transformer.doTransformation(pullDeps, 500)
-      //      transformer.currentState.printAll("After map merge")
-    }
-    mapNarrowingAndInsert(transformer)
-    transformer.doTransformation(pullDeps, 500)
-    transformer.doTransformation(new TypeTransformations(typeHandler), 500)
-    transformer.doTransformation(pullDeps, 500)
-
-    writeGraphToFile(transformer, "test.dot", true)
-
-    transformer.currentState
-  }
-  */
   def mkWireFormats() = {
     val out = new StringBuilder
     def findName(s: String) = s.takeWhile('_' != _)
     val groupedNames = types.keySet.groupBy(findName).map { x => (x._1, (x._2 - (x._1)).toList.sorted) }.toMap
     var index = -1
     val caseClassTypes = groupedNames.values.flatMap(x => x).toList.sorted
+    // generate the case class wire formats
     out ++= caseClassTypes.map { typ =>
       index += 1
       " implicit val wireFormat_%s = mkCaseWireFormatGen(%s.apply _, %s.unapply _) "
         .format(index, typ, typ)
     }.mkString("\n")
     out += '\n'
+    // generate the abstract wire formats (link between an interface and its implementations)
     out ++= groupedNames.map { in =>
       index += 1;
       " implicit val wireFormat_%s = mkAbstractWireFormat%s[%s, %s] "
         .format(index, if (in._2.size == 1) "1" else "", in._1, in._2.mkString(", "))
     }.mkString("\n")
+    // generate groupings (if a type is used as a key, this is needed)
     out ++= "\n//groupings\n"
     out ++= caseClassTypes.map { typ =>
       index += 1
@@ -118,7 +98,6 @@ trait ScoobiGenDList extends ScalaGenBase
     }.mkString("\n")
     out += '\n'
     out.toString
-    // emit for each case class: implicit val wireFormat2 = mkCaseWireFormatGen(N2_0_1.apply _, N2_0_1.unapply _)
   }
 
   def narrowNarrowers[A: Manifest](b: Block[A]) = {
@@ -156,8 +135,18 @@ trait ScoobiGenDList extends ScalaGenBase
     curBlock
   }
 
+  def transformTree[B: Manifest](block: Block[B]) = {
+    var y = block
+    // inserting narrower maps
+    val nit = new NarrowerInsertionTransformation()
+    y = nit.run(y)
+    // perform the narrowing
+    y = narrowNarrowers(y)
+    // TODO lower to loops
+    y
+  }
+
   override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, streamIn: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
-    //    val func : Exp[A] => Exp[B] = {x => reifyEffects(f(x))}
 
     val capture = new StringWriter
     val stream = new PrintWriter(capture)
@@ -204,14 +193,7 @@ object %s {
     var y = reifyBlock(f(x))
     typeHandler = new TypeHandler(y)
 
-    val sA = mA.toString
-    val sB = mB.toString
-
-    //    val staticData = getFreeDataBlock(y)
-
-    val nit = new NarrowerInsertionTransformation()
-    y = nit.run(y)
-    y = narrowNarrowers(y)
+    y = transformTree(y)
 
     var a = newFieldAnalyzer(y)
     a.makeFieldAnalysis
@@ -234,7 +216,6 @@ object %s {
     stream.flush
     val out = capture.toString
     val newOut = out.replace("###wireFormats###", mkWireFormats)
-    //    staticData
     streamIn.print(newOut)
     Nil
   }

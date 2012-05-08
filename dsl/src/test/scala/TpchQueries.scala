@@ -68,15 +68,14 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
         val isHigh = prio.startsWith("1") || prio.startsWith("2");
         val count = if (isHigh) 1 else 0
         val part2: Rep[(Int, Int)] = (count, 1 - count)
-        (x._2._1.l_shipmode, count)
+        (x._2._1.l_shipmode, part2)
     }
     // aggregate and save
-    joinedTupled.save(getArgs(1))
-    //    val reduced = joinedTupled.groupByKey.reduce((x, y) => (x._1 + y._1, x._2 + y._2))
-    //    reduced.map {
-    //      x =>
-    //        "shipmode " + x._1 + ": high " + x._2._1 + ", low " + x._2._2
-    //    }.save(getArgs(1))
+    val reduced = joinedTupled.groupByKey.reduce((x, y) => (x._1 + y._1, x._2 + y._2))
+    reduced.map {
+      x =>
+        "shipmode " + x._1 + ": high " + x._2._1 + ", low " + x._2._2
+    }.save(getArgs(1))
   }
 
   /*
@@ -133,7 +132,7 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
       var pw = setUpPrintWriter
 
       val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp
-      val codegen = new BaseCodeGenerator with ScoobiGenDList { val IR: dsl.type = dsl }
+      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
 
       codegen.emitSource(dsl.query12, appname, pw)
       writeToProject(pw, "scoobi", appname)

@@ -63,13 +63,13 @@ trait DListsProg extends DListProgram with ComplexBase {
     var x = 0
     var quad = nums
     while (x < 5) {
-      quad = quad.map(x => x+unit(2))
-      x = x+ 1
+      quad = quad.map(x => x + unit(2))
+      x = x + 1
     }
     quad.save(getArgs(1))
     unit(())
   }
-  
+
   /*
   def simple2(x: Rep[Unit]) = {
     val words1 = DList(getArgs(0))

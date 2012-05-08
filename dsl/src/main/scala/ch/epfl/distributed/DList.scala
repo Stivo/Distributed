@@ -79,12 +79,13 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
 
   trait ClosureNode[A, B] extends DListNode {
     val in: Exp[DList[_]]
-    def closure: Exp[A => B] = null
+    def closure: Exp[A => B]
     def getClosureTypes: (Manifest[A], Manifest[B])
   }
 
   trait Closure2Node[A, B, C] extends DListNode {
     val in: Exp[DList[_]]
+    def closure: Exp[(A, B) => C]
     def getClosureTypes: ((Manifest[A], Manifest[B]), Manifest[C])
 
   }
@@ -111,24 +112,22 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
 
   def makeDListManifest[B: Manifest] = manifest[DList[B]]
 
-  case class DListMap[A: Manifest, B: Manifest](in: Exp[DList[A]], func: Exp[A => B])
+  case class DListMap[A: Manifest, B: Manifest](in: Exp[DList[A]], closure: Exp[A => B])
       extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, B] {
     val mA = manifest[A]
     val mB = manifest[B]
     def getClosureTypes = (mA, mB)
-    override def closure = func
     def getTypes = (makeDListManifest[A], makeDListManifest[B])
   }
 
-  case class DListFilter[A: Manifest](in: Exp[DList[A]], func: Exp[A => Boolean])
+  case class DListFilter[A: Manifest](in: Exp[DList[A]], closure: Exp[A => Boolean])
       extends Def[DList[A]] with PreservingTypeComputation[DList[A]] with ClosureNode[A, Boolean] {
     val mA = manifest[A]
     def getClosureTypes = (mA, Manifest.Boolean)
     def getType = makeDListManifest[A]
-    override def closure = func
   }
 
-  case class DListFlatMap[A: Manifest, B: Manifest](in: Exp[DList[A]], func: Exp[A] => Exp[Iterable[B]])
+  case class DListFlatMap[A: Manifest, B: Manifest](in: Exp[DList[A]], closure: Exp[A => Iterable[B]])
       extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, Iterable[B]] {
     val mA = manifest[A]
     val mB = manifest[B]
@@ -151,7 +150,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def getTypes = (manifest[DList[(K, V)]], manifest[DList[(K, Iterable[V])]])
   }
 
-  case class DListReduce[K: Manifest, V: Manifest](in: Exp[DList[(K, Iterable[V])]], func: (Exp[V], Exp[V]) => Exp[V])
+  case class DListReduce[K: Manifest, V: Manifest](in: Exp[DList[(K, Iterable[V])]], closure: Exp[(V, V) => V])
       extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
       with ComputationNodeTyped[DList[(K, Iterable[V])], DList[(K, V)]] {
     val mKey = manifest[K]
@@ -176,19 +175,17 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
 
   case class GetArgs() extends Def[Array[String]]
 
-  case class Narrowing(struct: DList[Rep[SimpleStruct[_]]], fields: List[String]) extends Def[DList[Rep[SimpleStruct[_]]]]
-
   override def get_args() = GetArgs()
   override def dlist_new[A: Manifest](file: Exp[String]) = NewDList[A](file)
   override def dlist_map[A: Manifest, B: Manifest](dlist: Exp[DList[A]], f: Exp[A] => Exp[B]) = DListMap[A, B](dlist, doLambda(f))
-  override def dlist_flatMap[A: Manifest, B: Manifest](dlist: Rep[DList[A]], f: Rep[A] => Rep[Iterable[B]]) = DListFlatMap(dlist, f)
+  override def dlist_flatMap[A: Manifest, B: Manifest](dlist: Rep[DList[A]], f: Rep[A] => Rep[Iterable[B]]) = DListFlatMap(dlist, doLambda(f))
   override def dlist_filter[A: Manifest](dlist: Rep[DList[A]], f: Exp[A] => Exp[Boolean]) = DListFilter(dlist, doLambda(f))
   override def dlist_save[A: Manifest](dlist: Exp[DList[A]], file: Exp[String]) = {
     val save = new DListSave[A](dlist, file)
     reflectEffect(save)
   }
   override def dlist_++[A: Manifest](dlist1: Rep[DList[A]], dlist2: Rep[DList[A]]) = DListFlatten(immutable.List(dlist1, dlist2))
-  override def dlist_reduce[K: Manifest, V: Manifest](dlist: Exp[DList[(K, Iterable[V])]], f: (Exp[V], Exp[V]) => Exp[V]) = DListReduce(dlist, f)
+  override def dlist_reduce[K: Manifest, V: Manifest](dlist: Exp[DList[(K, Iterable[V])]], f: (Exp[V], Exp[V]) => Exp[V]) = DListReduce(dlist, doLambda2(f))
   override def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]] = DListJoin(left, right)
   override def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]]) = DListGroupByKey(dlist)
 
@@ -204,11 +201,15 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
     var out = e match {
       case GetArgs() => GetArgs()
-      case vm @ NewDList(path) => NewDList(f(path))(vm.mA)
-      case vm @ DListMap(dlist, func) => DListMap(f(dlist), f(func))(vm.mA, vm.mB)
-      case vm @ DListFilter(dlist, func) => DListFilter(f(dlist), f(func))(vm.mA)
-      case vs @ DListSave(dlist, path) => DListSave(f(dlist), f(path))(vs.mA)
-      case v @ DListJoin(left, right) => DListJoin(f(left), f(right))(v.mK, v.mV1, v.mV2)
+      case d @ NewDList(path) => NewDList(f(path))(d.mA)
+      case d @ DListMap(dlist, func) => DListMap(f(dlist), f(func))(d.mA, d.mB)
+      case d @ DListFilter(dlist, func) => DListFilter(f(dlist), f(func))(d.mA)
+      case d @ DListFlatMap(dlist, func) => DListFlatMap(f(dlist), f(func))(d.mA, d.mB)
+      case d @ DListSave(dlist, path) => DListSave(f(dlist), f(path))(d.mA)
+      case d @ DListJoin(left, right) => DListJoin(f(left), f(right))(d.mK, d.mV1, d.mV2)
+      case d @ DListReduce(dlist, func) => DListReduce(f(dlist), f(func))(d.mKey, d.mValue)
+      case d @ DListFlatten(dlists) => DListFlatten(f(dlists))(d.mA)
+      case d @ DListGroupByKey(dlist) => DListGroupByKey(f(dlist))(d.mKey, d.mValue)
       case _ => super.mirrorDef(e, f)
     }
     copyMetaInfo(e, out)
@@ -441,8 +442,6 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
     out
   }
 
-  def emitProgram[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)]
-
 }
 
 trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransformations with DListAnalysis {
@@ -471,19 +470,19 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     case nv @ NewDList(filename) => emitValDef(sym, "New dlist created from %s with type %s".format(filename, nv.mA))
     case vs @ DListSave(dlist, filename) => stream.println("Saving dlist %s (of type %s) to %s".format(dlist, remap(vs.mA), filename))
     case vm @ DListMap(dlist, func) => emitValDef(sym, "mapping dlist %s with function %s, type %s => %s".format(dlist, quote(func), vm.mA, vm.mB))
-    //    case vf @ DListFilter(dlist, function) => emitValDef(sym, "filtering dlist %s with function %s".format(dlist, function))
-    //    case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "flat mapping dlist %s with function %s".format(dlist, function))
-    //    case vm @ DListFlatten(v1) => emitValDef(sym, "flattening dlists %s".format(v1))
-    //    case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "grouping dlist by key")
-    //    case gbk @ DListJoin(left, right) => emitValDef(sym, "Joining %s with %s".format(left, right))
-    //    case red @ DListReduce(dlist, f) => emitValDef(sym, "reducing dlist")
+    case vf @ DListFilter(dlist, function) => emitValDef(sym, "filtering dlist %s with function %s".format(dlist, function))
+    case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "flat mapping dlist %s with function %s".format(dlist, function))
+    case vm @ DListFlatten(v1) => emitValDef(sym, "flattening dlists %s".format(v1))
+    case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "grouping dlist by key")
+    case gbk @ DListJoin(left, right) => emitValDef(sym, "Joining %s with %s".format(left, right))
+    case red @ DListReduce(dlist, f) => emitValDef(sym, "reducing dlist")
     case GetArgs() => emitValDef(sym, "getting the arguments")
     case IR.Lambda(_, _, _) if inlineClosures =>
     case IR.Lambda2(_, _, _, _) if inlineClosures =>
     case _ => super.emitNode(sym, rhs)
   }
 
-  def emitProgram[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
+  override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
 
     val x = fresh[A]
     val y = reifyBlock(f(x))
@@ -505,26 +504,13 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
       emitBlock(y)
       stream.println(quote(getBlockResult(y)))
 
-      //      stream.println("}")
-      //    
-      //      stream.println("}")
-      //      stream.println("/*****************************************\n"+
-      //                     "  End of Generated Code                  \n"+
-      //                     "*******************************************/")
+      stream.println("/*****************************************\n" +
+        "  End of Generated Code                  \n" +
+        "*******************************************/")
     }
 
     Nil
   }
-
-  /*
-  override def fattenAll(e: List[TP[Any]]): List[TTP] = {
-    val out = super.fattenAll(e)
-    if (!typeHandler.isInstanceOf[TypeHandler] || hasDListNodes(out)) {
-      typeHandler = new TypeHandler(out)
-    }
-    out
-  }
-  */
 
   def writeClosure(closure: Exp[_]) = {
     val sw = new StringWriter()
@@ -598,84 +584,17 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
 
   }
 
-  def insertNarrowingMaps(transformer: Transformer) {
-    var oneFound = false
-    var pullDeps = newPullDeps
-    if (insertNarrowingMaps) {
-      //inserting narrowing dlistmaps where analyzer says it should 
-      do {
-        oneFound = false
-        val analyzer = newAnalyzer(transformer.currentState, typeHandler)
-        analyzer.makeFieldAnalysis
-        for (x <- analyzer.narrowBefore) {
-          if (!oneFound) {
-            pullDeps = newPullDeps
-            val increase = x.metaInfos.getOrElse("insertedNarrowers", 0).asInstanceOf[Int]
-
-            analyzer.getInputs(x).foreach { input =>
-              x.metaInfos("insertedNarrowers") = 1 + increase
-              val inserter = new InsertMapNarrowTransformation(input, x.directFieldReads.toList)
-              transformer.doTransformation(inserter, 1)
-              inserter.lastOut match {
-                case None =>
-                case Some(narrowThis) =>
-                  transformer.doTransformation(pullDeps, 500)
-                  val analyzer2 = newAnalyzer(transformer.currentState, typeHandler)
-                  analyzer2.makeFieldAnalysis
-                  transformer.doTransformation(new MapNarrowTransformationNew(narrowThis, typeHandler), 2)
-                  transformer.doTransformation(pullDeps, 500)
-                  oneFound = true
-              }
-            }
-          }
-        }
-      } while (oneFound)
-    }
-
-  }
-
-  def transformTree(state: TransformationState): TransformationState = state
-
-  
-  override def focusExactScopeFat[A](currentScope0In: List[TTP])(result0B: List[Block[Any]])(body: List[TTP] => A): A = {
-    // only do our optimizations in top scope
-    if (hasDListNodes(currentScope0In)) {
-      // set up state
-      var result0 = result0B.map(getBlockResultFull)
-      var state = new TransformationState(currentScope0In, result0)
-
-      // transform the tree (backend specific)
-      state = transformTree(state)
-
-      // return optimized tree to 
-      var currentScope0 = state.ttps
-      result0 = state.results
-      // hack: should maybe not add all nodes here, but seems to work, as we are in the top scope
-      innerScope ++= IR.globalDefs.filter(!innerScope.contains(_))
-      currentScope0 = getFatSchedule(currentScope0)(result0)
-      super.focusExactScopeFat(currentScope0)(result0.map(IR.Block(_)))(body)
-    } else {
-      super.focusExactScopeFat(currentScope0In)(result0B)(body)
-    }
-  }
-
-  def mapNarrowingAndInsert(transformer: Transformer) {
-    mapNarrowing(transformer)
-    insertNarrowingMaps(transformer)
-  }
-
-  
-  
-  def writeGraphToFile(transformer: Transformer, name: String, comments: Boolean = true) {
-    val out = new FileOutputStream(name)
-    val analyzer = newAnalyzer(transformer.currentState, typeHandler)
-    analyzer.makeFieldAnalysis
-    analyzer.addComments = comments
-    out.write(analyzer.exportToGraph.getBytes)
-    out.close
-
-  }
 */
+
+  //  def writeGraphToFile(block: Block[_], name: String, comments: Boolean = true) {
+  //    val out = new FileOutputStream(name)
+  //    val analyzer = newFieldAnalyzer(block)
+  //    analyzer.makeFieldAnalysis
+  //    analyzer.addComments = comments
+  //    out.write(analyzer.exportToGraph.getBytes)
+  //    out.close
+  //  }
+
 }
 
 trait TypeFactory extends ScalaGenDList {

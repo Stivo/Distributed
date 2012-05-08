@@ -103,7 +103,7 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
 
     def getNodesInClosure(x: DListNode) = x match {
       case x: ClosureNode[_, _] => getNodesInLambda(x.closure)
-      //case x: Closure2Node[_, _, _] => getNodesInLambda(x.closure)
+      case x: Closure2Node[_, _, _] => getNodesInLambda(x.closure)
       case _ => Nil
     }
 
@@ -218,8 +218,8 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
           v.metaInfos(id) = true
           // create narrowing transformation for this map
           val narrowMapTransformation = new NarrowMapsTransformation(v, typeHandler)
+          // run the transformation
           val newBlock = narrowMapTransformation.run(block)
-          // run transformation
 
           // TODO is it needed? transformer.doTransformation(new FieldOnStructReadTransformation, 500)
           // analyze field reads of the new function
