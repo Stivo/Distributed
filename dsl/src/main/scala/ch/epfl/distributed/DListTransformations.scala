@@ -31,7 +31,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
   abstract class TransformationRunner {
     val wt = new WorklistTransformer() { val IR: DListTransformations.this.IR.type = DListTransformations.this.IR }
     def run[T: Manifest](y: Block[T]) = {
-      registerTransformations(new Analyzer(y))
+      registerTransformations(newAnalyzer(y))
       if (wt.nextSubst.isEmpty) {
         y
       } else {

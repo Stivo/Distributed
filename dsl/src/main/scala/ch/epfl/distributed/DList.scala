@@ -216,59 +216,6 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     out.asInstanceOf[Def[A]]
   }
 
-  /*
-  override def mirror[A: Manifest](e: Def[A], f: Transformer): Exp[A] = {
-    var out = e match {
-      case o @ ObjectCreation(name, fields) => toAtom(ObjectCreation(name, fields.mapValues(f(_)))(o.mA))(o.mA)
-      case flat @ DListFlatten(list) => toAtom(DListFlatten(f(list))(flat.mA))
-      case vm @ NewDList(dlist) => toAtom(NewDList(f(dlist))(vm.mA))(mtype(vm.mA))
-      case vm @ DListMap(dlist, func) => toAtom(
-        new { override val overrideClosure = Some(f(vm.closure)) } with DListMap(f(dlist), f(func))(vm.mA, vm.mB)
-      )(vm.getTypes._2)
-      case vf @ DListFilter(dlist, func) => toAtom(
-        new { override val overrideClosure = Some(f(vf.closure)) } with DListFilter(f(dlist), f(func))(vf.mA)
-      )(mtype(manifest[A]))
-      case vfm @ DListFlatMap(dlist, func) => toAtom(
-        new { override val overrideClosure = Some(f(vfm.closure)) } with DListFlatMap(f(dlist), f(func))(vfm.mA, vfm.mB)
-      )(mtype(manifest[A]))
-      case gbk @ DListGroupByKey(dlist) => toAtom(DListGroupByKey(f(dlist))(gbk.mKey, gbk.mValue))(mtype(manifest[A]))
-      case v @ DListJoin(left, right) => toAtom(DListJoin(f(left), f(right))(v.mK, v.mV1, v.mV2))(mtype(manifest[A]))
-      case v @ DListReduce(dlist, func) => toAtom(
-        new { override val overrideClosure = Some(f(v.closure)) } with DListReduce(f(dlist), f(func))(v.mKey, v.mValue)
-      )(mtype(manifest[A]))
-      case vs @ DListSave(dlist, path) => toAtom(DListSave(f(dlist), f(path))(vs.mA))
-      case Reflect(vs @ DListSave(dlist, path), u, es) => reflectMirrored(Reflect(DListSave(f(dlist), f(path))(vs.mA), mapOver(f, u), f(es)))
-      case Reify(x, u, es) => toAtom(Reify(f(x), mapOver(f, u), f(es)))(mtype(manifest[A]))
-      case _ => super.mirror(e, f)
-    }
-    copyMetaInfo(e, out)
-    out.asInstanceOf[Exp[A]]
-  }
-  */
-  /*
-  override def syms(e: Any): List[Sym[Any]] = e match {
-    case s: ClosureNode[_, _] => syms(s.in, s.closure)
-    case s: Closure2Node[_, _, _] => syms(s.in, s.closure)
-    case DListFlatten(x) => syms(x)
-    case NewDList(arg) => syms(arg)
-    case DListSave(dlist, path) => syms(dlist, path)
-    case ObjectCreation(_, fields) => syms(fields)
-    case DListJoin(left, right) => syms(left, right)
-    case _ => super.syms(e)
-  }
-
-  override def symsFreq(e: Any): List[(Sym[Any], Double)] = e match {
-    // TODO: ++ does not work anymore, because it is defined in ListOps
-    case s: ClosureNode[_, _] => freqHot(s.closure, s.in) //++ freqNormal(s.in)
-    case s: Closure2Node[_, _, _] => freqHot(s.closure, s.in) //++ freqNormal(s.in)
-    case DListFlatten(x) => freqNormal(x)
-    case NewDList(arg) => freqNormal(arg)
-    case DListSave(dlist, path) => freqNormal(dlist, path)
-    case ObjectCreation(_, fields) => freqNormal(fields)
-    case DListJoin(left, right) => freqNormal(left, right)
-    case _ => super.symsFreq(e)
-  }
-*/
 }
 
 trait DListImplOps extends DListOps with FunctionsExp {
@@ -444,7 +391,7 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
 
 }
 
-trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransformations with DListAnalysis {
+trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransformations with DListFieldAnalysis {
   val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
   import IR.{
@@ -551,49 +498,50 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   var narrowExistingMaps = true
   var insertNarrowingMaps = true
   var mapMerge = true
-  /*
-  def mapNarrowing(transformer: Transformer) {
-    // replace maps with narrower ones
-    var oneFound = false
-    var pullDeps = newPullDeps
-    if (narrowExistingMaps) {
-      do {
-        oneFound = false
-        // perform field usage analysis
-        val analyzer = newAnalyzer(transformer.currentState, typeHandler)
-        analyzer.makeFieldAnalysis
-        var goOn = true
-        analyzer.ordered.foreach {
-          case _ if !goOn =>
-          case v @ DListMap(in, func) if !v.metaInfos.contains("narrowed")
-            && !SimpleType.unapply(v.getClosureTypes._2).isDefined
-            && analyzer.hasObjectCreationInClosure(v) => {
-            oneFound = true
-            v.metaInfos += (("narrowed", true))
-            // transformer.currentState.printAll("Before narrowing")
-            transformer.doTransformation(new MapNarrowTransformationNew(v, typeHandler), 50)
-            transformer.doTransformation(pullDeps, 500)
-            // transformer.currentState.printAll("After narrowing")
-            transformer.doTransformation(new FieldOnStructReadTransformation, 500)
-            goOn = false
-          }
-          case _ =>
+  
+  def narrowNarrowers[A: Manifest](b: Block[A]) = {
+    var curBlock = b
+    //    emitBlock(curBlock)
+    var goOn = true
+    while (goOn) {
+      val fieldAnalyzer = newFieldAnalyzer(curBlock)
+
+      val candidates = fieldAnalyzer.ordered.flatMap {
+        case d @ DListMap(x, lam) if (d.metaInfos.contains("narrower") &&
+          !d.metaInfos.contains("narrowed") &&
+          SimpleType.unapply(d.mB).isDefined) => {
+          d.metaInfos("narrowed") = true
+          None
         }
-      } while (oneFound)
+        case d @ DListMap(x, lam) if (d.metaInfos.contains("narrower") &&
+          !d.metaInfos.contains("narrowed")) =>
+          Some(d)
+        case _ => None
+      }
+      if (candidates.isEmpty) {
+        goOn = false
+      } else {
+        fieldAnalyzer.makeFieldAnalysis
+        val toTransform = candidates.head
+        println("Found candidate: " + toTransform)
+        toTransform.metaInfos("narrowed") = true
+        val narrowTrans = new NarrowMapsTransformation(toTransform, typeHandler)
+        curBlock = narrowTrans.run(curBlock)
+        narrowTrans
+      }
     }
-
+    //    emitBlock(curBlock)
+    curBlock
   }
-
-*/
-
-  //  def writeGraphToFile(block: Block[_], name: String, comments: Boolean = true) {
-  //    val out = new FileOutputStream(name)
-  //    val analyzer = newFieldAnalyzer(block)
-  //    analyzer.makeFieldAnalysis
-  //    analyzer.addComments = comments
-  //    out.write(analyzer.exportToGraph.getBytes)
-  //    out.close
-  //  }
+  
+    def writeGraphToFile(block: Block[_], name: String, comments: Boolean = true) {
+      val out = new FileOutputStream(name)
+      val analyzer = newFieldAnalyzer(block)
+      analyzer.makeFieldAnalysis
+      analyzer.addComments = comments
+      out.write(analyzer.exportToGraph.getBytes)
+      out.close
+    }
 
 }
 
@@ -625,6 +573,7 @@ trait TypeFactory extends ScalaGenDList {
           emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
         } catch {
           case e => emitValDef(sym, "Exception " + e + " when accessing " + fields + " of " + name)
+          e.printStackTrace
         }
       }
 

@@ -100,41 +100,6 @@ trait ScoobiGenDList extends ScalaGenBase
     out.toString
   }
 
-  def narrowNarrowers[A: Manifest](b: Block[A]) = {
-    var curBlock = b
-    //    emitBlock(curBlock)
-    var goOn = true
-    while (goOn) {
-      val fieldAnalyzer = newFieldAnalyzer(curBlock)
-
-      val candidates = fieldAnalyzer.ordered.flatMap {
-        case d @ DListMap(x, lam) if (d.metaInfos.contains("narrower") &&
-          !d.metaInfos.contains("narrowed") &&
-          SimpleType.unapply(d.mB).isDefined) => {
-          d.metaInfos("narrowed") = true
-          None
-        }
-        case d @ DListMap(x, lam) if (d.metaInfos.contains("narrower") &&
-          !d.metaInfos.contains("narrowed")) =>
-          Some(d)
-        case _ => None
-      }
-      if (candidates.isEmpty) {
-        goOn = false
-      } else {
-        fieldAnalyzer.makeFieldAnalysis
-        val toTransform = candidates.head
-        println("Found candidate: " + toTransform)
-        toTransform.metaInfos("narrowed") = true
-        val narrowTrans = new NarrowMapsTransformation(toTransform, typeHandler)
-        curBlock = narrowTrans.run(curBlock)
-        narrowTrans
-      }
-    }
-    //    emitBlock(curBlock)
-    curBlock
-  }
-
   def transformTree[B: Manifest](block: Block[B]) = {
     var y = block
     // inserting narrower maps
@@ -195,12 +160,6 @@ object %s {
 
     y = transformTree(y)
 
-    var a = newFieldAnalyzer(y)
-    a.makeFieldAnalysis
-    val dot = new FileWriter("test.dot")
-    dot.write(a.exportToGraph)
-    dot.close()
-
     withStream(stream) {
       emitBlock(y)
     }
@@ -214,6 +173,9 @@ object %s {
       "*******************************************/")
 
     stream.flush
+    
+    writeGraphToFile(y, "test.dot", true)
+    
     val out = capture.toString
     val newOut = out.replace("###wireFormats###", mkWireFormats)
     streamIn.print(newOut)
