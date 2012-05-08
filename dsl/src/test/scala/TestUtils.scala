@@ -1,5 +1,6 @@
 import java.io.{ StringWriter, PrintWriter, File, FileWriter }
 import scala.collection.mutable
+import org.scalatest._
 
 trait CodeGenerator {
 
@@ -34,6 +35,22 @@ trait CodeGenerator {
   def release(pw: PrintWriter) {
     pairs -= pw
     pw.close
+  }
+
+}
+
+trait CodeGeneratorTestSuite extends Suite with CodeGenerator {
+
+  def tryCompile(block: => Unit) {
+    try {
+      block
+    } catch {
+      case e =>
+        e.printStackTrace
+        println(e.getMessage)
+        fail(e.getMessage)
+    }
+
   }
 
 }

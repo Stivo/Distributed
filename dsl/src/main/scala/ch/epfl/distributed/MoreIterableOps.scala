@@ -36,10 +36,10 @@ trait MoreIterableOpsExp extends MoreIterableOps with ArrayOpsExp with IterableO
   override def iterable_last[T: Manifest](a: Exp[Iterable[T]]) = SingleResultIterableOp(a, "last")
   override def iterable_first[T: Manifest](a: Exp[Iterable[T]]) = SingleResultIterableOp(a, "first")
 
-  override def mirror[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Exp[A] = (e match {
+  override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
     case SingleResultIterableOp(a, op) => SingleResultIterableOp(f(a), op)
-    case _ => super.mirror(e, f)
-  }).asInstanceOf[Exp[A]]
+    case _ => super.mirrorDef(e, f)
+  }).asInstanceOf[Def[A]]
 
 }
 

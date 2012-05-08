@@ -102,11 +102,9 @@ trait ScoobiGenDList extends ScalaGenBase
 
   def transformTree[B: Manifest](block: Block[B]) = {
     var y = block
-    // inserting narrower maps
-    val nit = new NarrowerInsertionTransformation()
-    y = nit.run(y)
-    // perform the narrowing
-    y = narrowNarrowers(y)
+    // inserting narrower maps and narrow
+    y = insertNarrowersAndNarrow(y, new NarrowerInsertionTransformation)
+
     // TODO lower to loops
     y
   }
@@ -173,9 +171,9 @@ object %s {
       "*******************************************/")
 
     stream.flush
-    
+
     writeGraphToFile(y, "test.dot", true)
-    
+
     val out = capture.toString
     val newOut = out.replace("###wireFormats###", mkWireFormats)
     streamIn.print(newOut)

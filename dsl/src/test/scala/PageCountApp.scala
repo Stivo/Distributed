@@ -1,4 +1,4 @@
-/*import java.io.PrintWriter
+import java.io.PrintWriter
 import java.io.StringWriter
 import java.io.FileWriter
 import ch.epfl.distributed._
@@ -6,7 +6,7 @@ import org.scalatest._
 import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps }
 import scala.util.Random
 
-trait PageCountApp extends DListImplOps with ApplicationOps with SparkDListOps {
+trait PageCountApp extends DListProgram with ApplicationOps with SparkDListOps {
 
   def parse(x: Rep[String]) = {
     val splitted = x.split("\\s")
@@ -23,7 +23,7 @@ trait PageCountApp extends DListImplOps with ApplicationOps with SparkDListOps {
       val both = lang_proj.split("\\.")
       both(1)
     } else {
-      "w"
+      unit("w")
     }
     PageCountEntry(lang, proj, splitted(1), splitted(2).toLong, splitted(3).toLong)
   }
@@ -44,16 +44,16 @@ trait PageCountApp extends DListImplOps with ApplicationOps with SparkDListOps {
 
 }
 
-class PageCountAppGenerator extends Suite with CodeGenerator {
+class PageCountAppGenerator extends CodeGeneratorTestSuite {
 
   val appname = "PageCountApp"
   val unoptimizedAppname = appname + "_Orig"
 
   def testSpark {
-    try {
+    tryCompile {
       println("-- begin")
 
-      val dsl = new PageCountApp with DListImplOps with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
+      val dsl = new PageCountApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
 
       val codegen = new SparkGenDList { val IR: dsl.type = dsl }
       var pw = setUpPrintWriter
@@ -61,26 +61,24 @@ class PageCountAppGenerator extends Suite with CodeGenerator {
       writeToProject(pw, "spark", appname)
       release(pw)
 
-      //      val codegenUnoptimized = new { override val allOff = true } with SparkGenDList { val IR: dsl.type = dsl }
-      //      codegenUnoptimized.reduceByKey = true
-      //      pw = setUpPrintWriter
-      //      codegenUnoptimized.emitSource(dsl.statistics, unoptimizedAppname, pw)
-      //      writeToProject(pw, "spark", unoptimizedAppname)
-      //      release(pw)
+      val typesDefined = codegen.types.keys
+      val codegenUnoptimized = new { override val allOff = true } with SparkGenDList { val IR: dsl.type = dsl }
+      codegenUnoptimized.skipTypes ++= typesDefined
+      codegenUnoptimized.reduceByKey = true
+      pw = setUpPrintWriter
+      codegenUnoptimized.emitSource(dsl.statistics, unoptimizedAppname, pw)
+      writeToProject(pw, "spark", unoptimizedAppname)
+      release(pw)
 
       println("-- end")
-    } catch {
-      case e =>
-        e.printStackTrace
-        println(e.getMessage)
     }
   }
 
   def testScoobi {
-    try {
+    tryCompile {
       println("-- begin")
 
-      val dsl = new PageCountApp with DListImplOps with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
+      val dsl = new PageCountApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
 
       var pw = setUpPrintWriter
       val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
@@ -88,19 +86,16 @@ class PageCountAppGenerator extends Suite with CodeGenerator {
       writeToProject(pw, "scoobi", appname)
       release(pw)
 
-      //      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
-      //      pw = setUpPrintWriter
-      //      codegenUnoptimized.emitSource(dsl.statistics, unoptimizedAppname, pw)
-      //      writeToProject(pw, "scoobi", unoptimizedAppname)
-      //      release(pw)
+      val typesDefined = codegen.types.keys
+      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
+      codegenUnoptimized.skipTypes ++= typesDefined
+      pw = setUpPrintWriter
+      codegenUnoptimized.emitSource(dsl.statistics, unoptimizedAppname, pw)
+      writeToProject(pw, "scoobi", unoptimizedAppname)
+      release(pw)
 
       println("-- end")
-    } catch {
-      case e =>
-        e.printStackTrace
-        println(e.getMessage)
     }
   }
 
 }
-*/

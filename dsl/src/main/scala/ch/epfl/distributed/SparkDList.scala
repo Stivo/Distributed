@@ -21,7 +21,7 @@ trait SparkDListOps extends DListOps {
 }
 
 trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
-  case class DListReduceByKey[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], closure: Exp[(V,V) => V])
+  case class DListReduceByKey[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], closure: Exp[(V, V) => V])
       extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
       with PreservingTypeComputation[DList[(K, V)]] {
     val mKey = manifest[K]
@@ -37,7 +37,7 @@ trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
 
   override def dlist_cache[A: Manifest](in: Rep[DList[A]]) = DListCache[A](in)
 
- override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
+  override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
     val out = (e match {
       case v @ DListReduceByKey(dlist, func) => DListReduceByKey(f(dlist), f(func))(v.mKey, v.mValue)
       case v @ DListCache(in) => DListCache(f(in))(v.mA)
@@ -53,11 +53,11 @@ trait SparkTransformations extends DListTransformations {
   val IR: DListOpsExp with SparkDListOpsExp
   import IR.{ DListReduceByKey, DListReduce, DListGroupByKey, DListMap }
   import IR.{ Def, Exp }
-  
+
   class ReduceByKeyTransformation extends TransformationRunner {
     import wt.IR._
     def registerTransformations(analyzer: Analyzer) {
-      val reduces = analyzer.nodes.flatMap{
+      val reduces = analyzer.nodes.flatMap {
         case d @ DListReduce(r, f) => Some(d)
         case _ => None
       }
@@ -66,7 +66,7 @@ trait SparkTransformations extends DListTransformations {
           val stm = findDefinition(d).get
           val newReducer = new DListReduceByKey(wt(r), wt(f))(d.mKey, d.mValue)
           val atom = toAtom2(newReducer)(mtype(stm.syms.head.tp), implicitly[SourceContext])
-          System.out.println("Registering "+stm+" to "+newReducer)
+          System.out.println("Registering " + stm + " to " + newReducer)
           wt.register(stm.syms.head)(atom)
         case _ =>
       }
@@ -103,7 +103,7 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
     override def registerTransformations(analyzer: Analyzer) {
       super.registerTransformations(analyzer)
       analyzer.narrowBefore.foreach {
-         case d @ DListReduceByKey(in, func) =>
+        case d @ DListReduceByKey(in, func) =>
           val stm = findDefinition(d).get
           class ReduceByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]]) {
             val mapNew = makeNarrower(in)
@@ -112,18 +112,17 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
           }
           new ReduceByKeyTransformer(d.in)(d.mKey, d.mValue)
 
-        case d @ DListCache(dlist) => 
+        case d @ DListCache(dlist) =>
           val stm = findDefinition(d).get
           val mapNew = makeNarrower(dlist)
           val cacheNew = IR.dlist_cache(mapNew)(d.mA)
-          wt.register(stm.syms.head)(cacheNew) 
+          wt.register(stm.syms.head)(cacheNew)
         case _ =>
       }
-      
+
     }
   }
 
-  
   class SparkFieldAnalyzer(block: Block[_], typeHandler: TypeHandler) extends FieldAnalyzer(block, typeHandler) {
 
     override def isNarrowBeforeCandidate(x: DListNode) = x match {
@@ -212,31 +211,30 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     reduceByKey = false
     mapMerge = false
   }
-  
+
   def transformTree[B: Manifest](block: Block[B]) = {
     var y = block
     // merge groupByKey with reduce to reduceByKey
-    val rbkt = new ReduceByKeyTransformation()
-    y = rbkt.run(y)
-    // inserting narrower maps
-    val nit = new SparkNarrowerInsertionTransformation()
-    y = nit.run(y)
-    // perform the narrowing
-    y = narrowNarrowers(y)
+    if (reduceByKey) {
+	    val rbkt = new ReduceByKeyTransformation()
+	    y = rbkt.run(y)
+    }
+    // inserting narrower maps and narrow them
+    y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
     // TODO lower to loops
     y
-    
+
   }
-  
+
   override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
 
     val x = fresh[A]
     var y = reifyBlock(f(x))
 
     typeHandler = new TypeHandler(y)
-    
+
     y = transformTree(y)
-    
+
     stream.println("/*****************************************\n" +
       "  Emitting Spark Code                  \n" +
       "*******************************************/")
@@ -256,7 +254,7 @@ object %s {
         """.format(className, className, className))
 
     withStream(stream) {
-    	emitBlock(y)
+      emitBlock(y)
     }
     stream.println("}")
     stream.println("}")
@@ -280,7 +278,7 @@ object %s {
     stream.flush
 
     writeGraphToFile(y, "test.dot", true)
-    
+
     Nil
   }
 
@@ -288,4 +286,3 @@ object %s {
 
 trait SparkGen extends DListBaseCodeGenPkg with SparkGenDList
 
- 

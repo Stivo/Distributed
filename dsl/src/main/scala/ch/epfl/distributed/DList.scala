@@ -498,11 +498,22 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   var narrowExistingMaps = true
   var insertNarrowingMaps = true
   var mapMerge = true
-  
+
+  def insertNarrowersAndNarrow[B: Manifest](b: Block[B], runner: TransformationRunner) = {
+    narrowNarrowers(insertNarrowers(b, runner))
+  }
+
+  def insertNarrowers[B: Manifest](y: Block[B], runner: TransformationRunner) = {
+    if (insertNarrowingMaps)
+      runner.run(y)
+    else
+      y
+  }
+
   def narrowNarrowers[A: Manifest](b: Block[A]) = {
     var curBlock = b
     //    emitBlock(curBlock)
-    var goOn = true
+    var goOn = insertNarrowingMaps
     while (goOn) {
       val fieldAnalyzer = newFieldAnalyzer(curBlock)
 
@@ -533,15 +544,15 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     //    emitBlock(curBlock)
     curBlock
   }
-  
-    def writeGraphToFile(block: Block[_], name: String, comments: Boolean = true) {
-      val out = new FileOutputStream(name)
-      val analyzer = newFieldAnalyzer(block)
-      analyzer.makeFieldAnalysis
-      analyzer.addComments = comments
-      out.write(analyzer.exportToGraph.getBytes)
-      out.close
-    }
+
+  def writeGraphToFile(block: Block[_], name: String, comments: Boolean = true) {
+    val out = new FileOutputStream(name)
+    val analyzer = newFieldAnalyzer(block)
+    analyzer.makeFieldAnalysis
+    analyzer.addComments = comments
+    out.write(analyzer.exportToGraph.getBytes)
+    out.close
+  }
 
 }
 
@@ -572,8 +583,9 @@ trait TypeFactory extends ScalaGenDList {
           val typeName = makeTypeFor(name, fieldsList.map(_._1))
           emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
         } catch {
-          case e => emitValDef(sym, "Exception " + e + " when accessing " + fields + " of " + name)
-          e.printStackTrace
+          case e =>
+            emitValDef(sym, "Exception " + e + " when accessing " + fields + " of " + name)
+            e.printStackTrace
         }
       }
 

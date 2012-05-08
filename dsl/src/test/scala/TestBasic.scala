@@ -84,7 +84,7 @@ trait DListsProg extends DListProgram with ComplexBase {
 
 }
 
-class TestDLists2 extends Suite with CodeGenerator {
+class TestDLists2 extends CodeGeneratorTestSuite {
 
   /*
   def testPrinter {
@@ -108,29 +108,25 @@ class TestDLists2 extends Suite with CodeGenerator {
 
   }
   */
-  /*
+
   def testSpark {
-    try {
+    tryCompile {
       println("-- begin")
 
-      val dsl = new DListsProg with DListImplOps with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
+      val dsl = new DListsProg with DListProgramExp with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
 
       val codegen = new SparkGenDList { val IR: dsl.type = dsl }
       val pw = setUpPrintWriter
-      codegen.emitSource(dsl.findLogEntry, "g", pw)
+      codegen.emitSource(dsl.testJoin, "g", pw)
 
       writeToProject(pw, "spark", "SparkGenerated")
       release(pw)
       println("-- end")
-    } catch {
-      case e =>
-        e.printStackTrace
-        println(e.getMessage)
     }
   }
- */
+
   def testScoobi {
-    try {
+    tryCompile {
       println("-- begin")
       val pw = setUpPrintWriter
 
@@ -142,10 +138,6 @@ class TestDLists2 extends Suite with CodeGenerator {
       //      println(getContent(pw))
       release(pw)
       println("-- end")
-    } catch {
-      case e =>
-        e.printStackTrace
-        println(e.getMessage)
     }
   }
 

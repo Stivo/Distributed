@@ -1,4 +1,4 @@
-/*import java.io.PrintWriter
+import java.io.PrintWriter
 import java.io.StringWriter
 import java.io.FileWriter
 import ch.epfl.distributed._
@@ -6,7 +6,7 @@ import org.scalatest._
 import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps }
 import scala.util.Random
 
-trait WordCountApp extends DListImplOps with ApplicationOps with SparkDListOps {
+trait WordCountApp extends DListProgram with ApplicationOps with SparkDListOps {
 
   def parse(x: Rep[String]): Rep[String] = {
     val splitted = x.split("\\s+")
@@ -32,16 +32,16 @@ trait WordCountApp extends DListImplOps with ApplicationOps with SparkDListOps {
 
 }
 
-class WordCountAppGenerator extends Suite with CodeGenerator {
+class WordCountAppGenerator extends CodeGeneratorTestSuite {
 
   val appname = "WordCountApp"
   val unoptimizedAppname = appname + "_Orig"
 
   def testSpark {
-    try {
+    tryCompile {
       println("-- begin")
 
-      val dsl = new WordCountApp with DListImplOps with ApplicationOpsExp with SparkDListOpsExp
+      val dsl = new WordCountApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
       val codegen = new SparkGenDList { val IR: dsl.type = dsl }
       var pw = setUpPrintWriter
       codegen.emitSource(dsl.statistics, appname, pw)
@@ -57,21 +57,17 @@ class WordCountAppGenerator extends Suite with CodeGenerator {
       release(pw)
 
       println("-- end")
-    } catch {
-      case e =>
-        e.printStackTrace
-        println(e.getMessage)
     }
   }
 
   def testScoobi {
-    try {
+    tryCompile {
       println("-- begin")
 
-      val dsl = new WordCountApp with DListImplOps with ApplicationOpsExp with SparkDListOpsExp
+      val dsl = new WordCountApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
+      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
 
       var pw = setUpPrintWriter
-      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
       codegen.emitSource(dsl.statistics, appname, pw)
       writeToProject(pw, "scoobi", appname)
       release(pw)
@@ -84,12 +80,7 @@ class WordCountAppGenerator extends Suite with CodeGenerator {
       release(pw)
 
       println("-- end")
-    } catch {
-      case e =>
-        e.printStackTrace
-        println(e.getMessage)
     }
   }
 
 }
-*/

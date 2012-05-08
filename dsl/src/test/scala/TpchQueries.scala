@@ -90,13 +90,13 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
 
 }
 
-class TpchQueriesAppGenerator extends Suite with CodeGenerator {
+class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
 
   val appname = "TpchQueries"
   val unoptimizedAppname = appname + "_Orig"
 
   def testSpark {
-    try {
+    tryCompile {
       println("-- begin")
 
       var pw = setUpPrintWriter
@@ -108,24 +108,20 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
       writeToProject(pw, "spark", appname)
       release(pw)
 
-      //      val typesDefined = codegen.types.keys
-      //      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
-      //      codegenUnoptimized.skipTypes ++= typesDefined
-      //      pw = setUpPrintWriter
-      //      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
-      //      writeToProject(pw, "scoobi", unoptimizedAppname)
-      //      release(pw)
+      val typesDefined = codegen.types.keys
+      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
+      codegenUnoptimized.skipTypes ++= typesDefined
+      pw = setUpPrintWriter
+      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
+      writeToProject(pw, "scoobi", unoptimizedAppname)
+      release(pw)
 
       println("-- end")
-    } catch {
-      case e =>
-        e.printStackTrace
-        println(e.getMessage)
     }
   }
 
   def testScoobi {
-    try {
+    tryCompile {
       println("-- begin")
 
       var pw = setUpPrintWriter
@@ -137,20 +133,15 @@ class TpchQueriesAppGenerator extends Suite with CodeGenerator {
       writeToProject(pw, "scoobi", appname)
       release(pw)
 
-      //      val typesDefined = codegen.types.keys
-      //      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
-      //      codegenUnoptimized.skipTypes ++= typesDefined
-      //      pw = setUpPrintWriter
-      //      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
-      //      writeToProject(pw, "scoobi", unoptimizedAppname)
-      //      release(pw)
+      val typesDefined = codegen.types.keys
+      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
+      codegenUnoptimized.skipTypes ++= typesDefined
+      pw = setUpPrintWriter
+      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
+      writeToProject(pw, "scoobi", unoptimizedAppname)
+      release(pw)
 
       println("-- end")
-    } catch {
-      case e =>
-        e.printStackTrace
-        println(e.getMessage)
     }
   }
-
 }
