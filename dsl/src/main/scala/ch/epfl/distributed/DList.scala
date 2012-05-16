@@ -227,6 +227,7 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
   import IR.{ TP, Stm, SimpleStruct, Def, Sym, Exp, Block, StructTag, ClassTag }
   import IR.{ findDefinition, syms, infix_rhs }
   class BlockVisitor(block: Block[_]) {
+    
     def visitAll(inputSym: Exp[Any]): List[Stm] = {
       def getInputs(x: Exp[Any]) = x match {
         case x: Sym[_] =>
@@ -236,17 +237,16 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
           }
         case _ => Nil
       }
-
-      var out = List[Stm]()
-      val inputs = getInputs(inputSym)
-      for (input <- inputs) input match {
-        case s: Sym[_] => {
-          val stm = findDefinition(s)
-          out ++= (visitAll(s) ++ stm)
-        }
-        case _ =>
+      val toVisit = mutable.Set[Sym[_]]()
+      toVisit += inputSym.asInstanceOf[Sym[_]]
+      val out = mutable.Buffer[Stm]()
+      while (!toVisit.isEmpty) {
+        val nextSym = toVisit.head
+        toVisit.remove(nextSym)
+        out ++= findDefinition(nextSym)
+        toVisit ++= getInputs(nextSym)
       }
-      out.distinct
+      out.toList.distinct.reverse
     }
 
     lazy val statements = visitAll(block.res)

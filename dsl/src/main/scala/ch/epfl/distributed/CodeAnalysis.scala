@@ -37,6 +37,18 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
       case SomeDef(Reflect(x: DListNode, _, _)) => Some(x)
       case _ => Nil
     }
+    lazy val nodesInReflects : Iterable[(DListNode, Option[Def[_]])]= statements.flatMap {
+      case SomeDef(x: DListNode) => List((x, Some(x)))
+      case SomeDef(r@Reflect(x: DListNode, _, _)) => List((x,Some(r)))
+      case _ => Nil
+    }
+    def findDef(node : DListNode with Def[_]) = {
+      val defToSearch = nodesInReflects.find(_._1 == node) match {
+        case Some((_,Some(x))) => x
+        case _ => node
+      }
+      IR.findDefinition(defToSearch).get
+    }
     lazy val lambdas = statements.flatMap {
       case SomeDef(l @ Lambda(f, x, y)) => Some(l)
       case _ => None
