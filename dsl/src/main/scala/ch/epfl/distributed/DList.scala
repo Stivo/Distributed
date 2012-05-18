@@ -71,6 +71,26 @@ case class FieldRead(val path: String) {
 trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   def toAtom2[T: Manifest](d: Def[T])(implicit ctx: SourceContext): Exp[T] = super.toAtom(d)
 
+  // TODO (VJ) Move to lms once fusion is in  
+  case class ShapeDep[T](s: Exp[T]) extends Def[Int]
+  case class IteratorCollect[T](gen: Option[Any], block: Block[T]) extends Def[T]
+  case class IteratorValue[T : Manifest] extends Def[T]
+  
+  override def syms(e: Any): List[Sym[Any]] = e match {
+    case IteratorCollect(g, y) => syms(y)
+    case _ => super.syms(e)
+  }
+
+  override def symsFreq(e: Any) = e match {
+    case IteratorCollect(g, y) => freqNormal(y)
+    case _ => super.symsFreq(e)
+  }
+  
+  override def boundSyms(e: Any): List[Sym[Any]] = e match {
+    case IteratorCollect(g, y) => effectSyms(y)
+    case _ => super.boundSyms(e)
+  }
+  
   trait DListNode {
     val directFieldReads = mutable.HashSet[FieldRead]()
     val successorFieldReads = mutable.HashSet[FieldRead]()
@@ -397,6 +417,8 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
   import IR.{
+    IteratorValue,
+    ShapeDep,
     NewDList,
     DListSave,
     DListMap,
@@ -416,6 +438,8 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
+    case sd @ IteratorValue() => emitValDef(sym, "it.next") 
+    case sd @ ShapeDep(dep) => stream.println("// " + quote(dep)) 
     case nv @ NewDList(filename) => emitValDef(sym, "New dlist created from %s with type %s".format(filename, nv.mA))
     case vs @ DListSave(dlist, filename) => stream.println("Saving dlist %s (of type %s) to %s".format(dlist, remap(vs.mA), filename))
     case vm @ DListMap(dlist, func) => emitValDef(sym, "mapping dlist %s with function %s, type %s => %s".format(dlist, quote(func), vm.mA, vm.mB))

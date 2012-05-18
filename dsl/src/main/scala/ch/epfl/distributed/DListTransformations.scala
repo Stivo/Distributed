@@ -165,6 +165,38 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
     }
   }
 
+  class MonadicToLoopsTransformation extends TransformationRunner {
+    import wt.IR._
+
+    import wt.IR._
+    def registerTransformations(analyzer: Analyzer) {
+      val monadic = analyzer.nodes.collect {
+        case m @ DListMap(r, f) => m
+      }
+      
+      monadic.foreach {
+        case m @ DListMap(r, f) =>
+          val stm = findDefinition(m).get
+          
+//          val map = DListMap(wt(r), f)(m.mA, m.mB)
+//          val loop = map
+          val i = fresh[Int]
+          
+          // create a loop with body that inlines the function
+          val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(None, Block(
+              doApply(f, toAtom2(IteratorValue()))))
+          )
+          
+          // make an stm out of the loop
+          val atom = toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
+          
+          System.out.println("Registering " + stm + " to " + loop)
+          wt.register(stm.syms.head)(atom)
+        case _ =>
+      }
+    }
+    }
+  
   /*
    * insert identity mapper before a save
    * - try to keep existing interface?

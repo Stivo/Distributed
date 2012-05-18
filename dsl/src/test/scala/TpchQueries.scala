@@ -102,14 +102,14 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       var pw = setUpPrintWriter
 
       val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
-      val codegen = new SparkGenDList { val IR: dsl.type = dsl }
+      val codegen = new SparkGen { val IR: dsl.type = dsl }
 
       codegen.emitSource(dsl.query12, appname, pw)
       writeToProject(pw, "spark", appname)
       release(pw)
 
       val typesDefined = codegen.types.keys
-      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
+      val codegenUnoptimized = new { override val allOff = true } with SparkGen { val IR: dsl.type = dsl }
       codegenUnoptimized.skipTypes ++= typesDefined
       pw = setUpPrintWriter
       codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)

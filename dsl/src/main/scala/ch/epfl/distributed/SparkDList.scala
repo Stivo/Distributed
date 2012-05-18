@@ -1,6 +1,6 @@
 package ch.epfl.distributed
 
-import scala.virtualization.lms.common.ScalaGenBase
+import scala.virtualization.lms.common.{ ScalaGenBase, LoopsExp, BaseGenLoops }
 import java.io.PrintWriter
 import scala.reflect.SourceContext
 import scala.virtualization.lms.util.GraphUtil
@@ -250,7 +250,10 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     }
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
-    // TODO lower to loops
+    
+    // transforming monadic ops to loops for fusion
+    y = new MonadicToLoopsTransformation().run(y)
+    
     y
 
   }
@@ -315,5 +318,25 @@ object %s {
 
 }
 
-trait SparkGen extends DListBaseCodeGenPkg with SparkGenDList
+trait SparkLoopsGen extends BaseGenLoops with DListBaseCodeGenPkg {
+  val IR: LoopsExp with DListOpsExp
+  import IR._
+  
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
+    case SimpleLoop(Def(ShapeDep(sd)), i, IteratorCollect(y, block)) =>
+      stream.println("val " + quote(sym) + " = " + quote(sd) + ".mapPartitions(it => {")
+      stream.println("// todo emit wrapper ")
+      emitBlock(block)
+      stream.println("val newIt = it// todo emit new iterator ")
+      stream.println("newIt")
+      stream.println("}")
+    case _ =>
+      super.emitNode(sym, rhs)
+  }
+}
+
+trait SparkGen extends DListBaseCodeGenPkg with SparkGenDList with SparkLoopsGen {
+  val IR: SparkDListOpsExp
+  
+}
 
