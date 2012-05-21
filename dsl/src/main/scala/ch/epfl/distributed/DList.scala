@@ -227,7 +227,7 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
   import IR.{ TP, Stm, SimpleStruct, Def, Sym, Exp, Block, StructTag, ClassTag }
   import IR.{ findDefinition, syms, infix_rhs }
   class BlockVisitor(block: Block[_]) {
-    
+
     def visitAll(inputSym: Exp[Any]): List[Stm] = {
       def getInputs(x: Exp[Any]) = x match {
         case x: Sym[_] =>

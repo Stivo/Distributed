@@ -19,6 +19,12 @@ trait SparkDListOps extends DListOps {
     def takeSample(withReplacement: Rep[Boolean], num: Rep[Int], seed: Rep[Int]) = dlist_takeSample(dlist, withReplacement, num, seed)
   }
 
+  //  implicit def repDListToDListIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]]) = new dlistIterableTupleOpsCls(x)
+  //  implicit def varDListToDListIterableTupleOpsCls[K: Manifest, V: Manifest](x: Var[DList[(K, V)]]) = new dlistIterableTupleOpsCls(readVar(x))
+  //  class dlistIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) {
+  //    def reduceByKey(f: (Rep[V], Rep[V]) => Rep[V]) = dlist_reduceByKey[K, V](x, f)
+  //  }
+
   def dlist_cache[A: Manifest](dlist: Rep[DList[A]]): Rep[DList[A]]
   def dlist_collect[A: Manifest](dlist: Rep[DList[A]]): Rep[Iterable[A]]
   def dlist_takeSample[A: Manifest](dlist: Rep[DList[A]], withReplacement: Rep[Boolean], num: Rep[Int], seed: Rep[Int]): Rep[Iterable[A]]
@@ -76,18 +82,19 @@ trait SparkTransformations extends DListTransformations {
   class ReduceByKeyTransformation extends TransformationRunner {
     import wt.IR._
     def registerTransformations(analyzer: Analyzer) {
+      System.out.println("running ReduceByKeyTransformation")
       val reduces = analyzer.nodes.flatMap {
         case d @ DListReduce(r, f) => Some(d)
         case _ => None
       }
+
+      System.out.println("Found reduces " + reduces)
       reduces.foreach {
         case d @ DListReduce(Def(DListGroupByKey(r)), f) =>
-          val stm = findDefinition(d).get
-          val newReducer = new DListReduceByKey(wt(r), wt(f))(d.mKey, d.mValue)
-          val atom = toAtom2(newReducer)(mtype(stm.syms.head.tp), implicitly[SourceContext])
-          System.out.println("Registering " + stm + " to " + newReducer)
-          wt.register(stm.syms.head)(atom)
-        case _ =>
+          val stm = analyzer.findDef(d)
+          wt.register(stm.syms.head) {
+            toAtom2(new DListReduceByKey(wt(r), wt(f))(d.mKey, d.mValue))(mtype(stm.syms.head.tp), implicitly[SourceContext])
+          }
       }
     }
   }
@@ -167,8 +174,8 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
       }
 
       case v @ DListCollect(in) => visitAll("input", v.mA)
-    		  
-      case v @ DListTakeSample(in,_,_,_) => visitAll("input", v.mA)
+
+      case v @ DListTakeSample(in, _, _, _) => visitAll("input", v.mA)
 
       case v @ DListCache(in) => node.successorFieldReads.toSet
 
@@ -252,7 +259,6 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
     // TODO lower to loops
     y
-
   }
 
   val collectionName = "RDD"
@@ -263,8 +269,6 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     var y = reifyBlock(f(x))
 
     typeHandler = new TypeHandler(y)
-
-    y = transformTree(y)
 
     stream.println("/*****************************************\n" +
       "  Emitting Spark Code                  \n" +
@@ -280,13 +284,21 @@ object %s {
         def main(sparkInputArgs: Array[String]) {
     System.setProperty("spark.serializer", "spark.KryoSerializer")
     System.setProperty("spark.kryo.registrator", "spark.examples.Registrator_%s")
-
+    System.setProperty("spark.kryoserializer.buffer.mb", "20")
+        
     		val sc = new SparkContext(sparkInputArgs(0), "%s")
         """.format(className, className, className))
 
+    val oldAnalysis = newAnalyzer(y)
+
+    y = transformTree(y)
+    val newAnalysis = newAnalyzer(y)
     withStream(stream) {
       emitBlock(y)
     }
+    println("old vs new syms " + oldAnalysis.statements.size + " " + newAnalysis.statements.size)
+    //    oldAnalysis.orderedStatements.foreach(println)
+    //    newAnalysis.orderedStatements.foreach(println)
     stream.println("}")
     stream.println("}")
     stream.println("// Types that are used in this program")
