@@ -1,6 +1,6 @@
 package ch.epfl.distributed
 
-import scala.virtualization.lms.common.{ ScalaGenBase, LoopsExp, BaseGenLoops }
+import scala.virtualization.lms.common.{ ScalaGenBase, LoopsExp, LoopsFatExp, BaseGenLoops, ScalaGenLoops, ScalaGenLoopsFat }
 import java.io.PrintWriter
 import scala.reflect.SourceContext
 import scala.virtualization.lms.util.GraphUtil
@@ -253,7 +253,6 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     
     // transforming monadic ops to loops for fusion
     y = new MonadicToLoopsTransformation().run(y)
-    
     y
 
   }
@@ -318,15 +317,17 @@ object %s {
 
 }
 
-trait SparkLoopsGen extends BaseGenLoops with DListBaseCodeGenPkg {
+trait SparkLoopsGen extends ScalaGenLoops with DListBaseCodeGenPkg {
   val IR: LoopsExp with DListOpsExp
   import IR._
   
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
-    case SimpleLoop(Def(ShapeDep(sd)), i, IteratorCollect(y, block)) =>
+    case SimpleLoop(Def(ShapeDep(sd)), i, IteratorCollect(g, block)) =>
       stream.println("val " + quote(sym) + " = " + quote(sd) + ".mapPartitions(it => {")
       stream.println("// todo emit wrapper ")
-      emitBlock(block)
+      withGen(g, s => stream.println(s.head + "// yield")) {
+        emitBlock(block)
+      }
       stream.println("val newIt = it// todo emit new iterator ")
       stream.println("newIt")
       stream.println("}")
@@ -335,7 +336,37 @@ trait SparkLoopsGen extends BaseGenLoops with DListBaseCodeGenPkg {
   }
 }
 
-trait SparkGen extends DListBaseCodeGenPkg with SparkGenDList with SparkLoopsGen {
+trait ScalaGenSparkFat extends ScalaGenLoopsFat  {
+  val IR: DListOpsExp with LoopsFatExp
+  import IR._
+    
+  override def emitFatNode(sym: List[Sym[Any]], rhs: FatDef) = rhs match {
+    case SimpleFatLoop(Def(ShapeDep(sd)),x,rhs) =>
+      val ii = x
+
+      val gens = for ((l,r) <- sym zip rhs) yield r match {       //if !r.isInstanceOf[ForeachElem[_]
+        case IteratorCollect(g,Block(y)) => 
+          (g, (s: List[String]) => {
+            stream.println("val result = " +  s.head + "// yield")
+            stream.println("val " + quote(g) + " = ()")
+          })
+      }
+      stream.println("val " + quote(sym.head) + " = " + quote(sd) + ".mapPartitions(it => {")
+      stream.println("// todo emit wrapper ")
+     
+      withGens(gens) {
+        emitFatBlock(syms(rhs).map(Block(_)))
+      }
+      stream.println("val newIt = it// todo emit new iterator ")
+      stream.println("newIt")
+      stream.println("}")
+
+
+    case _ => super.emitFatNode(sym, rhs)
+  }
+}
+
+trait SparkGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with SparkGenDList with ScalaGenSparkFat {
   val IR: SparkDListOpsExp
   
 }

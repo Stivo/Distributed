@@ -58,6 +58,7 @@ trait DListOps extends Base with Variables {
   def dlist_reduce[K: Manifest, V: Manifest](dlist: Rep[DList[(K, Iterable[V])]], f: (Rep[V], Rep[V]) => Rep[V]): Rep[DList[(K, V)]]
   def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]]
   def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]]): Rep[DList[(K, Iterable[V])]]
+  
 }
 
 object FakeSourceContext {
@@ -72,9 +73,10 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   def toAtom2[T: Manifest](d: Def[T])(implicit ctx: SourceContext): Exp[T] = super.toAtom(d)
 
   // TODO (VJ) Move to lms once fusion is in  
-  case class ShapeDep[T](s: Exp[T]) extends Def[Int]
-  case class IteratorCollect[T](gen: Option[Any], block: Block[T]) extends Def[T]
-  case class IteratorValue[T : Manifest] extends Def[T]
+  case class ShapeDep[T](s: Rep[T]) extends Def[Int]
+  case class Dummy() extends Def[Unit]
+  case class IteratorCollect[T](gen: Rep[Gen[T]], block: Block[Gen[T]]) extends Def[DList[T]]
+  case class IteratorValue[T : Manifest](l: Rep[DList[T]],v: Rep[Int]) extends Def[T]
   
   override def syms(e: Any): List[Sym[Any]] = e match {
     case IteratorCollect(g, y) => syms(y)
@@ -218,6 +220,12 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     }
   }
 
+  override def mirrorFatDef[A:Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
+    case IteratorCollect(g, y) => IteratorCollect(g, f(y))
+    case _ => super.mirrorFatDef(e,f)
+  }).asInstanceOf[Def[A]]
+
+
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
     var out = e match {
       case GetArgs() => GetArgs()
@@ -230,6 +238,10 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       case d @ DListReduce(dlist, func) => DListReduce(f(dlist), f(func))(d.mKey, d.mValue)
       case d @ DListFlatten(dlists) => DListFlatten(f(dlists))(d.mA)
       case d @ DListGroupByKey(dlist) => DListGroupByKey(f(dlist))(d.mKey, d.mValue)
+      case d @ IteratorCollect(g, y) => IteratorCollect(g, f(y))
+      case d @ IteratorValue(in, i) => IteratorValue(f(in), f(i))
+      case d @ ShapeDep(in) => ShapeDep(f(in))
+      case SimpleLoop(s, i, IteratorCollect(g, y)) => toAtom(SimpleLoop(f(s), f(i).asInstanceOf[Sym[Int]], IteratorCollect(f(g), f(y))))(mtype(manifest[A]), implicitly[SourceContext])
       case _ => super.mirrorDef(e, f)
     }
     copyMetaInfo(e, out)
@@ -419,6 +431,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   import IR.{
     IteratorValue,
     ShapeDep,
+    Dummy,
     NewDList,
     DListSave,
     DListMap,
@@ -438,8 +451,9 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
-    case sd @ IteratorValue() => emitValDef(sym, "it.next") 
+    case sd @ IteratorValue(r, i) => emitValDef(sym, "it.next // loop var " + quote(i)) 
     case sd @ ShapeDep(dep) => stream.println("// " + quote(dep)) 
+    case sd @ Dummy() => stream.println("// dummy ") 
     case nv @ NewDList(filename) => emitValDef(sym, "New dlist created from %s with type %s".format(filename, nv.mA))
     case vs @ DListSave(dlist, filename) => stream.println("Saving dlist %s (of type %s) to %s".format(dlist, remap(vs.mA), filename))
     case vm @ DListMap(dlist, func) => emitValDef(sym, "mapping dlist %s with function %s, type %s => %s".format(dlist, quote(func), vm.mA, vm.mB))
@@ -661,3 +675,54 @@ trait CaseClassTypeFactory extends TypeFactory {
   }
 
 }
+
+trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElseFat with LoopFusionOpt {
+  val IR: DListOpsExp with IfThenElseFatExp
+  
+  import IR.{ collectYields, fresh, toAtom2,SimpleLoop,reifyEffects, ShapeDep, mtype,
+      IteratorCollect, Block, Dummy, IteratorValue, yields, skip, doApply, ifThenElse, reflectMutableSym, 
+      reflectMutable, Reflect, Exp, Def, Reify, Gen, Yield, IfThenElse, Skip }
+
+  override def unapplySimpleIndex(e: Def[Any]) = e match {
+    case IteratorValue(a, i) => Some((a, i))
+    case _ => super.unapplySimpleIndex(e)
+  }
+  override def unapplySimpleDomain(e: Def[Int]): Option[Exp[Any]] = e match {
+    case ShapeDep(a) => Some(a)
+    case _ => super.unapplySimpleDomain(e)
+  }
+
+  override def unapplySimpleCollect(e: Def[Any]) = e match {
+    case IteratorCollect(Def(Reflect(Yield(_, a), _, _)), _) => Some(a.head)
+    case _ => super.unapplySimpleCollect(e)
+  }
+
+
+  // take d's context (everything between loop body and yield) and duplicate it into r
+  override def plugInHelper[A, T: Manifest, U: Manifest](oldGen: Exp[Gen[A]], context: Exp[Gen[T]], plug: Exp[Gen[U]]): Exp[Gen[U]] = context match {
+    case `oldGen` => plug
+
+    case Def(Reify(y, s, e)) =>
+      getBlockResultFull(reifyEffects(plugInHelper(oldGen, y, plug)))
+
+    case Def(Reflect(IfThenElse(c, Block(a), /*Block(Def(Skip(x)))), _, _))*/ Block(Def(Reify(Def(Reflect(Skip(x), _, b)), _, _)))), u, es)) =>
+      // this is wrong but we need to check if it works at all
+      ifThenElse(c, reifyEffects(plugInHelper(oldGen, a, plug)), reifyEffects(skip[U](reflectMutableSym(fresh[Int]), x)))
+
+//    case Def(Reflect(SimpleLoop(sh, x, ForeachElem(Block(y))), _, _)) =>
+//      val body = reifyEffects(plugInHelper(oldGen, y, plug))
+//      reflectEffect(SimpleLoop(sh, x, ForeachElem(body)), summarizeEffects(body).star)
+
+    case Def(x) =>
+      error("Missed me => " + x + " should find " + Def.unapply(oldGen).getOrElse("None"))
+  }
+
+  override def applyPlugIntoContext(d: Def[Any], r: Def[Any]) = (d, r) match {
+    case (IteratorCollect(g, Block(a)), IteratorCollect(g2, Block(b))) =>
+      IteratorCollect(g2, Block(plugInHelper(g, a, b)))
+      
+    case _ => super.applyPlugIntoContext(d, r)
+  }
+
+}
+

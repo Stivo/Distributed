@@ -29,12 +29,22 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
   import IR.{ Struct }
 
   abstract class TransformationRunner {
-    val wt = new WorklistTransformer() { val IR: DListTransformations.this.IR.type = DListTransformations.this.IR }
+    val wt = new WorklistTransformer() { 
+      val IR: DListTransformations.this.IR.type = DListTransformations.this.IR
+      
+      def registerFunction[A](x: Exp[A])(y: () => Exp[A]): Unit = if (nextSubst.contains(x.asInstanceOf[Sym[A]]))
+      printdbg("discarding, already have a replacement for " + x)
+    else {
+      printdbg("register replacement for " + x)
+      nextSubst = nextSubst + (x.asInstanceOf[Sym[A]] -> y)
+    }
+    }
     def run[T: Manifest](y: Block[T]) = {
       registerTransformations(newAnalyzer(y))
       if (wt.nextSubst.isEmpty) {
         y
       } else {
+        println("Running")
         wt.run(y)
       }
     }
@@ -166,47 +176,55 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
   }
 
   class MonadicToLoopsTransformation extends TransformationRunner {
-    import wt.IR._
+    import wt.IR.{ collectYields, fresh, toAtom2,SimpleLoop,reifyEffects, ShapeDep, mtype,
+      IteratorCollect, Block, Dummy, IteratorValue, yields, skip, doApply, ifThenElse, reflectMutableSym, 
+      reflectMutable, Reflect, Exp }
 
-    import wt.IR._
     def registerTransformations(analyzer: Analyzer) {
-      analyzer.nodes.foreach {      
-        case m @ DListMap(r, f) =>
-          val stm = findDefinition(m).get
-          val i = fresh[Int]
-          
-          // create a loop with body that inlines the function
-          val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(None, Block(
-              // Yield the doApply
-              doApply(f, toAtom2(IteratorValue()))
-          )))
-          
-          // make an stm out of the loop
-          val atom = toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
-          
-          System.out.println("Registering " + stm + " to " + loop)
-          wt.register(stm.syms.head)(atom)
-          
+      analyzer.nodes.foreach {
         case m @ DListFilter(r, f) =>
           val stm = findDefinition(m).get
-          val i = fresh[Int]
+          val eval = () => {
+            val i = fresh[Int]
+            val d = reflectMutableSym(fresh[Int])
+            val value = toAtom2(IteratorValue(r, i))
+            val (g, y) = collectYields {
+              reifyEffects {
+                // Yield the iterator value in the block
+                ifThenElse(doApply(f, value), reifyEffects { yields(d, List(i), value) }, reifyEffects { skip(d, List(i)) })
+              }
+            }
+            // create a loop with the body that inlines the filtering function
+            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
+
+            // make an stm out of the loop
+            toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
+          }
           
-          val value = toAtom2(IteratorValue())
-          // create a loop with the body that inlines the filtering function
-          val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(None, Block(
-              // Yield the iterator value in the block
-              toAtom2(IfThenElse(doApply(f, value), Block(value), Block(value)))
-          )))
+          System.out.println("Registering " + stm + " to a filter loop")
+          wt.registerFunction(stm.syms.head)(eval)
+        case m @ DListMap(r, f) =>
+          val stm = findDefinition(m).get
+          
+          val eval = () => {
+          val i = fresh[Int]
+   		  val d = reflectMutableSym(fresh[Int])
+
+   		  val (g, y) = collectYields { reifyEffects {
+   		    yields(d, List(i), doApply(f, toAtom2(IteratorValue(r, i))))
+   		  }}
+          // create a loop with body that inlines the function
+          val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
           
           // make an stm out of the loop
-          val atom = toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
-          
-          System.out.println("Registering " + stm + " to " + loop)
-          wt.register(stm.syms.head)(atom)
+          toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
+          }
+          System.out.println("Registering " + stm + " to a map loop")
+          wt.registerFunction(stm.syms.head)(eval)
         case _ =>
       }
     }
-    }
+  }
   
   /*
    * insert identity mapper before a save
