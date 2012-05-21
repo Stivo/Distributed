@@ -170,22 +170,33 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
 
     import wt.IR._
     def registerTransformations(analyzer: Analyzer) {
-      val monadic = analyzer.nodes.collect {
-        case m @ DListMap(r, f) => m
-      }
-      
-      monadic.foreach {
+      analyzer.nodes.foreach {      
         case m @ DListMap(r, f) =>
           val stm = findDefinition(m).get
-          
-//          val map = DListMap(wt(r), f)(m.mA, m.mB)
-//          val loop = map
           val i = fresh[Int]
           
           // create a loop with body that inlines the function
           val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(None, Block(
-              doApply(f, toAtom2(IteratorValue()))))
-          )
+              // Yield the doApply
+              doApply(f, toAtom2(IteratorValue()))
+          )))
+          
+          // make an stm out of the loop
+          val atom = toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
+          
+          System.out.println("Registering " + stm + " to " + loop)
+          wt.register(stm.syms.head)(atom)
+          
+        case m @ DListFilter(r, f) =>
+          val stm = findDefinition(m).get
+          val i = fresh[Int]
+          
+          val value = toAtom2(IteratorValue())
+          // create a loop with the body that inlines the filtering function
+          val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(None, Block(
+              // Yield the iterator value in the block
+              toAtom2(IfThenElse(doApply(f, value), Block(value), Block(value)))
+          )))
           
           // make an stm out of the loop
           val atom = toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
