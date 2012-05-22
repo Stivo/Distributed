@@ -360,6 +360,48 @@ trait OrderOpsExp extends OrderOps with StructExp with EffectExp with BaseFatExp
   def order_o_comment(__x: Rep[Order]) = field[String](__x, "o_comment")
 }
 
+trait WikiArticleOps extends Base with Variables with OverloadHack with ParserOps {
+
+  class WikiArticle
+
+  object WikiArticle {
+    def apply(pageId: Rep[Long], name: Rep[String], updated: Rep[Date], xml: Rep[String], plaintext: Rep[String]) = wikiarticle_obj_new(pageId, name, updated, xml, plaintext)
+    def parse(input: Rep[String], sep: Rep[String]): Rep[WikiArticle] = fromArray(input.split(sep))
+
+    def fromArray(input: Rep[Array[String]]): Rep[WikiArticle] = {
+      WikiArticle(input(0).toLong, input(1), input(2).toDate, input(3), input(4))
+    }
+  }
+
+  implicit def repWikiArticleToWikiArticleOps(x: Rep[WikiArticle]) = new wikiarticleOpsCls(x)
+  class wikiarticleOpsCls(__x: Rep[WikiArticle]) {
+    def pageId = wikiarticle_pageId(__x)
+    def name = wikiarticle_name(__x)
+    def updated = wikiarticle_updated(__x)
+    def xml = wikiarticle_xml(__x)
+    def plaintext = wikiarticle_plaintext(__x)
+  }
+
+  //object defs
+  def wikiarticle_obj_new(pageId: Rep[Long], name: Rep[String], updated: Rep[Date], xml: Rep[String], plaintext: Rep[String]): Rep[WikiArticle]
+
+  //class defs
+  def wikiarticle_pageId(__x: Rep[WikiArticle]): Rep[Long]
+  def wikiarticle_name(__x: Rep[WikiArticle]): Rep[String]
+  def wikiarticle_updated(__x: Rep[WikiArticle]): Rep[Date]
+  def wikiarticle_xml(__x: Rep[WikiArticle]): Rep[String]
+  def wikiarticle_plaintext(__x: Rep[WikiArticle]): Rep[String]
+}
+
+trait WikiArticleOpsExp extends WikiArticleOps with StructExp with EffectExp with BaseFatExp {
+  def wikiarticle_obj_new(pageId: Exp[Long], name: Exp[String], updated: Exp[Date], xml: Exp[String], plaintext: Exp[String]) = struct[WikiArticle](ClassTag[WikiArticle]("WikiArticle"), ListMap("pageId" -> pageId, "name" -> name, "updated" -> updated, "xml" -> xml, "plaintext" -> plaintext))
+  def wikiarticle_pageId(__x: Rep[WikiArticle]) = field[Long](__x, "pageId")
+  def wikiarticle_name(__x: Rep[WikiArticle]) = field[String](__x, "name")
+  def wikiarticle_updated(__x: Rep[WikiArticle]) = field[Date](__x, "updated")
+  def wikiarticle_xml(__x: Rep[WikiArticle]) = field[String](__x, "xml")
+  def wikiarticle_plaintext(__x: Rep[WikiArticle]) = field[String](__x, "plaintext")
+}
+
 trait SupplierOps extends Base with Variables with OverloadHack with ParserOps {
 
   class Supplier
@@ -630,5 +672,5 @@ trait AddressOpsExp extends AddressOps with StructExp with EffectExp with BaseFa
   def address_city(__x: Rep[Address]) = field[String](__x, "city")
 }
 
-trait ApplicationOps extends PartSupplierOps with LogEntryOps with PageCountEntryOps with PartOps with N1Ops with RegionOps with CustomerOps with OrderOps with SupplierOps with NationOps with LineItemOps with N2Ops with UserOps with AddressOps
-trait ApplicationOpsExp extends PartSupplierOpsExp with LogEntryOpsExp with PageCountEntryOpsExp with PartOpsExp with N1OpsExp with RegionOpsExp with CustomerOpsExp with OrderOpsExp with SupplierOpsExp with NationOpsExp with LineItemOpsExp with N2OpsExp with UserOpsExp with AddressOpsExp
+trait ApplicationOps extends PartSupplierOps with LogEntryOps with PageCountEntryOps with PartOps with N1Ops with RegionOps with CustomerOps with OrderOps with WikiArticleOps with SupplierOps with NationOps with LineItemOps with N2Ops with UserOps with AddressOps
+trait ApplicationOpsExp extends PartSupplierOpsExp with LogEntryOpsExp with PageCountEntryOpsExp with PartOpsExp with N1OpsExp with RegionOpsExp with CustomerOpsExp with OrderOpsExp with WikiArticleOpsExp with SupplierOpsExp with NationOpsExp with LineItemOpsExp with N2OpsExp with UserOpsExp with AddressOpsExp

@@ -1,5 +1,5 @@
 #!/bin/sh
-python lift_user_class.py impls/ data/ structs/
+python lift_user_class.py impls/ structs/
 
 cp impls/ApplicationOps.scala src/test/scala/
 

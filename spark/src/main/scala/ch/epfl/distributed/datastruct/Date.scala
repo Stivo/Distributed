@@ -4,8 +4,8 @@ object Date {
   def apply(year: Int, month: Int, day: Int): Date = new SimpleDate(year, month, day)
   def apply(year: Int, month: Int, day: Int, hour: Int, minute: Int, second: Int) = DateTime(year, month, day, hour, minute, second)
   def apply(s: String): Date = {
-    val tokens = s.split("-")
-    assert(tokens.size == 3, "expected 3 tokens in date, got: " + tokens.size + " in " + s)
+    val tokens = s.split("[-\\s:]")
+    //assert(tokens.size == 3, "expected 3 tokens in date, got: " + tokens.size + " in " + s)
     Date(tokens(0).toInt, tokens(1).toInt, tokens(2).toInt)
   }
 }

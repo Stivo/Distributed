@@ -10,7 +10,7 @@ options = {}
 classes = []
 
 def main():
-    usage = "usage: %prog [options] ops_dir data_dir impls_dir(s)"
+    usage = "usage: %prog [options] output_dir input_dir(s)"
     parser = OptionParser(usage)
     parser.add_option("-v", "--verbose", action="store_true", dest="verbose")
     parser.add_option("--dsl", dest="dsl_name", default="optiml", help="specify which dsl you want to process ops on behalf")
@@ -20,11 +20,9 @@ def main():
         parser.error("incorrect number of arguments")
 
     ops_dir = args.pop(0)
-    data_dir = args.pop(0)
     impls_dir = args.pop(0)
 
     initDir(ops_dir)
-    initDir(data_dir)
     initDir(impls_dir)
 
     loadOptions(opts)

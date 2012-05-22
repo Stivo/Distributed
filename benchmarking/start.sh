@@ -1,21 +1,28 @@
 
 OUTPUT=./output
-#OUTPUT="hdfs:///out/job7_1"
+#OUTPUT="hdfs:///tmp/job6"
 INPUTS="/home/stivo/master/testdata/pagecounts $OUTPUT"
 INPUTS="/home/stivo/master/testdata/tpch/ 50000 1997-06-04 $OUTPUT"
 INPUTS="/home/stivo/master/testdata/currenttmp-5m $OUTPUT"
+INPUTS="kmeans_data.txt 2 0.001"
+INPUTS="/home/stivo/master/testdata/kmeans/k5d10big.dat 5 0.0000001"
+INPUTS="/home/stivo/master/testdata/kmlocal-1.7.2/bigkmeans.txt 49 0.0001"
+INPUTS="/home/stivo/master/testdata/wiki/freebase-wex-2009-01-12-articles.tsv.head $OUTPUT"
 #INPUTS="/home/stivo/master/testdata/tpch/ $OUTPUT 1995-01-01 TRUCK SHIP"
 #INPUTS="hdfs:///inputs/tpch/ $OUTPUT 1995-01-01 TRUCK SHIP"
-#INPUTS="hdfs:///inputs/wikitr* $OUTPUT"
+#INPUTS="hdfs:///tmp/wikilog $OUTPUT"
+#INPUTS="input/pagecount $OUTPUT"
 
+./compile.sh
 
 #./warmup.sh
 #./run.sh $INPUTS
 #du -h output/
 #rm -rf output
 
-./warmup.sh
+#./warmup.sh
+rm -rf $OUTPUT
 ./runspark.sh $INPUTS
-du -h output/
-rm -rf output
+du -h $OUTPUT
+#rm -rf output
 #./compare.py
