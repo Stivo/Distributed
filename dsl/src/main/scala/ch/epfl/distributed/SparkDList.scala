@@ -265,8 +265,9 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     var y = reifyBlock(f(x))
 
     typeHandler = new TypeHandler(y)
-
+    getSchedule(availableDefs)(y.res, true).foreach{println}
     y = transformTree(y)
+    getSchedule(availableDefs)(y.res, true).foreach{println}
 
     stream.println("/*****************************************\n" +
       "  Emitting Spark Code                  \n" +
@@ -323,7 +324,7 @@ trait SparkLoopsGen extends ScalaGenLoops with DListBaseCodeGenPkg {
   
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case SimpleLoop(Def(ShapeDep(sd)), i, IteratorCollect(g, block)) =>
-      stream.println("val " + quote(sym) + " = " + quote(sd) + ".mapPartitions(it => {")
+      stream.println("val " + quote(sym) + " = " + quote(sd) + ".mapPartitions(it => { ")
       stream.println("// todo emit wrapper ")
       withGen(g, s => stream.println(s.head + "// yield")) {
         emitBlock(block)

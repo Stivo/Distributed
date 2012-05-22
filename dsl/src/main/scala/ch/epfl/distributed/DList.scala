@@ -221,7 +221,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   override def mirrorFatDef[A:Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
-    case IteratorCollect(g, y) => IteratorCollect(g, f(y))
+    case IteratorCollect(g, y) => IteratorCollect(f(g), f(y))
     case _ => super.mirrorFatDef(e,f)
   }).asInstanceOf[Def[A]]
 
@@ -238,7 +238,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       case d @ DListReduce(dlist, func) => DListReduce(f(dlist), f(func))(d.mKey, d.mValue)
       case d @ DListFlatten(dlists) => DListFlatten(f(dlists))(d.mA)
       case d @ DListGroupByKey(dlist) => DListGroupByKey(f(dlist))(d.mKey, d.mValue)
-      case d @ IteratorCollect(g, y) => IteratorCollect(g, f(y))
+      case d @ IteratorCollect(g, y) => IteratorCollect(f(g), f(y))
       case d @ IteratorValue(in, i) => IteratorValue(f(in), f(i))
       case d @ ShapeDep(in) => ShapeDep(f(in))
       case SimpleLoop(s, i, IteratorCollect(g, y)) => toAtom(SimpleLoop(f(s), f(i).asInstanceOf[Sym[Int]], IteratorCollect(f(g), f(y))))(mtype(manifest[A]), implicitly[SourceContext])
@@ -719,6 +719,7 @@ trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElse
 
   override def applyPlugIntoContext(d: Def[Any], r: Def[Any]) = (d, r) match {
     case (IteratorCollect(g, Block(a)), IteratorCollect(g2, Block(b))) =>
+      println("Yield should be: " + g2)
       IteratorCollect(g2, Block(plugInHelper(g, a, b)))
       
     case _ => super.applyPlugIntoContext(d, r)

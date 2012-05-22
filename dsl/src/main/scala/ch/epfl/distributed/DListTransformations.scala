@@ -184,14 +184,14 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
       analyzer.nodes.foreach {
         case m @ DListFilter(r, f) =>
           val stm = findDefinition(m).get
-          val eval = () => {
+          wt.register(stm.syms.head) {
             val i = fresh[Int]
             val d = reflectMutableSym(fresh[Int])
-            val value = toAtom2(IteratorValue(r, i))
+            val value = toAtom2(IteratorValue(wt(r), i))
             val (g, y) = collectYields {
               reifyEffects {
                 // Yield the iterator value in the block
-                ifThenElse(doApply(f, value), reifyEffects { yields(d, List(i), value) }, reifyEffects { skip(d, List(i)) })
+                ifThenElse(doApply(wt(f), value), reifyEffects { yields(d, List(i), value) }, reifyEffects { skip(d, List(i)) })
               }
             }
             // create a loop with the body that inlines the filtering function
@@ -200,9 +200,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
             // make an stm out of the loop
             toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
           }
-          
           System.out.println("Registering " + stm + " to a filter loop")
-          wt.registerFunction(stm.syms.head)(eval)
         case m @ DListMap(r, f) =>
           val stm = findDefinition(m).get
           
@@ -211,7 +209,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
    		  val d = reflectMutableSym(fresh[Int])
 
    		  val (g, y) = collectYields { reifyEffects {
-   		    yields(d, List(i), doApply(f, toAtom2(IteratorValue(r, i))))
+   		    yields(d, List(i), doApply(wt(f), toAtom2(IteratorValue(wt(r), i))))
    		  }}
           // create a loop with body that inlines the function
           val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
