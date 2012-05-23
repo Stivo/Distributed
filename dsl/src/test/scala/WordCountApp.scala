@@ -273,50 +273,39 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
   val appname = "WordCountApp"
   val unoptimizedAppname = appname + "_Orig"
 
-  def testSpark {
+  def testBoth {
     tryCompile {
       println("-- begin")
 
       val dsl = new WordCountApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
-      val codegen = new SparkGenDList { val IR: dsl.type = dsl }
-      var pw = setUpPrintWriter
-      codegen.emitSource(dsl.wikiArticleWordcount2012, appname, pw)
-      writeToProject(pw, "spark", appname)
-      release(pw)
-
+      val codegenSpark = new SparkGenDList { val IR: dsl.type = dsl }
+      val codegenScoobi = new ScoobiGenDList { val IR: dsl.type = dsl }
+      val list = List(codegenSpark, codegenScoobi)
+      def writeVersion(version: String) {
+        var pw = setUpPrintWriter
+        codegenSpark.emitProgram(dsl.wikiArticleWordcount2012, appname, pw, version)
+        writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
+        release(pw)
+        pw = setUpPrintWriter
+        codegenScoobi.emitProgram(dsl.wikiArticleWordcount2012, appname, pw, version)
+        writeToProject(pw, "scoobi", appname, version, codegenScoobi.lastGraph)
+        release(pw)
+      }
+      list.foreach { codegen =>
+        codegen.narrowExistingMaps = false
+        codegen.insertNarrowingMaps = false
+      }
       dsl.disablePatterns = true
-      val codegenUnoptimized = new { override val allOff = true } with SparkGenDList with MoreIterableOpsCodeGen { val IR: dsl.type = dsl }
-      codegenUnoptimized.skipTypes ++= codegen.types.keys
-      codegenUnoptimized.reduceByKey = true
-      pw = setUpPrintWriter
-      codegenUnoptimized.emitSource(dsl.wikiArticleWordcount2012, unoptimizedAppname, pw)
-      writeToProject(pw, "spark", unoptimizedAppname)
-      release(pw)
-
-      println("-- end")
-    }
-  }
-
-  def testScoobi {
-    tryCompile {
-      println("-- begin")
-
-      val dsl = new WordCountApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
-      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
-
-      var pw = setUpPrintWriter
-      codegen.emitSource(dsl.wikiArticleWordcount2012, appname, pw)
-      writeToProject(pw, "scoobi", appname)
-      release(pw)
-
-      dsl.disablePatterns = true
-      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
-      codegenUnoptimized.skipTypes ++= codegen.types.keys
-      pw = setUpPrintWriter
-      codegenUnoptimized.emitSource(dsl.wikiArticleWordcount2012, unoptimizedAppname, pw)
-      writeToProject(pw, "scoobi", unoptimizedAppname)
-      release(pw)
-
+      writeVersion("v0")
+      
+      dsl.disablePatterns = false
+      writeVersion("v1")
+      
+      list.foreach { codegen =>
+        codegen.narrowExistingMaps = true
+        codegen.insertNarrowingMaps = true
+      }
+      writeVersion("v2")
       println("-- end")
     }
   }

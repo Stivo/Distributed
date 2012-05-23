@@ -430,8 +430,13 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     case IR.Lambda2(_, _, _, _) if inlineClosures =>
     case _ => super.emitNode(sym, rhs)
   }
-
-  override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
+  
+  def makePackageName(pack: String) = if (pack == "") "" else "."+pack
+  
+  override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] =
+    emitProgram(f, className, stream, "")
+      
+  def emitProgram[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter, pack: String)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
 
     val x = fresh[A]
     val y = reifyBlock(f(x))
@@ -501,8 +506,28 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   var insertNarrowingMaps = true
   var mapMerge = true
 
+  def markMapsToNarrow(b: Block[_]) {
+    val analyzer = newFieldAnalyzer(b)
+    analyzer.nodes.foreach {
+      case d@DListMap(x, f) if (!d.metaInfos.contains("narrowed"))
+         && !SimpleType.unapply(d.getClosureTypes._2).isDefined 
+         && analyzer.hasObjectCreationInClosure(d) =>
+          d.metaInfos("toNarrow") = true
+      case _ =>
+    }
+  }
+  
+  def doNarrowExistingMaps[B: Manifest](b: Block[B]) = {
+    if (narrowExistingMaps) {
+      markMapsToNarrow(b)
+      narrowNarrowers(b, "toNarrow")
+    } else {
+      b
+    }
+  }
+  
   def insertNarrowersAndNarrow[B: Manifest](b: Block[B], runner: TransformationRunner) = {
-    narrowNarrowers(insertNarrowers(b, runner))
+    narrowNarrowers(insertNarrowers(b, runner), "narrower")
   }
 
   def insertNarrowers[B: Manifest](y: Block[B], runner: TransformationRunner) = {
@@ -512,7 +537,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
       y
   }
 
-  def narrowNarrowers[A: Manifest](b: Block[A]) = {
+  def narrowNarrowers[A: Manifest](b: Block[A], tag: String) = {
     var curBlock = b
     //    emitBlock(curBlock)
     var goOn = insertNarrowingMaps
@@ -520,13 +545,13 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
       val fieldAnalyzer = newFieldAnalyzer(curBlock)
 
       val candidates = fieldAnalyzer.ordered.flatMap {
-        case d @ DListMap(x, lam) if (d.metaInfos.contains("narrower") &&
+        case d @ DListMap(x, lam) if (d.metaInfos.contains(tag) &&
           !d.metaInfos.contains("narrowed") &&
           SimpleType.unapply(d.mB).isDefined) => {
           d.metaInfos("narrowed") = true
           None
         }
-        case d @ DListMap(x, lam) if (d.metaInfos.contains("narrower") &&
+        case d @ DListMap(x, lam) if (d.metaInfos.contains(tag) &&
           !d.metaInfos.contains("narrowed")) =>
           Some(d)
         case _ => None
@@ -547,6 +572,19 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     curBlock
   }
 
+  var lastGraph : String = ""
+  
+  def prepareGraphData(block: Block[_], comments: Boolean = true) {
+    lastGraph = try {
+      val analyzer = newFieldAnalyzer(block)
+      analyzer.makeFieldAnalysis
+      analyzer.addComments = comments
+      analyzer.exportToGraph
+    } catch {
+      case e => e.getMessage+"\n"+e.getStackTraceString
+    }
+  }
+  /*
   def writeGraphToFile(block: Block[_], name: String, comments: Boolean = true) {
     val out = new FileOutputStream(name)
     val analyzer = newFieldAnalyzer(block)
@@ -555,7 +593,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     out.write(analyzer.exportToGraph.getBytes)
     out.close
   }
-
+  */
 }
 
 trait TypeFactory extends ScalaGenDList {

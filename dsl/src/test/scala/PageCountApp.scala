@@ -1,4 +1,4 @@
-import java.io.PrintWriter
+/*import java.io.PrintWriter
 import java.io.StringWriter
 import java.io.FileWriter
 import ch.epfl.distributed._
@@ -99,3 +99,4 @@ class PageCountAppGenerator extends CodeGeneratorTestSuite {
   }
 
 }
+*/ 

@@ -95,53 +95,37 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
   val appname = "TpchQueries"
   val unoptimizedAppname = appname + "_Orig"
 
-  def testSpark {
+    def testBoth {
     tryCompile {
       println("-- begin")
-
-      var pw = setUpPrintWriter
 
       val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
-      val codegen = new SparkGenDList { val IR: dsl.type = dsl }
-
-      codegen.emitSource(dsl.query12, appname, pw)
-      writeToProject(pw, "spark", appname)
-      release(pw)
-
-      val typesDefined = codegen.types.keys
-      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
-      codegenUnoptimized.skipTypes ++= typesDefined
-      pw = setUpPrintWriter
-      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
-      writeToProject(pw, "scoobi", unoptimizedAppname)
-      release(pw)
-
+      val codegenSpark = new SparkGenDList { val IR: dsl.type = dsl }
+      val codegenScoobi = new ScoobiGenDList { val IR: dsl.type = dsl }
+      val list = List(codegenSpark, codegenScoobi)
+      def writeVersion(version: String) {
+        var pw = setUpPrintWriter
+        codegenSpark.emitProgram(dsl.query12, appname, pw, version)
+        writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
+        release(pw)
+        pw = setUpPrintWriter
+        codegenScoobi.emitProgram(dsl.query12, appname, pw, version)
+        writeToProject(pw, "scoobi", appname, version, codegenScoobi.lastGraph)
+        release(pw)
+      }
+      list.foreach { codegen =>
+        codegen.narrowExistingMaps = false
+        codegen.insertNarrowingMaps = false
+      }
+      writeVersion("v0")
+      
+      list.foreach { codegen =>
+        codegen.narrowExistingMaps = true
+        codegen.insertNarrowingMaps = true
+      }
+      writeVersion("v1")
       println("-- end")
     }
   }
 
-  def testScoobi {
-    tryCompile {
-      println("-- begin")
-
-      var pw = setUpPrintWriter
-
-      val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp
-      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
-
-      codegen.emitSource(dsl.query12, appname, pw)
-      writeToProject(pw, "scoobi", appname)
-      release(pw)
-
-      val typesDefined = codegen.types.keys
-      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
-      codegenUnoptimized.skipTypes ++= typesDefined
-      pw = setUpPrintWriter
-      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
-      writeToProject(pw, "scoobi", unoptimizedAppname)
-      release(pw)
-
-      println("-- end")
-    }
-  }
 }

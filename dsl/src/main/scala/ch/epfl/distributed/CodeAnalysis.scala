@@ -239,7 +239,10 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
           // analyze field reads of the new function
           val a2 = newFieldAnalyzer(newBlock, typeHandler)
           val candidates = a2.nodes.flatMap {
-            case vm @ DListMap(_, _) if (vm.metaInfos.contains(id)) => Some(vm)
+            case vm @ DListMap(_, _) if (vm.metaInfos.contains(id)) => {
+              vm.metaInfos.remove(id)
+              Some(vm)
+            }
             case _ => None
           }
           // remove the tag, not needed afterwards

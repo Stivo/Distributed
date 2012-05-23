@@ -255,6 +255,8 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
       val rbkt = new ReduceByKeyTransformation()
       y = rbkt.run(y)
     }
+    // narrow the existing maps
+    y = doNarrowExistingMaps(y)
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
     // TODO lower to loops
@@ -263,7 +265,7 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
 
   val collectionName = "RDD"
 
-  override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
+  override def emitProgram[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter, pack: String)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
 
     val x = fresh[A]
     var y = reifyBlock(f(x))
@@ -274,7 +276,7 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
       "  Emitting Spark Code                  \n" +
       "*******************************************/")
     stream.println("""
-package spark.examples;
+package spark.examples%s;
 import scala.math.random
 import spark._
 import SparkContext._
@@ -287,7 +289,7 @@ object %s {
     System.setProperty("spark.kryoserializer.buffer.mb", "20")
         
     		val sc = new SparkContext(sparkInputArgs(0), "%s")
-        """.format(className, className, className))
+        """.format(makePackageName(pack), className, className, className))
 
     val oldAnalysis = newAnalyzer(y)
 
@@ -319,9 +321,11 @@ object %s {
       "*******************************************/")
 
     stream.flush
-
+    
+    prepareGraphData(y, true)
+    types.clear()
     //writeGraphToFile(y, "test.dot", true)
-
+    reset
     Nil
   }
 

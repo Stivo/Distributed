@@ -102,6 +102,8 @@ trait ScoobiGenDList extends ScalaGenBase
 
   def transformTree[B: Manifest](block: Block[B]) = {
     var y = block
+    // narrow existing maps
+    y = doNarrowExistingMaps(y)
     // inserting narrower maps and narrow
     y = insertNarrowersAndNarrow(y, new NarrowerInsertionTransformation)
 
@@ -111,7 +113,7 @@ trait ScoobiGenDList extends ScalaGenBase
 
   val collectionName = "DList"
 
-  override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, streamIn: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
+  override def emitProgram[A, B](f: Exp[A] => Exp[B], className: String, streamIn: PrintWriter, pack: String)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
 
     val capture = new StringWriter
     val stream = new PrintWriter(capture)
@@ -120,7 +122,8 @@ trait ScoobiGenDList extends ScalaGenBase
       "  Emitting Scoobi Code                  \n" +
       "*******************************************/")
     stream.println("""
-package scoobi.generated;
+package scoobi.generated%s;
+import scoobi.generated.WireFormatsGen
 import com.nicta.scoobi.Scoobi._
 import com.nicta.scoobi.WireFormat
 import ch.epfl.distributed.datastruct._
@@ -152,7 +155,7 @@ object %s {
     	implicit val grouping_datetime = makeGrouping[DateTime]
     	
         ###wireFormats###
-        """.format(className, className))
+        """.format(makePackageName(pack), className, className))
 
     val x = fresh[A]
     var y = reifyBlock(f(x))
@@ -173,12 +176,12 @@ object %s {
       "*******************************************/")
 
     stream.flush
-
-    writeGraphToFile(y, "test.dot", true)
-
+    prepareGraphData(y, true)
     val out = capture.toString
     val newOut = out.replace("###wireFormats###", mkWireFormats)
     streamIn.print(newOut)
+    types.clear()
+    reset
     Nil
   }
 
