@@ -20,7 +20,7 @@ trait PartSupplierOps extends Base with Variables with OverloadHack with ParserO
 
   object PartSupplier {
     def apply(ps_partkey: Rep[Int], ps_suppkey: Rep[Int], ps_availqty: Rep[Int], ps_supplycost: Rep[Double], ps_comment: Rep[String]) = partsupplier_obj_new(ps_partkey, ps_suppkey, ps_availqty, ps_supplycost, ps_comment)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[PartSupplier] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[PartSupplier] = fromArray(input.split(sep, 5))
 
     def fromArray(input: Rep[Array[String]]): Rep[PartSupplier] = {
       PartSupplier(input(0).toInt, input(1).toInt, input(2).toInt, input(3).toDouble, input(4))
@@ -62,7 +62,7 @@ trait LogEntryOps extends Base with Variables with OverloadHack with ParserOps {
 
   object LogEntry {
     def apply(request: Rep[Long], timestamp: Rep[Double], url: Rep[String]) = logentry_obj_new(request, timestamp, url)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[LogEntry] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[LogEntry] = fromArray(input.split(sep, 3))
 
     def fromArray(input: Rep[Array[String]]): Rep[LogEntry] = {
       LogEntry(input(0).toLong, input(1).toDouble, input(2))
@@ -98,7 +98,7 @@ trait PageCountEntryOps extends Base with Variables with OverloadHack with Parse
 
   object PageCountEntry {
     def apply(language: Rep[String], project: Rep[String], site: Rep[String], number: Rep[Long], size: Rep[Long]) = pagecountentry_obj_new(language, project, site, number, size)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[PageCountEntry] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[PageCountEntry] = fromArray(input.split(sep, 5))
 
     def fromArray(input: Rep[Array[String]]): Rep[PageCountEntry] = {
       PageCountEntry(input(0), input(1), input(2), input(3).toLong, input(4).toLong)
@@ -140,7 +140,7 @@ trait PartOps extends Base with Variables with OverloadHack with ParserOps {
 
   object Part {
     def apply(p_partkey: Rep[Int], p_name: Rep[String], p_mfgr: Rep[String], p_brand: Rep[String], p_type: Rep[String], p_size: Rep[Int], p_container: Rep[String], p_retailprice: Rep[Double], p_comment: Rep[String]) = part_obj_new(p_partkey, p_name, p_mfgr, p_brand, p_type, p_size, p_container, p_retailprice, p_comment)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[Part] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[Part] = fromArray(input.split(sep, 9))
 
     def fromArray(input: Rep[Array[String]]): Rep[Part] = {
       Part(input(0).toInt, input(1), input(2), input(3), input(4), input(5).toInt, input(6), input(7).toDouble, input(8))
@@ -225,7 +225,7 @@ trait RegionOps extends Base with Variables with OverloadHack with ParserOps {
 
   object Region {
     def apply(r_regionkey: Rep[Int], r_name: Rep[String], r_comment: Rep[String]) = region_obj_new(r_regionkey, r_name, r_comment)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[Region] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[Region] = fromArray(input.split(sep, 3))
 
     def fromArray(input: Rep[Array[String]]): Rep[Region] = {
       Region(input(0).toInt, input(1), input(2))
@@ -261,7 +261,7 @@ trait CustomerOps extends Base with Variables with OverloadHack with ParserOps {
 
   object Customer {
     def apply(c_custkey: Rep[Int], c_name: Rep[String], c_address: Rep[String], c_nationkey: Rep[Int], c_phone: Rep[String], c_acctbal: Rep[Double], c_mktsegment: Rep[String], c_comment: Rep[String]) = customer_obj_new(c_custkey, c_name, c_address, c_nationkey, c_phone, c_acctbal, c_mktsegment, c_comment)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[Customer] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[Customer] = fromArray(input.split(sep, 8))
 
     def fromArray(input: Rep[Array[String]]): Rep[Customer] = {
       Customer(input(0).toInt, input(1), input(2), input(3).toInt, input(4), input(5).toDouble, input(6), input(7))
@@ -312,7 +312,7 @@ trait OrderOps extends Base with Variables with OverloadHack with ParserOps {
 
   object Order {
     def apply(o_orderkey: Rep[Int], o_custkey: Rep[Int], o_orderstatus: Rep[Char], o_totalprice: Rep[Double], o_orderdate: Rep[Date], o_orderpriority: Rep[String], o_clerk: Rep[String], o_shippriority: Rep[Int], o_comment: Rep[String]) = order_obj_new(o_orderkey, o_custkey, o_orderstatus, o_totalprice, o_orderdate, o_orderpriority, o_clerk, o_shippriority, o_comment)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[Order] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[Order] = fromArray(input.split(sep, 9))
 
     def fromArray(input: Rep[Array[String]]): Rep[Order] = {
       Order(input(0).toInt, input(1).toInt, input(2).toChar, input(3).toDouble, input(4).toDate, input(5), input(6), input(7).toInt, input(8))
@@ -366,7 +366,7 @@ trait WikiArticleOps extends Base with Variables with OverloadHack with ParserOp
 
   object WikiArticle {
     def apply(pageId: Rep[Long], name: Rep[String], updated: Rep[Date], xml: Rep[String], plaintext: Rep[String]) = wikiarticle_obj_new(pageId, name, updated, xml, plaintext)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[WikiArticle] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[WikiArticle] = fromArray(input.split(sep, 5))
 
     def fromArray(input: Rep[Array[String]]): Rep[WikiArticle] = {
       WikiArticle(input(0).toLong, input(1), input(2).toDate, input(3), input(4))
@@ -408,7 +408,7 @@ trait SupplierOps extends Base with Variables with OverloadHack with ParserOps {
 
   object Supplier {
     def apply(s_suppkey: Rep[Int], s_name: Rep[String], s_address: Rep[String], s_nationkey: Rep[Int], s_phone: Rep[String], s_acctbal: Rep[Double], s_comment: Rep[String]) = supplier_obj_new(s_suppkey, s_name, s_address, s_nationkey, s_phone, s_acctbal, s_comment)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[Supplier] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[Supplier] = fromArray(input.split(sep, 7))
 
     def fromArray(input: Rep[Array[String]]): Rep[Supplier] = {
       Supplier(input(0).toInt, input(1), input(2), input(3).toInt, input(4), input(5).toDouble, input(6))
@@ -456,7 +456,7 @@ trait NationOps extends Base with Variables with OverloadHack with ParserOps {
 
   object Nation {
     def apply(n_nationkey: Rep[Int], n_name: Rep[String], n_regionkey: Rep[Int], n_comment: Rep[String]) = nation_obj_new(n_nationkey, n_name, n_regionkey, n_comment)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[Nation] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[Nation] = fromArray(input.split(sep, 4))
 
     def fromArray(input: Rep[Array[String]]): Rep[Nation] = {
       Nation(input(0).toInt, input(1), input(2).toInt, input(3))
@@ -495,7 +495,7 @@ trait LineItemOps extends Base with Variables with OverloadHack with ParserOps {
 
   object LineItem {
     def apply(l_orderkey: Rep[Int], l_partkey: Rep[Int], l_suppkey: Rep[Int], l_linenumber: Rep[Int], l_quantity: Rep[Double], l_extendedprice: Rep[Double], l_discount: Rep[Double], l_tax: Rep[Double], l_returnflag: Rep[Char], l_linestatus: Rep[Char], l_shipdate: Rep[Date], l_commitdate: Rep[Date], l_receiptdate: Rep[Date], l_shipinstruct: Rep[String], l_shipmode: Rep[String], l_comment: Rep[String]) = lineitem_obj_new(l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[LineItem] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[LineItem] = fromArray(input.split(sep, 16))
 
     def fromArray(input: Rep[Array[String]]): Rep[LineItem] = {
       LineItem(input(0).toInt, input(1).toInt, input(2).toInt, input(3).toInt, input(4).toDouble, input(5).toDouble, input(6).toDouble, input(7).toDouble, input(8).toChar, input(9).toChar, input(10).toDate, input(11).toDate, input(12).toDate, input(13), input(14), input(15))
@@ -570,7 +570,7 @@ trait N2Ops extends Base with Variables with OverloadHack with ParserOps {
 
   object N2 {
     def apply(n2id: Rep[String], n2junk: Rep[Int]) = n2_obj_new(n2id, n2junk)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[N2] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[N2] = fromArray(input.split(sep, 2))
 
     def fromArray(input: Rep[Array[String]]): Rep[N2] = {
       N2(input(0), input(1).toInt)
@@ -603,7 +603,7 @@ trait UserOps extends Base with Variables with OverloadHack with ParserOps {
 
   object User {
     def apply(userId: Rep[Int], name: Rep[String], age: Rep[Int]) = user_obj_new(userId, name, age)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[User] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[User] = fromArray(input.split(sep, 3))
 
     def fromArray(input: Rep[Array[String]]): Rep[User] = {
       User(input(0).toInt, input(1), input(2).toInt)
@@ -639,7 +639,7 @@ trait AddressOps extends Base with Variables with OverloadHack with ParserOps {
 
   object Address {
     def apply(userId: Rep[Int], street: Rep[String], zip: Rep[Int], city: Rep[String]) = address_obj_new(userId, street, zip, city)
-    def parse(input: Rep[String], sep: Rep[String]): Rep[Address] = fromArray(input.split(sep))
+    def parse(input: Rep[String], sep: Rep[String]): Rep[Address] = fromArray(input.split(sep, 4))
 
     def fromArray(input: Rep[Array[String]]): Rep[Address] = {
       Address(input(0).toInt, input(1), input(2).toInt, input(3))

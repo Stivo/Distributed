@@ -13,32 +13,66 @@ trait WordCountApp extends DListProgram with ApplicationOps with SparkDListOps w
     splitted.apply(2)
   }
 
-  def wikiArticleWordcount(x : Rep[Unit]) = {
-    val splitted = stopwords.split("\\s").toList.filter(_.length > 1).flatMap{x => scala.collection.immutable.List(x, x.capitalize)}
+  def wikiArticleWordcount2012(x: Rep[Unit]) = {
+    val splitted = stopwords.split("\\s").
+      toList.filter(_.length > 1).
+      flatMap { x => scala.collection.immutable.List(x, x.capitalize) }
     val stopWordsList = unit(splitted.toArray)
     val stopWordsSet = Set[String]()
-    stopWordsList.foreach{ x=> 
-       stopWordsSet.add(x)
+    stopWordsList.foreach { x =>
+      stopWordsSet.add(x)
     }
     val read = DList(getArgs(0))
     val parsed = read.map(WikiArticle.parse(_, "\t"))
+
     parsed
-    .map(_.plaintext)
-    //.map(x => if (x.startsWith("thumb")) x.substring(5) else x)
-    .flatMap(_.replaceAll("""((\\n(thumb)*)|(\.(thumb)+))""", " ").split("[^a-zA-Z0-9']+").toSeq)
-    //.flatMap(_.split("[^a-zA-Z0-9']+").toSeq)
-    .map(x => if (x.matches("(thumb)+[A-Z].*?")) x.replaceAll("(thumb)+", "") else x)
-    .filter(x => x.length > 1)
-    .filter(x => !stopWordsSet.contains(x))
-    .filter(x => !x.matches("(left|right)(thumb)+"))
-    .map( x=> (x,unit(1)))
-    .groupByKey
-    .reduce(_+_)
-    .save(getArgs(1))
+      .map(x => "\\n" + x.plaintext)
+      .map(_.replaceAll("""\[\[.*?\]\]""", " "))
+      //      .flatMap(_.replaceAll("""((\\n((\d+px)?(left|right)?thumb(nail)?)*)|(\.(thumb)+))""", " ")
+      //          .split("[^a-zA-Z0-9']+").toSeq)
+      //      .flatMap(_.split("[^a-zA-Z0-9']+").toSeq)
+      .flatMap(_.replaceAll("""\\[nNt]""", " ").split("[^a-zA-Z0-9']+").toSeq)
+      .filter(x => x.length > 1)
+      .filter(x => !stopWordsSet.contains(x))
+      .map(x => if (x.matches("^((left|right)*(thumb)(nail|left|right)*)+[0-9A-Z].*?")) x.replaceAll("((left|right)*thumb(nail|left|right)*)+", "") else x)
+      //      .filter(x => !((x.contains("thumb") || x.contains("0px")) && x.matches("(\\d+px|left|right|thumb|nail)+")))
+      .map(x => (x, unit(1)))
+      .groupByKey
+      .reduce(_ + _)
+      .save(getArgs(1))
+    //    parsed.map(_.plaintext).save(getArgs(1))
     unit(())
   }
-  
-  
+
+  def wikiArticleWordcount2009(x: Rep[Unit]) = {
+    val splitted = stopwords.split("\\s").
+      toList.filter(_.length > 1).
+      flatMap { x => scala.collection.immutable.List(x, x.capitalize) }
+    val stopWordsList = unit(splitted.toArray)
+    val stopWordsSet = Set[String]()
+    stopWordsList.foreach { x =>
+      stopWordsSet.add(x)
+    }
+    val read = DList(getArgs(0))
+    val parsed = read.map(WikiArticle.parse(_, "\t"))
+
+    parsed
+      .map(_.plaintext)
+      //.map(x => if (x.startsWith("thumb")) x.substring(5) else x)
+      .flatMap(_.replaceAll("""((\\n(thumb)*)|(\.(thumb)+))""", " ").split("[^a-zA-Z0-9']+").toSeq)
+      //.flatMap(_.split("[^a-zA-Z0-9']+").toSeq)
+      .map(x => if (x.matches("(thumb)+[A-Z].*?")) x.replaceAll("(thumb)+", "") else x)
+      .filter(x => x.length > 1)
+      .filter(x => !stopWordsSet.contains(x))
+      .filter(x => !x.matches("(left|right)(thumb)+"))
+      .map(x => (x, unit(1)))
+      .groupByKey
+      .reduce(_ + _)
+      .save(getArgs(1))
+    //    parsed.map(_.plaintext).save(getArgs(1))
+    unit(())
+  }
+
   def statistics(x: Rep[Unit]) = {
     val read = DList(getArgs(0))
     val parsed = read.map(parse)
@@ -55,7 +89,7 @@ trait WordCountApp extends DListProgram with ApplicationOps with SparkDListOps w
     //    parsed.save(folder+"/output/")
     unit(())
   }
-  
+
   val stopwords = """a
 about
 above
@@ -232,8 +266,6 @@ yourself
 yourselves
 """
 
-  
-  
 }
 
 class WordCountAppGenerator extends CodeGeneratorTestSuite {
@@ -248,7 +280,7 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
       val dsl = new WordCountApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
       val codegen = new SparkGenDList { val IR: dsl.type = dsl }
       var pw = setUpPrintWriter
-      codegen.emitSource(dsl.wikiArticleWordcount, appname, pw)
+      codegen.emitSource(dsl.wikiArticleWordcount2012, appname, pw)
       writeToProject(pw, "spark", appname)
       release(pw)
 
@@ -257,7 +289,7 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
       codegenUnoptimized.skipTypes ++= codegen.types.keys
       codegenUnoptimized.reduceByKey = true
       pw = setUpPrintWriter
-      codegenUnoptimized.emitSource(dsl.wikiArticleWordcount, unoptimizedAppname, pw)
+      codegenUnoptimized.emitSource(dsl.wikiArticleWordcount2012, unoptimizedAppname, pw)
       writeToProject(pw, "spark", unoptimizedAppname)
       release(pw)
 
@@ -273,7 +305,7 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
       val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
 
       var pw = setUpPrintWriter
-      codegen.emitSource(dsl.wikiArticleWordcount, appname, pw)
+      codegen.emitSource(dsl.wikiArticleWordcount2012, appname, pw)
       writeToProject(pw, "scoobi", appname)
       release(pw)
 
@@ -281,7 +313,7 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
       val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
       codegenUnoptimized.skipTypes ++= codegen.types.keys
       pw = setUpPrintWriter
-      codegenUnoptimized.emitSource(dsl.wikiArticleWordcount, unoptimizedAppname, pw)
+      codegenUnoptimized.emitSource(dsl.wikiArticleWordcount2012, unoptimizedAppname, pw)
       writeToProject(pw, "scoobi", unoptimizedAppname)
       release(pw)
 
