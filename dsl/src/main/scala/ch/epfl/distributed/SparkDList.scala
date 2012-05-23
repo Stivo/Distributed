@@ -26,8 +26,8 @@ trait SparkDListOps extends DListOps {
 
 trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
   case class DListReduceByKey[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], closure: Exp[(V, V) => V])
-      extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
-      with PreservingTypeComputation[DList[(K, V)]] {
+    extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
+    with PreservingTypeComputation[DList[(K, V)]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     def getClosureTypes = ((manifest[V], manifest[V]), manifest[V])
@@ -167,8 +167,8 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
       }
 
       case v @ DListCollect(in) => visitAll("input", v.mA)
-    		  
-      case v @ DListTakeSample(in,_,_,_) => visitAll("input", v.mA)
+
+      case v @ DListTakeSample(in, _, _, _) => visitAll("input", v.mA)
 
       case v @ DListCache(in) => node.successorFieldReads.toSet
 
@@ -179,7 +179,7 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
 }
 
 trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransformations
-    with SparkTransformations with Matchers with SparkDListFieldAnalysis with CaseClassTypeFactory {
+  with SparkTransformations with Matchers with SparkDListFieldAnalysis with CaseClassTypeFactory {
 
   val IR: SparkDListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -197,7 +197,8 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     ComputationNode,
     DListNode,
     DListTakeSample,
-    GetArgs
+    GetArgs,
+    IteratorValue
   }
   import IR.{ TTP, TP, SubstTransformer, Field }
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
@@ -223,6 +224,7 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
       case v @ DListCollect(dlist) => emitValDef(sym, "%s.collect()".format(quote(dlist)))
       case v @ DListTakeSample(in, r, n, s) => emitValDef(sym, "%s.takeSample(%s, %s, %s)".format(quote(in), quote(r), quote(n), quote(s)))
       case GetArgs() => emitValDef(sym, "sparkInputArgs.drop(1); // First argument is for spark context")
+      case sd @ IteratorValue(r, i) => emitValDef(sym, "it.next // loop var " + quote(i))
       case _ => super.emitNode(sym, rhs)
     }
     //    println(sym+" "+rhs)
@@ -250,9 +252,15 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     }
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
+
+    println("Find me narrow")
+    newAnalyzer(y).statements.foreach(println)
     
     // transforming monadic ops to loops for fusion
     y = new MonadicToLoopsTransformation().run(y)
+    
+    println("Find me")
+    newAnalyzer(y).statements.foreach(println)
     y
 
   }
@@ -265,9 +273,9 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     var y = reifyBlock(f(x))
 
     typeHandler = new TypeHandler(y)
-    getSchedule(availableDefs)(y.res, true).foreach{println}
+    getSchedule(availableDefs)(y.res, true).foreach { println }
     y = transformTree(y)
-    getSchedule(availableDefs)(y.res, true).foreach{println}
+    getSchedule(availableDefs)(y.res, true).foreach { println }
 
     stream.println("/*****************************************\n" +
       "  Emitting Spark Code                  \n" +
@@ -321,47 +329,66 @@ object %s {
 trait SparkLoopsGen extends ScalaGenLoops with DListBaseCodeGenPkg {
   val IR: LoopsExp with DListOpsExp
   import IR._
-  
-  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
-    case SimpleLoop(Def(ShapeDep(sd)), i, IteratorCollect(g, block)) =>
-      stream.println("val " + quote(sym) + " = " + quote(sd) + ".mapPartitions(it => { ")
-      stream.println("// todo emit wrapper ")
-      withGen(g, s => stream.println(s.head + "// yield")) {
-        emitBlock(block)
-      }
-      stream.println("val newIt = it// todo emit new iterator ")
-      stream.println("newIt")
-      stream.println("}")
-    case _ =>
-      super.emitNode(sym, rhs)
-  }
 }
 
-trait ScalaGenSparkFat extends ScalaGenLoopsFat  {
+trait ScalaGenSparkFat extends ScalaGenLoopsFat {
   val IR: DListOpsExp with LoopsFatExp
   import IR._
-    
+
   override def emitFatNode(sym: List[Sym[Any]], rhs: FatDef) = rhs match {
-    case SimpleFatLoop(Def(ShapeDep(sd)),x,rhs) =>
+    case SimpleFatLoop(Def(ShapeDep(sd)), x, rhs) =>
       val ii = x
 
-      val gens = for ((l,r) <- sym zip rhs) yield r match {       //if !r.isInstanceOf[ForeachElem[_]
-        case IteratorCollect(g,Block(y)) => 
+      for ((l, r) <- sym zip rhs) r match { //if !r.isInstanceOf[ForeachElem[_]
+        case IteratorCollect(g, Block(y)) =>
+          stream.println("val " + quote(sym.head) + " = " + quote(sd) + """.mapPartitions(it => {
+        new Iterator[""" + stripGen(g.tp) + """] {
+          private[this] val buff = new Array[""" + stripGen(g.tp) + """](1 << 22)
+  		  private[this] final var start = 0
+          private[this] final var end = 0
+
+          @inline
+          private[this] final def load = {
+            var i = 0
+            while (it.hasNext && i < buff.length) {
+            val curr = it.next
+          """)
+      }
+      
+      val gens = for ((l, r) <- sym zip rhs) yield r match { //if !r.isInstanceOf[ForeachElem[_]
+        case IteratorCollect(g, Block(y)) =>
           (g, (s: List[String]) => {
-            stream.println("val result = " +  s.head + "// yield")
+            stream.println("buff(i) = " + s.head + "// yield")
+            stream.println("i = i + 1")
             stream.println("val " + quote(g) + " = ()")
           })
       }
-      stream.println("val " + quote(sym.head) + " = " + quote(sd) + ".mapPartitions(it => {")
-      stream.println("// todo emit wrapper ")
-     
+
       withGens(gens) {
         emitFatBlock(syms(rhs).map(Block(_)))
       }
-      stream.println("val newIt = it// todo emit new iterator ")
-      stream.println("newIt")
-      stream.println("}")
 
+      stream.println("""
+            }
+            start = 0
+            end = if (i < buff.length) i else i - 1
+          }
+
+          override def hasNext(): Boolean = {
+            if (start == end) load
+            
+            start != end
+          }
+
+          override def next = {
+            if (start == end) load
+
+            val res = buff(start)
+            start += 1
+            res
+          }
+        }
+      })""")
 
     case _ => super.emitFatNode(sym, rhs)
   }
@@ -369,6 +396,5 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat  {
 
 trait SparkGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with SparkGenDList with ScalaGenSparkFat {
   val IR: SparkDListOpsExp
-  
 }
 

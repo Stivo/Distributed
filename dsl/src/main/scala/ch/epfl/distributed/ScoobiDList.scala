@@ -1,6 +1,6 @@
 package ch.epfl.distributed
 
-import scala.virtualization.lms.common.ScalaGenBase
+import scala.virtualization.lms.common.{ ScalaGenBase, LoopsFatExp, ScalaGenLoopsFat }
 import java.io.PrintWriter
 import scala.reflect.SourceContext
 import scala.virtualization.lms.util.GraphUtil
@@ -14,8 +14,8 @@ import java.io.FileWriter
 trait ScoobiProgram extends DListProgram
 
 trait ScoobiGenDList extends ScalaGenBase
-    with DListFieldAnalysis
-    with DListTransformations with Matchers with CaseClassTypeFactory {
+  with DListFieldAnalysis
+  with DListTransformations with Matchers with CaseClassTypeFactory {
 
   val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -31,7 +31,8 @@ trait ScoobiGenDList extends ScalaGenBase
     DListReduce,
     ComputationNode,
     DListNode,
-    GetArgs
+    GetArgs,
+    IteratorValue
   }
   import IR.{ TTP, TP, SubstTransformer, Field }
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
@@ -53,6 +54,7 @@ trait ScoobiGenDList extends ScalaGenBase
       case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
       case v @ DListJoin(left, right) => emitValDef(sym, "join(%s,%s)".format(quote(left), quote(right)))
       case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.combine(%s)".format(quote(dlist), handleClosure(f)))
+      case sd @ IteratorValue(r, i) => emitValDef(sym, "input // loop var " + quote(i))
       case GetArgs() => emitValDef(sym, "scoobiInputArgs")
       case _ => super.emitNode(sym, rhs)
     }
@@ -105,7 +107,7 @@ trait ScoobiGenDList extends ScalaGenBase
     // inserting narrower maps and narrow
     y = insertNarrowersAndNarrow(y, new NarrowerInsertionTransformation)
 
-    // TODO lower to loops
+    y = new MonadicToLoopsTransformation().run(y)
     y
   }
 
@@ -121,6 +123,7 @@ trait ScoobiGenDList extends ScalaGenBase
       "*******************************************/")
     stream.println("""
 package scoobi.generated;
+import com.nicta.scoobi.Emitter
 import com.nicta.scoobi.Scoobi._
 import com.nicta.scoobi.WireFormat
 import ch.epfl.distributed.datastruct._
@@ -184,5 +187,44 @@ object %s {
 
 }
 
-trait ScoobiGen extends DListBaseCodeGenPkg with ScoobiGenDList
+trait ScalaGenScoobiFat extends ScalaGenLoopsFat {
+  val IR: DListOpsExp with LoopsFatExp
+  import IR._
+
+  override def emitFatNode(sym: List[Sym[Any]], rhs: FatDef) = rhs match {
+    case SimpleFatLoop(Def(ShapeDep(sd)), x, rhs) =>
+      val ii = x
+      var outType = "Nothing"
+      for ((l, r) <- sym zip rhs) r match { //if !r.isInstanceOf[ForeachElem[_]
+        case IteratorCollect(g, Block(y)) =>
+          outType = stripGen(g.tp)
+          val inType = remap(sd.tp.typeArguments(0))
+          stream.println("val " + quote(sym.head) + " = " + quote(sd) + """.parallelDo(new DoFn[""" + inType + """,""" + outType + """] {
+        def setup(): Unit = {}
+        def process(input: """ + inType + """, emitter: Emitter[""" + outType + """]): Unit = {
+          """)
+      }
+      val gens = for ((l, r) <- sym zip rhs) yield r match { //if !r.isInstanceOf[ForeachElem[_]
+        case IteratorCollect(g, Block(y)) =>
+          (g, (s: List[String]) => {
+            stream.println("emitter.emit(" + s.head + ")// yield")
+            stream.println("val " + quote(g) + " = ()")
+          })
+      }
+
+      withGens(gens) {
+        emitFatBlock(syms(rhs).map(Block(_)))
+      }
+      stream.println("}")
+      stream.println("""
+            def cleanup(emitter: Emitter[""" + outType + """]): Unit = {}
+          })
+          """)
+
+    case _ => super.emitFatNode(sym, rhs)
+  }
+}
+
+trait ScoobiGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with ScoobiGenDList with ScalaGenScoobiFat
+
 

@@ -3,7 +3,7 @@ import java.io.StringWriter
 import java.io.FileWriter
 import ch.epfl.distributed._
 import org.scalatest._
-import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps, LiftNumeric }
+import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps, LiftNumeric}
 import scala.util.Random
 
 trait TpchQueriesApp extends DListProgram with ApplicationOps {
@@ -104,46 +104,33 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp {
         override val verbosity = 1
       }
-      val codegen = new SparkGen { val IR: dsl.type = dsl }
+      val codegen = new SparkGen { val IR: dsl.type = dsl
+        import IR._
+        override def shouldApplyFusion(currentScope: List[Stm])(result: List[Exp[Any]]): Boolean = true  
+      }
 
       codegen.emitSource(dsl.query12, appname, pw)
       writeToProject(pw, "spark", appname)
       release(pw)
 
-      val typesDefined = codegen.types.keys
-//      val codegenUnoptimized = new { override val allOff = true } with SparkGen { val IR: dsl.type = dsl }
-//      codegenUnoptimized.skipTypes ++= typesDefined
-//      pw = setUpPrintWriter
-//      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
-//      writeToProject(pw, "spark", unoptimizedAppname)
-//      release(pw)
-
       println("-- end")
     }
   }
 
-  /* def testScoobi {
+  def testScoobi {
     tryCompile {
       println("-- begin")
 
       var pw = setUpPrintWriter
 
       val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp
-      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
+      val codegen = new ScoobiGen { val IR: dsl.type = dsl }
 
       codegen.emitSource(dsl.query12, appname, pw)
       writeToProject(pw, "scoobi", appname)
       release(pw)
 
-      val typesDefined = codegen.types.keys
-      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
-      codegenUnoptimized.skipTypes ++= typesDefined
-      pw = setUpPrintWriter
-      codegenUnoptimized.emitSource(dsl.query12, unoptimizedAppname, pw)
-      writeToProject(pw, "scoobi", unoptimizedAppname)
-      release(pw)
-
       println("-- end")
     }
-  } */
+  } 
 }

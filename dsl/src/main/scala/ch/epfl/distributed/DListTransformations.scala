@@ -191,7 +191,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
             val (g, y) = collectYields {
               reifyEffects {
                 // Yield the iterator value in the block
-                ifThenElse(doApply(wt(f), value), reifyEffects { yields(d, List(i), value) }, reifyEffects { skip(d, List(i)) })
+                ifThenElse(doApply(wt(f), value), reifyEffects { yields(d, List(i), value)(mtype(r.tp.typeArguments(0))) }, reifyEffects { skip(d, List(i)) })
               }
             }
             // create a loop with the body that inlines the filtering function
@@ -207,10 +207,14 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
           val eval = () => {
           val i = fresh[Int]
    		  val d = reflectMutableSym(fresh[Int])
-
+   		  val closure = Def.unapply(f).get.asInstanceOf[Lambda[Any, Any]]
+   		    
+          val yld = doApply(wt(f), toAtom2(IteratorValue(wt(r), i)))
    		  val (g, y) = collectYields { reifyEffects {
-   		    yields(d, List(i), doApply(wt(f), toAtom2(IteratorValue(wt(r), i))))
+   		    yields(d, List(i), yld)(closure.mB)
    		  }}
+          
+          println("Generator type= " + stripGen(g.tp))
           // create a loop with body that inlines the function
           val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
           
