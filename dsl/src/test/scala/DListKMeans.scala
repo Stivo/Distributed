@@ -63,61 +63,41 @@ trait VectorBaseExp extends VectorBase with BaseExp {
 trait ScalaVectorCodeGen extends ScalaCodegen {
   val IR: VectorBaseExp
   import IR._
+    def writeLoop(initOutVar: String, loopBody: String, desc: String, var1: String, var2: String = "") = {
+      val out = """ {
+          // %s
+    		%s
+    	    var out = %s
+    	    var i = 0
+    	    while (i < $var1.size) {
+    			%s
+    			i += 1
+    		}
+    	    out
+    		}""".format(desc, 
+    	        if (var2 != "") """if ($var1.size != $var2.size) 
+    	        						throw new IllegalArgumentException("Should have same length")""" else "",
+    	        initOutVar, loopBody)
+       out.replaceAll("\\$var1",var1).replaceAll("\\$var2",var2)
+    }
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case nv @ NewVector(elems) => emitValDef(sym, quote(elems))
     case VectorSimpleOp(v1, v2, op) => {
       val q1 = quote(v1)
       val q2 = quote(v2)
-      emitValDef(sym, """
-    	    {
-          // Vector Simple Op
-    	    if (%s.size != %s.size)
-    			throw new IllegalArgumentException("Should have same length")
-    	    val newOut = new Array[Double](%s.size)
-    	    var i = 0
-    	    while (i < %s.size) {
-    			newOut(i) = %s(i) %s %s(i)
-    			i += 1
-    		}
-    	    newOut
-    		}
-    	    """.format(q1, q2, q1, q1, q1, op, q2))
+      emitValDef(sym, writeLoop("new Array[Double]($var1.size)", "out(i) = $var1(i) "+op+" $var2(i)", "Vector Simple Op", q1, q2))
     }
     case VectorPointWiseOp(v, d, op) => {
       val qv = quote(v)
       val qd = quote(d)
-      emitValDef(sym, """
-    	    {
-          // Vector Point wise op
-    	    val newOut = new Array[Double](%s.size)
-    	    var i = 0
-    	    while (i < %s.size) {
-    			newOut(i) = %s(i) %s %s
-    			i += 1
-    		}
-    	    newOut
-    		}
-    	    """.format(qv, qv, qv, op, qd))
+      emitValDef(sym, writeLoop("new Array[Double]($var1.size)", "out(i) = $var1(i) "+op+" "+qd, "Vector Point wise op", qv))
     }
     case VectorSquaredDist(v1, v2) => {
       val q1 = quote(v1)
       val q2 = quote(v2)
-      emitValDef(sym, """
-    	    {
-    		  // Vector Squared Dist
-    	    if (%s.size != %s.size)
-    			throw new IllegalArgumentException("Should have same length")
-    	    var out = 0.0
-    	    var i = 0
-    	    while (i < %s.size) {
-    			val dist = %s(i) - %s(i)
-    	  		out += dist * dist
-    			i += 1
-    		}
-    	    out
-    		}
-    	    """.format(q1, q2, q1, q1, q2))
+      emitValDef(sym, writeLoop("0.0", "val dist = $var1(i) - $var2(i); out += dist * dist", "Vector Squared Dist", q1, q2))
     }
+    
     case VectorPrint(v1) => {
       emitValDef(sym, """%s.mkString("(", ",", ")")""".format(quote(v1)))
     }
@@ -228,29 +208,31 @@ class KMeansAppGenerator extends CodeGeneratorTestSuite {
     }
   }
 
-  /*
-  def testScoobi {
-    tryCompile {
-      println("-- begin")
-
-      val dsl = new KMeansApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
-
-      var pw = setUpPrintWriter
-      val codegen = new ScoobiGenDList { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.statistics, appname, pw)
-      writeToProject(pw, "scoobi", appname)
-      release(pw)
-
-      val typesDefined = codegen.types.keys
-      val codegenUnoptimized = new { override val allOff = true } with ScoobiGenDList { val IR: dsl.type = dsl }
-      codegenUnoptimized.skipTypes ++= typesDefined
-      pw = setUpPrintWriter
-      codegenUnoptimized.emitSource(dsl.statistics, unoptimizedAppname, pw)
-      writeToProject(pw, "scoobi", unoptimizedAppname)
-      release(pw)
-
-      println("-- end")
-    }
-  }
-*/
 }
+
+/*
+  def squaredDistForMin(o: Rep[Vector], max: Rep[Double]) = vec_squaredDistForMin(v, o, max)
+  def vec_squaredDistForMin(v: Rep[Vector], o: Rep[Vector], max: Rep[Double]): Rep[Double]
+  case class VectorSquaredDistForMin(v1: Exp[Vector], v2: Exp[Vector], max: Exp[Double]) extends Def[Double]
+  def vec_squaredDistForMin(v: Exp[Vector], o: Exp[Vector], max: Rep[Double]) = VectorSquaredDistForMin(v, o, max)
+  case VectorSquaredDistForMin(v1, v2, max) => VectorSquaredDistForMin(f(v1), f(v2), f(max))
+case VectorSquaredDistForMin(v1, v2, max) => {
+      val q1 = quote(v1)
+      val q2 = quote(v2)
+      emitValDef(sym, """
+    	    {
+    		  // Vector Squared Dist
+    	    if (%s.size != %s.size)
+    			throw new IllegalArgumentException("Should have same length")
+    	    var out = 0.0
+    	    var i = 0
+    	    while (i < %s.size && out <= %s) {
+    			val dist = %s(i) - %s(i)
+    	  		out += dist * dist
+    			i += 1
+    		}
+    	    out
+    		}
+    	    """.format(q1, q2, q1, quote(max), q1, q2))
+    }
+*/
