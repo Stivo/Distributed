@@ -543,6 +543,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   var narrowExistingMaps = true
   var insertNarrowingMaps = true
   var mapMerge = true
+  var loopFusion = true
 
   def markMapsToNarrow(b: Block[_]) {
     val analyzer = newFieldAnalyzer(b)

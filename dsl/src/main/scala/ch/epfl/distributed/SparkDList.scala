@@ -242,14 +242,6 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
 
   var reduceByKey = true
 
-  val allOff = false
-  if (allOff) {
-    narrowExistingMaps = false
-    insertNarrowingMaps = false
-    reduceByKey = false
-    mapMerge = false
-  }
-
   def transformTree[B: Manifest](block: Block[B]) = {
     var y = block
     // merge groupByKey with reduce to reduceByKey
@@ -262,14 +254,14 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
 
-    println("Find me narrow")
-    newAnalyzer(y).statements.foreach(println)
-    
-    // transforming monadic ops to loops for fusion
-    y = new MonadicToLoopsTransformation().run(y)
-    
-    println("Find me")
-    newAnalyzer(y).statements.foreach(println)
+    if (loopFusion){
+      println("Find me narrow")
+      newAnalyzer(y).statements.foreach(println)
+      // transforming monadic ops to loops for fusion
+      y = new MonadicToLoopsTransformation().run(y)
+      println("Find me")
+      newAnalyzer(y).statements.foreach(println)
+    }
     y
   }
 
@@ -367,7 +359,7 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
           private[this] final def load = {
             var i = 0
             while (it.hasNext && i < buff.length) {
-            val curr = it.next
+            //val curr = it.next
           """)
       }
       
