@@ -29,12 +29,22 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
   import IR.{ Struct }
 
   abstract class TransformationRunner {
-    val wt = new WorklistTransformer() { val IR: DListTransformations.this.IR.type = DListTransformations.this.IR }
+    val wt = new WorklistTransformer() { 
+      val IR: DListTransformations.this.IR.type = DListTransformations.this.IR
+      
+      def registerFunction[A](x: Exp[A])(y: () => Exp[A]): Unit = if (nextSubst.contains(x.asInstanceOf[Sym[A]]))
+      printdbg("discarding, already have a replacement for " + x)
+    else {
+      printdbg("register replacement for " + x)
+      nextSubst = nextSubst + (x.asInstanceOf[Sym[A]] -> y)
+    }
+    }
     def run[T: Manifest](y: Block[T]) = {
       registerTransformations(newAnalyzer(y))
       if (wt.nextSubst.isEmpty) {
         y
       } else {
+        println("Running")
         wt.run(y)
       }
     }
@@ -165,6 +175,59 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
     }
   }
 
+  class MonadicToLoopsTransformation extends TransformationRunner {
+    import wt.IR.{ collectYields, fresh, toAtom2,SimpleLoop,reifyEffects, ShapeDep, mtype,
+      IteratorCollect, Block, Dummy, IteratorValue, yields, skip, doApply, ifThenElse, reflectMutableSym, 
+      reflectMutable, Reflect, Exp }
+
+    def registerTransformations(analyzer: Analyzer) {
+      analyzer.nodes.foreach {
+        case m @ DListFilter(r, f) =>
+          val stm = findDefinition(m).get
+          wt.register(stm.syms.head) {
+            val i = fresh[Int]
+            val d = reflectMutableSym(fresh[Int])
+            val value = toAtom2(IteratorValue(wt(r), i))
+            val (g, y) = collectYields {
+              reifyEffects {
+                // Yield the iterator value in the block
+                ifThenElse(doApply(wt(f), value), reifyEffects { yields(d, List(i), value)(mtype(r.tp.typeArguments(0))) }, reifyEffects { skip(d, List(i)) })
+              }
+            }
+            // create a loop with the body that inlines the filtering function
+            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
+
+            // make an stm out of the loop
+            toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
+          }
+          System.out.println("Registering " + stm + " to a filter loop")
+        case m @ DListMap(r, f) =>
+          val stm = findDefinition(m).get
+          
+          val eval = () => {
+          val i = fresh[Int]
+   		  val d = reflectMutableSym(fresh[Int])
+   		  val closure = Def.unapply(f).get.asInstanceOf[Lambda[Any, Any]]
+   		    
+          val yld = doApply(wt(f), toAtom2(IteratorValue(wt(r), i)))
+   		  val (g, y) = collectYields { reifyEffects {
+   		    yields(d, List(i), yld)(closure.mB)
+   		  }}
+          
+          println("Generator type= " + stripGen(g.tp))
+          // create a loop with body that inlines the function
+          val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
+          
+          // make an stm out of the loop
+          toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
+          }
+          System.out.println("Registering " + stm + " to a map loop")
+          wt.registerFunction(stm.syms.head)(eval)
+        case _ =>
+      }
+    }
+  }
+  
   /*  
 
   class MergeFlattenTransformation extends Transformation {

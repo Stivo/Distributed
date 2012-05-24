@@ -3,7 +3,7 @@ import java.io.StringWriter
 import java.io.FileWriter
 import ch.epfl.distributed._
 import org.scalatest._
-import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps, LiftNumeric }
+import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps, LiftNumeric}
 import scala.util.Random
 
 trait TpchQueriesApp extends DListProgram with ApplicationOps {
@@ -94,13 +94,16 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
 
   val appname = "TpchQueries"
   val unoptimizedAppname = appname + "_Orig"
-
+  
     def testBoth {
     tryCompile {
       println("-- begin")
 
-      val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
-      val codegenSpark = new SparkGenDList { val IR: dsl.type = dsl }
+      val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp {
+      val codegenSpark = new SparkGenDList { val IR: dsl.type = dsl 
+        import IR._
+        override def shouldApplyFusion(currentScope: List[Stm])(result: List[Exp[Any]]): Boolean = true  
+      }
       val codegenScoobi = new ScoobiGenDList { val IR: dsl.type = dsl }
       val list = List(codegenSpark, codegenScoobi)
       def writeVersion(version: String) {
@@ -126,6 +129,6 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       writeVersion("v1")
       println("-- end")
     }
-  }
+  } 
 
 }
