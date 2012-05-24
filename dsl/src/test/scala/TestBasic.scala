@@ -107,7 +107,7 @@ class TestDLists2 extends CodeGeneratorTestSuite {
     }
 
   }
-  */
+  
 
   def testSpark {
     tryCompile {
@@ -140,6 +140,6 @@ class TestDLists2 extends CodeGeneratorTestSuite {
       println("-- end")
     }
   }
-
+*/
 }
 

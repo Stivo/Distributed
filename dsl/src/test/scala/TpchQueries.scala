@@ -96,30 +96,43 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
   val unoptimizedAppname = appname + "_Orig"
   
     def testBoth {
+    /*
+     * Variants:
+     *  	FR	LF
+     * v0:	-	-
+     * v1:	x	-
+     * v2:	-	x
+     * v3:	x 	x
+     * 
+     */
     tryCompile {
       println("-- begin")
-
+      var applyFusion = false
       val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp {
-      val codegenSpark = new SparkGenDList { val IR: dsl.type = dsl 
-        import IR._
-        override def shouldApplyFusion(currentScope: List[Stm])(result: List[Exp[Any]]): Boolean = true  
+        override val verbosity = 1
       }
-      val codegenScoobi = new ScoobiGenDList { val IR: dsl.type = dsl }
+      val codegenSpark = new SparkGen { 
+        val IR: dsl.type = dsl 
+        import IR._
+        override def shouldApplyFusion(currentScope: List[Stm])(result: List[Exp[Any]]): Boolean = applyFusion  
+      }
+      val codegenScoobi = new ScoobiGen { val IR: dsl.type = dsl }
       val list = List(codegenSpark, codegenScoobi)
       def writeVersion(version: String) {
         var pw = setUpPrintWriter
         codegenSpark.emitProgram(dsl.query12, appname, pw, version)
         writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
         release(pw)
-        pw = setUpPrintWriter
-        codegenScoobi.emitProgram(dsl.query12, appname, pw, version)
-        writeToProject(pw, "scoobi", appname, version, codegenScoobi.lastGraph)
-        release(pw)
+//        pw = setUpPrintWriter
+//        codegenScoobi.emitProgram(dsl.query12, appname, pw, version)
+//        writeToProject(pw, "scoobi", appname, version, codegenScoobi.lastGraph)
+//        release(pw)
       }
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false
         codegen.insertNarrowingMaps = false
       }
+      applyFusion = false
       writeVersion("v0")
       
       list.foreach { codegen =>
@@ -127,6 +140,13 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
         codegen.insertNarrowingMaps = true
       }
       writeVersion("v1")
+      applyFusion = true
+      writeVersion("v3")
+      list.foreach { codegen =>
+        codegen.narrowExistingMaps = false
+        codegen.insertNarrowingMaps = false
+      }
+      writeVersion("v2")
       println("-- end")
     }
   } 
