@@ -70,12 +70,14 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
         val part2: Rep[(Int, Int)] = (count, 1 - count)
         (x._2._1.l_shipmode, part2)
     }
+    
     // aggregate and save
     val reduced = joinedTupled.groupByKey.reduce((x, y) => (x._1 + y._1, x._2 + y._2))
     reduced.map {
       x =>
         "shipmode " + x._1 + ": high " + x._2._1 + ", low " + x._2._2
     }.save(getArgs(1))
+    
     unit(())
   }
 
@@ -96,8 +98,7 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
   val appname = "TpchQueries"
   val unoptimizedAppname = appname + "_Orig"
   
-    def testBoth {
-    /*
+    /**
      * Variants:
      *  	FR	LF
      * v0:	-	-
@@ -106,6 +107,7 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
      * v3:	x 	x
      * 
      */
+  def testBoth {
     tryCompile {
       println("-- begin")
       var applyFusion = true
@@ -133,6 +135,7 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
         codegen.narrowExistingMaps = false
         codegen.insertNarrowingMaps = false
         codegen.loopFusion = false
+        codegen.inlineClosures = true
       }
       writeVersion("v0")
       
@@ -144,6 +147,7 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       
       list.foreach { codegen =>
         codegen.loopFusion = true
+        codegen.inlineClosures = false
       }
       writeVersion("v3")
       

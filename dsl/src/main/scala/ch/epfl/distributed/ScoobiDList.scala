@@ -62,7 +62,6 @@ trait ScoobiGenDList extends ScalaGenBase
     out
   }
 
-  override val inlineClosures = false
   override val typesInInlinedClosures = true
 
   val allOff = false

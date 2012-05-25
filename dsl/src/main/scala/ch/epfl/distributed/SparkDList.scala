@@ -238,8 +238,6 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     out
   }
 
-  override val inlineClosures = false
-
   var reduceByKey = true
 
   def transformTree[B: Manifest](block: Block[B]) = {
@@ -275,6 +273,7 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     typeHandler = new TypeHandler(y)
     getSchedule(availableDefs)(y.res, true).foreach { println }
     getSchedule(availableDefs)(y.res, true).foreach { println }
+    val packName = makePackageName(pack)
     stream.println("/*****************************************\n" +
       "  Emitting Spark Code                  \n" +
       "*******************************************/")
@@ -288,11 +287,11 @@ import com.esotericsoftware.kryo.Kryo
 object %s {
         def main(sparkInputArgs: Array[String]) {
     System.setProperty("spark.serializer", "spark.KryoSerializer")
-    System.setProperty("spark.kryo.registrator", "spark.examples.Registrator_%s")
+    System.setProperty("spark.kryo.registrator", "spark.examples%s.Registrator_%s")
     System.setProperty("spark.kryoserializer.buffer.mb", "20")
         
     		val sc = new SparkContext(sparkInputArgs(0), "%s")
-        """.format(makePackageName(pack), className, className, className))
+        """.format(packName, className, packName, className, className))
 
     val oldAnalysis = newAnalyzer(y)
 
@@ -302,6 +301,9 @@ object %s {
       emitBlock(y)
     }
     println("old vs new syms " + oldAnalysis.statements.size + " " + newAnalysis.statements.size)
+    
+//    innerScope.foreach(println)
+    
     //    oldAnalysis.orderedStatements.foreach(println)
     //    newAnalysis.orderedStatements.foreach(println)
     stream.println("}")
@@ -359,7 +361,6 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
           private[this] final def load = {
             var i = 0
             while (it.hasNext && i < buff.length) {
-            //val curr = it.next
           """)
       }
       

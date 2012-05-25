@@ -58,11 +58,23 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
   class NarrowerInsertionTransformation extends TransformationRunner {
     import wt.IR._
 
+      def isNarrower(x: Exp[Any]) = x match {
+        case Def(d @ DListMap(_,_)) if 
+        	d.metaInfos.contains("narrower") 
+        	|| d.metaInfos.contains("toNarrow")
+        	=>
+        	true
+        case _ => false
+      }
     def makeNarrower[T: Manifest](in: Exp[DList[T]]) = {
-      val narrower = dlist_map(wt(in), { x: Rep[T] => x })
-      findDefinition(narrower.asInstanceOf[Sym[_]]).get.defs
-        .head.asInstanceOf[DListNode].metaInfos("narrower") = true
-      narrower
+      if (isNarrower(in))
+        in 
+        else {
+	      val narrower = dlist_map(wt(in), { x: Rep[T] => x })
+	      findDefinition(narrower.asInstanceOf[Sym[_]]).get.defs
+	        .head.asInstanceOf[DListNode].metaInfos("narrower") = true
+	      narrower
+        }
     }
     def registerTransformations(analyzer: Analyzer) {
       analyzer.narrowBefore.foreach {
@@ -80,7 +92,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
           class DListJoinTransformer[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]]) {
             val mapNewLeft = makeNarrower(left)
             val mapNewRight = makeNarrower(right)
-
+            
             val joinNew = dlist_join(mapNewLeft, mapNewRight)
             wt.register(stm.syms.head)(joinNew)
           }

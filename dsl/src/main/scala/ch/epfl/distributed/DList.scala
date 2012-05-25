@@ -528,7 +528,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     sw.toString
   }
 
-  def inlineClosures = false
+  var inlineClosures = false
 
   def typesInInlinedClosures = false
 
@@ -600,7 +600,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
       } else {
         fieldAnalyzer.makeFieldAnalysis
         val toTransform = candidates.head
-        println("Found candidate: " + toTransform)
+        println("Found candidate for narrowing: " + toTransform)
         toTransform.metaInfos("narrowed") = true
         val narrowTrans = new NarrowMapsTransformation(toTransform, typeHandler)
         curBlock = narrowTrans.run(curBlock)
