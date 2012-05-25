@@ -72,11 +72,11 @@ case class FieldRead(val path: String) {
 trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   def toAtom2[T: Manifest](d: Def[T])(implicit ctx: SourceContext): Exp[T] = super.toAtom(d)
 
-  // TODO (VJ) Move to lms once fusion is in  
   case class ShapeDep[T](s: Rep[T]) extends Def[Int]
   case class Dummy() extends Def[Unit]
   case class IteratorCollect[T](gen: Rep[Gen[T]], block: Block[Gen[T]]) extends Def[DList[T]]
-  case class IteratorValue[T : Manifest](l: Rep[DList[T]],v: Rep[Int]) extends Def[T]
+  case class IteratorValue[T : Manifest, Coll[_]](l: Rep[Coll[T]],v: Rep[Int]) extends Def[T]
+  case class ForeachElem[T](y: Block[Gen[T]]) extends Def[Gen[T]]
   
   override def syms(e: Any): List[Sym[Any]] = e match {
     case IteratorCollect(g, y) => syms(y)
@@ -222,8 +222,16 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
 
   override def mirrorFatDef[A:Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
     case IteratorCollect(g, y) => IteratorCollect(f(g), f(y))
+    case ForeachElem(y) => ForeachElem(f(y))
     case _ => super.mirrorFatDef(e,f)
   }).asInstanceOf[Def[A]]
+  
+override def mirror[A:Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Exp[A] = (e match {
+    case SimpleLoop(s, i, IteratorCollect(g, y)) if f.hasContext =>
+      val newBlock = reifyEffectsHere(f.reflectBlock(y))
+      toAtom(SimpleLoop(f(s), f(i).asInstanceOf[Sym[Int]], IteratorCollect(f(g), newBlock)))(mtype(manifest[A]), implicitly[SourceContext])
+    case _ => super.mirror(e,f)
+  }).asInstanceOf[Exp[A]]
 
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
@@ -239,9 +247,9 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       case d @ DListFlatten(dlists) => DListFlatten(f(dlists))(d.mA)
       case d @ DListGroupByKey(dlist) => DListGroupByKey(f(dlist))(d.mKey, d.mValue)
       case d @ IteratorCollect(g, y) => IteratorCollect(f(g), f(y))
+      case d @ ForeachElem(y) => ForeachElem(f(y))
       case d @ IteratorValue(in, i) => IteratorValue(f(in), f(i))
       case d @ ShapeDep(in) => ShapeDep(f(in))
-      case SimpleLoop(s, i, IteratorCollect(g, y)) => toAtom(SimpleLoop(f(s), f(i).asInstanceOf[Sym[Int]], IteratorCollect(f(g), f(y))))(mtype(manifest[A]), implicitly[SourceContext])
       case _ => super.mirrorDef(e, f)
     }
     copyMetaInfo(e, out)
@@ -719,7 +727,8 @@ trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElse
   
   import IR.{ collectYields, fresh, toAtom2,SimpleLoop,reifyEffects, ShapeDep, mtype,
       IteratorCollect, Block, Dummy, IteratorValue, yields, skip, doApply, ifThenElse, reflectMutableSym, 
-      reflectMutable, Reflect, Exp, Def, Reify, Gen, Yield, IfThenElse, Skip }
+      reflectMutable, Reflect, Exp, Def, Reify, Gen, Yield, IfThenElse, Skip, reflectEffect, ForeachElem,
+      summarizeEffects }
 
   override def unapplySimpleIndex(e: Def[Any]) = e match {
     case IteratorValue(a, i) => Some((a, i))
@@ -747,9 +756,9 @@ trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElse
       // this is wrong but we need to check if it works at all
       ifThenElse(c, reifyEffects(plugInHelper(oldGen, a, plug)), reifyEffects(skip[U](reflectMutableSym(fresh[Int]), x)))
 
-//    case Def(Reflect(SimpleLoop(sh, x, ForeachElem(Block(y))), _, _)) =>
-//      val body = reifyEffects(plugInHelper(oldGen, y, plug))
-//      reflectEffect(SimpleLoop(sh, x, ForeachElem(body)), summarizeEffects(body).star)
+    case Def(Reflect(SimpleLoop(sh, x, ForeachElem(Block(y))), _, _)) =>
+      val body = reifyEffects(plugInHelper(oldGen, y, plug))
+      reflectEffect(SimpleLoop(sh, x, ForeachElem(body)), summarizeEffects(body))
 
     case Def(x) =>
       error("Missed me => " + x + " should find " + Def.unapply(oldGen).getOrElse("None"))

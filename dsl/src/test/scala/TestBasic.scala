@@ -27,14 +27,24 @@ trait ComplexStructExp extends ComplexBase with StructExp {
 
 trait DListsProg extends DListProgram with ComplexBase {
 
+  def flatMapFusionTest(x: Rep[Unit]) = {
+    val read = DList(getArgs(0))
+    read
+      .map(x => "\\n")
+      .flatMap(_.split("[^a-zA-Z0-9']+").toSeq)
+      .filter(x => x.length > 1)
+      .save(getArgs(1))
+    unit(())
+  }
+
   def simple(x: Rep[Unit]) = {
     val words1 = DList(getArgs(0))
-    words1.map(x => (Complex(x.toDouble, 5.0), unit("asdf")))
-      .map(x => (x._1.im))
-    //    .save(getArgs(1))
+    words1.map(x => Complex(x.toDouble, x.toDouble+5.0))
+      .map(x => (x.im))
+        .save(getArgs(1))
 
-    val tupled = words1
-    tupled.map(x => (x, unit(1))).groupByKey.save(getArgs(1))
+//    val tupled = words1
+//    tupled.map(x => (x, unit(1))).groupByKey.save(getArgs(1))
     //    tupled.map(x => (x, unit(1))).groupByKey.save(getArgs(2))
 
     //    words1
@@ -106,7 +116,7 @@ class TestDLists2 extends CodeGeneratorTestSuite {
         println(e.getMessage)
     }
 
-  }
+  }*/
   
 
   def testSpark {
@@ -115,9 +125,12 @@ class TestDLists2 extends CodeGeneratorTestSuite {
 
       val dsl = new DListsProg with DListProgramExp with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
 
-      val codegen = new SparkGenDList { val IR: dsl.type = dsl }
+      val codegen = new SparkGen { 
+        val IR: dsl.type = dsl 
+       override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = true  
+      }
       val pw = setUpPrintWriter
-      codegen.emitSource(dsl.testJoin, "g", pw)
+      codegen.emitSource(dsl.simple, "flatMapFusionTest", pw)
 
       writeToProject(pw, "spark", "SparkGenerated")
       release(pw)
@@ -125,7 +138,7 @@ class TestDLists2 extends CodeGeneratorTestSuite {
     }
   }
 
-  def testScoobi {
+  /*def testScoobi {
     tryCompile {
       println("-- begin")
       val pw = setUpPrintWriter
@@ -139,7 +152,7 @@ class TestDLists2 extends CodeGeneratorTestSuite {
       release(pw)
       println("-- end")
     }
-  }
-*/
+  }*/
+
 }
 

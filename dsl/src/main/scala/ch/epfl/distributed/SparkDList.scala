@@ -262,14 +262,16 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
 
-    println("Find me narrow")
-    newAnalyzer(y).statements.foreach(println)
-    
     // transforming monadic ops to loops for fusion
     y = new MonadicToLoopsTransformation().run(y)
     
-    println("Find me")
-    newAnalyzer(y).statements.foreach(println)
+//    println() 
+//    println("************************* Before Start **********************************")
+//    newAnalyzer(y).statements.foreach{println}
+//    y = new InlineTransformation().run(y)
+//    println("************************* After End **********************************")
+//    newAnalyzer(y).statements.foreach { println }
+    
     y
   }
 
@@ -332,7 +334,7 @@ object %s {
       "*******************************************/")
 
     stream.flush
-    
+
     prepareGraphData(y, true)
     types.clear()
     //writeGraphToFile(y, "test.dot", true)
@@ -355,7 +357,7 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
     case SimpleFatLoop(Def(ShapeDep(sd)), x, rhs) =>
       val ii = x
 
-      for ((l, r) <- sym zip rhs) r match { //if !r.isInstanceOf[ForeachElem[_]
+      for ((l, r) <- (sym zip rhs)) r match {
         case IteratorCollect(g, Block(y)) =>
           stream.println("val " + quote(sym.head) + " = " + quote(sd) + """.mapPartitions(it => {
         new Iterator[""" + stripGen(g.tp) + """] {
@@ -369,9 +371,12 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
             while (it.hasNext && i < buff.length) {
             val curr = it.next
           """)
+        case ForeachElem(y) =>
+          stream.println("{ val it = " + quote(sd) + ".iterator") // hack for the wrong interface
+          stream.println("while(it.hasNext) { // flatMap")
       }
-      
-      val gens = for ((l, r) <- sym zip rhs) yield r match { //if !r.isInstanceOf[ForeachElem[_]
+
+      val gens = for ((l, r) <- sym zip rhs if !r.isInstanceOf[ForeachElem[_]]) yield r match {
         case IteratorCollect(g, Block(y)) =>
           (g, (s: List[String]) => {
             stream.println("buff(i) = " + s.head + "// yield")
@@ -383,9 +388,12 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
       withGens(gens) {
         emitFatBlock(syms(rhs).map(Block(_)))
       }
+      stream.println("}")
 
-      stream.println("""
-            }
+      // with iterators there is no horizontal fusion so we do not have to worry about the ugly prefix and suffix
+      for ((l, r) <- (sym zip rhs)) r match {
+        case IteratorCollect(g, Block(y)) =>
+          stream.println("""
             start = 0
             end = if (i < buff.length) i else i - 1
           }
@@ -405,6 +413,9 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
           }
         }
       })""")
+        case ForeachElem(y) =>
+          stream.println("}")
+      }
 
     case _ => super.emitFatNode(sym, rhs)
   }
