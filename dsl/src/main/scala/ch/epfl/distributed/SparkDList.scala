@@ -265,12 +265,11 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     // transforming monadic ops to loops for fusion
     y = new MonadicToLoopsTransformation().run(y)
     
-//    println() 
-//    println("************************* Before Start **********************************")
-//    newAnalyzer(y).statements.foreach{println}
-//    y = new InlineTransformation().run(y)
-//    println("************************* After End **********************************")
-//    newAnalyzer(y).statements.foreach { println }
+    println("************************* Before Start **********************************")
+    newAnalyzer(y).statements.foreach{println}
+    y = new InlineTransformation().run(y)
+    println("************************* After End **********************************")
+    newAnalyzer(y).statements.foreach { println }
     
     y
   }
@@ -423,5 +422,6 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
 
 trait SparkGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with SparkGenDList with ScalaGenSparkFat {
   val IR: SparkDListOpsExp
+  
 }
 
