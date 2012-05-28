@@ -15,6 +15,8 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
       .filter(_.l_linestatus == 'F')
       .map(x => (x.l_receiptdate, x.l_comment))
       .save(getArgs(1))
+      
+    unit(())
   }
 
   def query3nephele(x: Rep[Unit]) = {
@@ -34,6 +36,7 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
     val grouped = tupled.groupByKey
     grouped.reduce((x, y) => x + y)
       .save(getArgs(3))
+    unit(())
   }
 
   def query12(x: Rep[Unit]) = {
@@ -119,7 +122,10 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
         import IR._
         override def shouldApplyFusion(currentScope: List[Stm])(result: List[Exp[Any]]): Boolean = applyFusion  
       }
-      val codegenScoobi = new ScoobiGen { val IR: dsl.type = dsl }
+      val codegenScoobi = new ScoobiGen { 
+        val IR: dsl.type = dsl 
+        override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = applyFusion
+      }
       val list = List(codegenSpark, codegenScoobi)
       def writeVersion(version: String) {
         var pw = setUpPrintWriter

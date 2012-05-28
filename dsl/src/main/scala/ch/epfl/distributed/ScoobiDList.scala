@@ -198,7 +198,7 @@ trait ScalaGenScoobiFat extends ScalaGenLoopsFat {
     case SimpleFatLoop(Def(ShapeDep(sd)), x, rhs) =>
       val ii = x
       var outType = "Nothing"
-      for ((l, r) <- sym zip rhs) r match { //if !r.isInstanceOf[ForeachElem[_]
+      for ((l, r) <- sym zip rhs) r match {
         case IteratorCollect(g, Block(y)) =>
           outType = stripGen(g.tp)
           val inType = remap(sd.tp.typeArguments(0))
@@ -206,8 +206,12 @@ trait ScalaGenScoobiFat extends ScalaGenLoopsFat {
         def setup(): Unit = {}
         def process(input: """ + inType + """, emitter: Emitter[""" + outType + """]): Unit = {
           """)
+        case ForeachElem(y) =>
+          stream.println("{ val it = " + quote(sd) + ".iterator") // hack for the wrong interface
+          stream.println("while(it.hasNext) { // flatMap")
       }
-      val gens = for ((l, r) <- sym zip rhs) yield r match { //if !r.isInstanceOf[ForeachElem[_]
+
+      val gens = for ((l, r) <- (sym zip rhs) if !r.isInstanceOf[ForeachElem[_]]) yield r match {
         case IteratorCollect(g, Block(y)) =>
           (g, (s: List[String]) => {
             stream.println("emitter.emit(" + s.head + ")// yield")
@@ -218,13 +222,20 @@ trait ScalaGenScoobiFat extends ScalaGenLoopsFat {
       withGens(gens) {
         emitFatBlock(syms(rhs).map(Block(_)))
       }
+
       stream.println("}")
-      stream.println("""
+
+      // with iterators there is no horizontal fusion so we do not have to worry about the ugly prefix and suffix
+      for ((l, r) <- (sym zip rhs)) r match {
+        case IteratorCollect(g, Block(y)) =>
+          stream.println("""
             def cleanup(emitter: Emitter[""" + outType + """]): Unit = {}
           })
           """)
-
-    case _ => super.emitFatNode(sym, rhs)
+        case ForeachElem(y) =>
+          stream.println("}")
+      }
+      case _ => super.emitFatNode(sym, rhs)
   }
 }
 
