@@ -17,7 +17,7 @@ CORES=1
 
 #set -x
 
-for version in 1 3
+for version in {0..3}
 do
 #PROG=spark.examples.v$version.WordCountApp
 PROG=spark.examples.v$version.TpchQueries
