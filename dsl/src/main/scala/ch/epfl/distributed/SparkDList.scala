@@ -242,14 +242,6 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
 
   var reduceByKey = true
 
-  val allOff = false
-  if (allOff) {
-    narrowExistingMaps = false
-    insertNarrowingMaps = false
-    reduceByKey = false
-    mapMerge = false
-  }
-
   def transformTree[B: Manifest](block: Block[B]) = {
     var y = block
     // merge groupByKey with reduce to reduceByKey
@@ -262,15 +254,15 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
 
-    // transforming monadic ops to loops for fusion
-    y = new MonadicToLoopsTransformation().run(y)
+    if (loopFusion){
+      y = new MonadicToLoopsTransformation().run(y)
     
-    println("************************* Before Start **********************************")
-    newAnalyzer(y).statements.foreach{println}
-    y = new InlineTransformation().run(y)
-    println("************************* After End **********************************")
-    newAnalyzer(y).statements.foreach { println }
-    
+      println("************************* Before Start **********************************")
+      newAnalyzer(y).statements.foreach{println}
+      y = new InlineTransformation().run(y)
+      println("************************* After End **********************************")
+      newAnalyzer(y).statements.foreach { println }
+    }
     y
   }
 
@@ -368,7 +360,7 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
           private[this] final def load = {
             var i = 0
             while (it.hasNext && i < buff.length) {
-            val curr = it.next
+            //val curr = it.next
           """)
         case ForeachElem(y) =>
           stream.println("{ val it = " + quote(sd) + ".iterator") // hack for the wrong interface

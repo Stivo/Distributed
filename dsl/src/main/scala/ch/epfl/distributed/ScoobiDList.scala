@@ -108,8 +108,9 @@ trait ScoobiGenDList extends ScalaGenBase
     y = doNarrowExistingMaps(y)
     // inserting narrower maps and narrow
     y = insertNarrowersAndNarrow(y, new NarrowerInsertionTransformation)
-
-    y = new MonadicToLoopsTransformation().run(y)
+    if (loopFusion) {
+    	y = new MonadicToLoopsTransformation().run(y)
+    }
     y
   }
 

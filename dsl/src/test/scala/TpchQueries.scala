@@ -111,7 +111,7 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
      */
     tryCompile {
       println("-- begin")
-      var applyFusion = false
+      var applyFusion = true
       val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp {
         override val verbosity = 1
       }
@@ -138,8 +138,8 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false
         codegen.insertNarrowingMaps = false
+        codegen.loopFusion = false
       }
-      applyFusion = false
       writeVersion("v0")
       
       list.foreach { codegen =>
@@ -147,8 +147,12 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
         codegen.insertNarrowingMaps = true
       }
       writeVersion("v1")
-      applyFusion = true
+      
+      list.foreach { codegen =>
+        codegen.loopFusion = true
+      }
       writeVersion("v3")
+      
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false
         codegen.insertNarrowingMaps = false
@@ -156,6 +160,7 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       writeVersion("v2")
       println("-- end")
     }
+    
   } 
 
 }
