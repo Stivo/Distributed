@@ -196,7 +196,7 @@ class KMeansAppGenerator extends CodeGeneratorTestSuite {
 
       val dsl = new KMeansApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp with VectorBaseExp
 
-      val codegen = new { override val allOff = true } with SparkGen with ScalaVectorCodeGen with ScalaGenIterableOps { 
+      val codegen = new SparkGen with ScalaVectorCodeGen with ScalaGenIterableOps { 
         val IR: dsl.type = dsl
         
       }
