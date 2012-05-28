@@ -75,23 +75,21 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
   class NarrowerInsertionTransformation extends TransformationRunner {
     import wt.IR._
 
-      def isNarrower(x: Exp[Any]) = x match {
-        case Def(d @ DListMap(_,_)) if 
-        	d.metaInfos.contains("narrower") 
-        	|| d.metaInfos.contains("toNarrow")
-        	=>
-        	true
-        case _ => false
-      }
+    def isNarrower(x: Exp[Any]) = x match {
+      case Def(d @ DListMap(_, _)) if d.metaInfos.contains("narrower")
+        || d.metaInfos.contains("toNarrow") =>
+        true
+      case _ => false
+    }
     def makeNarrower[T: Manifest](in: Exp[DList[T]]) = {
       if (isNarrower(in))
-        in 
-        else {
-	      val narrower = dlist_map(wt(in), { x: Rep[T] => x })
-	      findDefinition(narrower.asInstanceOf[Sym[_]]).get.defs
-	        .head.asInstanceOf[DListNode].metaInfos("narrower") = true
-	      narrower
-        }
+        in
+      else {
+        val narrower = dlist_map(wt(in), { x: Rep[T] => x })
+        findDefinition(narrower.asInstanceOf[Sym[_]]).get.defs
+          .head.asInstanceOf[DListNode].metaInfos("narrower") = true
+        narrower
+      }
     }
     def registerTransformations(analyzer: Analyzer) {
       analyzer.narrowBefore.foreach {
@@ -109,7 +107,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
           class DListJoinTransformer[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]]) {
             val mapNewLeft = makeNarrower(left)
             val mapNewRight = makeNarrower(right)
-            
+
             val joinNew = dlist_join(mapNewLeft, mapNewRight)
             wt.register(stm.syms.head)(joinNew)
           }
@@ -235,10 +233,10 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
       case SomeDef(_: (DListFilter[_])) | SomeDef(_: DListMap[_, _]) | SomeDef(_: DListFlatMap[_, _]) => true
       case _ => false
     }
-      
+
     def registerTransformations(analyzer: Analyzer) {
       analyzer.nodes.foreach {
-        case m @ DListFilter(r, lm @ Def(Lambda(f, in, bl))) 
+        case m @ DListFilter(r, lm @ Def(Lambda(f, in, bl)))
           if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp)=>
           val stm = findDefinition(m).get
           wt.register(stm.syms.head) {
@@ -258,8 +256,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
             toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
           }
           System.out.println("Registering " + stm + " to a filter loop")
-        case m @ DListMap(r, lm @ Def(lmdef @ Lambda(f, v, bl))) 
-          if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp)=>
+        case m @ DListMap(r, lm @ Def(lmdef @ Lambda(f, v, bl))) if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp) =>
           println(findDefinition(m).get.syms.head)
           val stm = findDefinition(m).get
 
@@ -283,8 +280,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
           }
           System.out.println("Registering " + stm + " to a map loop")
           wt.registerFunction(stm.syms.head)(eval)
-        case m @ DListFlatMap(r, lm @ Def(Lambda(f, in, bl))) 
-          if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp)=>
+        case m @ DListFlatMap(r, lm @ Def(Lambda(f, in, bl))) if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp) =>
           val stm = findDefinition(m).get
 
           val eval = () => {
@@ -301,7 +297,6 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
                 reflectEffect(SimpleLoop(shape2, j, ForeachElem(innerBody).asInstanceOf[Def[Gen[Any]]]), summarizeEffects(innerBody))
               }
             }
-            SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
 
             println("Generator type= " + stripGen(g.tp))
             // create a loop with body that inlines the function
@@ -310,7 +305,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
             // make an stm out of the loop
             toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
           }
-          System.out.println("Registering " + stm + " to a map loop")
+          System.out.println("Registering " + stm + " to a flatmap loop")
           wt.registerFunction(stm.syms.head)(eval)
         case _ =>
       }
@@ -358,7 +353,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
         case s @ SomeDef(m @ IR.Apply(lm @ Def(Lambda(f, in, bl @ Block(inBl))), vl @ Def(value @ IteratorValue(a, b)))) =>
 
           wt.symSubst += in -> (() => wt(vl).asInstanceOf[wt.IR.Sym[Any]])
-          wt.registerFunction(s.syms.head) {()=> wt.reflectBlock(bl) }
+          wt.registerFunction(s.syms.head) { () => wt.reflectBlock(bl) }
 
           System.out.println("Substituting " + in + " with " + vl + "")
           System.out.println("Registering inlining of " + m)

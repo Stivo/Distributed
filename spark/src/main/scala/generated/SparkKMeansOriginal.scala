@@ -53,6 +53,7 @@ object SparkKMeans {
 
     var i = 0
     while (tempDist > convergeDist) {
+      println(System.currentTimeMillis + " Iteration " + i + " started ")
       var closest = data.map(p => (closestPoint(p, kPoints), (p, 1)))
 
       var pointStats = closest.reduceByKey { case ((x1, y1), (x2, y2)) => (x1 + x2, y1 + y2) }
@@ -68,10 +69,12 @@ object SparkKMeans {
         kPoints.put(newP._1, newP._2)
       }
       i += 1
-      println("Iteration " + i + " done")
+      println(System.currentTimeMillis + " Iteration " + i + " done, dist: " + tempDist)
     }
 
-    println("Final centers: " + kPoints.toBuffer.sortBy { x: (Int, Vector) => x._1 })
+    //println("Final centers: " + kPoints.toBuffer.sortBy { x: (Int, Vector) => x._1 })
+    println("Found centers with distance " + tempDist)
+    System.exit(0)
   }
 }
 

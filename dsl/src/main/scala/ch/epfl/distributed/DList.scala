@@ -58,7 +58,7 @@ trait DListOps extends Base with Variables {
   def dlist_reduce[K: Manifest, V: Manifest](dlist: Rep[DList[(K, Iterable[V])]], f: (Rep[V], Rep[V]) => Rep[V]): Rep[DList[(K, V)]]
   def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]]
   def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]]): Rep[DList[(K, Iterable[V])]]
-  
+
 }
 
 object FakeSourceContext {
@@ -75,9 +75,9 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   case class ShapeDep[T](s: Rep[T]) extends Def[Int]
   case class Dummy() extends Def[Unit]
   case class IteratorCollect[T](gen: Rep[Gen[T]], block: Block[Gen[T]]) extends Def[DList[T]]
-  case class IteratorValue[T : Manifest, Coll[_]](l: Rep[Coll[T]],v: Rep[Int]) extends Def[T]
+  case class IteratorValue[T: Manifest, Coll[_]](l: Rep[Coll[T]], v: Rep[Int]) extends Def[T]
   case class ForeachElem[T](y: Block[Gen[T]]) extends Def[Gen[T]]
-  
+
   override def syms(e: Any): List[Sym[Any]] = e match {
     case IteratorCollect(g, y) => syms(y)
     case _ => super.syms(e)
@@ -87,12 +87,12 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     case IteratorCollect(g, y) => freqNormal(y)
     case _ => super.symsFreq(e)
   }
-  
+
   override def boundSyms(e: Any): List[Sym[Any]] = e match {
     case IteratorCollect(g, y) => effectSyms(y)
     case _ => super.boundSyms(e)
   }
-  
+
   trait DListNode {
     val directFieldReads = mutable.HashSet[FieldRead]()
     val successorFieldReads = mutable.HashSet[FieldRead]()
@@ -220,19 +220,18 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     }
   }
 
-  override def mirrorFatDef[A:Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
+  override def mirrorFatDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
     case IteratorCollect(g, y) => IteratorCollect(f(g), f(y))
     case ForeachElem(y) => ForeachElem(f(y))
-    case _ => super.mirrorFatDef(e,f)
+    case _ => super.mirrorFatDef(e, f)
   }).asInstanceOf[Def[A]]
-  
-override def mirror[A:Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Exp[A] = (e match {
+
+  override def mirror[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Exp[A] = (e match {
     case SimpleLoop(s, i, IteratorCollect(g, y)) if f.hasContext =>
       val newBlock = reifyEffectsHere(f.reflectBlock(y))
       toAtom(SimpleLoop(f(s), f(i).asInstanceOf[Sym[Int]], IteratorCollect(f(g), newBlock)))(mtype(manifest[A]), implicitly[SourceContext])
-    case _ => super.mirror(e,f)
+    case _ => super.mirror(e, f)
   }).asInstanceOf[Exp[A]]
-
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
     var out = e match {
@@ -459,9 +458,9 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
-    case sd @ IteratorValue(r, i) => emitValDef(sym, "it.next // loop var " + quote(i)) 
-    case sd @ ShapeDep(dep) => stream.println("// " + quote(dep)) 
-    case sd @ Dummy() => stream.println("// dummy ") 
+    case sd @ IteratorValue(r, i) => emitValDef(sym, "it.next // loop var " + quote(i))
+    case sd @ ShapeDep(dep) => stream.println("// " + quote(dep))
+    case sd @ Dummy() => stream.println("// dummy ")
     case nv @ NewDList(filename) => emitValDef(sym, "New dlist created from %s with type %s".format(filename, nv.mA))
     case vs @ DListSave(dlist, filename) => stream.println("Saving dlist %s (of type %s) to %s".format(dlist, remap(vs.mA), filename))
     case vm @ DListMap(dlist, func) => emitValDef(sym, "mapping dlist %s with function %s, type %s => %s".format(dlist, quote(func), vm.mA, vm.mB))
@@ -476,12 +475,12 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     case IR.Lambda2(_, _, _, _) if inlineClosures =>
     case _ => super.emitNode(sym, rhs)
   }
-  
-  def makePackageName(pack: String) = if (pack == "") "" else "."+pack
-  
+
+  def makePackageName(pack: String) = if (pack == "") "" else "." + pack
+
   override def emitSource[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] =
     emitProgram(f, className, stream, "")
-      
+
   def emitProgram[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter, pack: String)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
 
     val x = fresh[A]
@@ -552,18 +551,19 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   var insertNarrowingMaps = true
   var mapMerge = true
   var loopFusion = true
+  var inlineInLoopFusion = true
 
   def markMapsToNarrow(b: Block[_]) {
     val analyzer = newFieldAnalyzer(b)
     analyzer.nodes.foreach {
-      case d@DListMap(x, f) if (!d.metaInfos.contains("narrowed"))
-         && !SimpleType.unapply(d.getClosureTypes._2).isDefined 
-         && analyzer.hasObjectCreationInClosure(d) =>
-          d.metaInfos("toNarrow") = true
+      case d @ DListMap(x, f) if (!d.metaInfos.contains("narrowed"))
+        && !SimpleType.unapply(d.getClosureTypes._2).isDefined
+        && analyzer.hasObjectCreationInClosure(d) =>
+        d.metaInfos("toNarrow") = true
       case _ =>
     }
   }
-  
+
   def doNarrowExistingMaps[B: Manifest](b: Block[B]) = {
     if (narrowExistingMaps) {
       markMapsToNarrow(b)
@@ -572,7 +572,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
       b
     }
   }
-  
+
   def insertNarrowersAndNarrow[B: Manifest](b: Block[B], runner: TransformationRunner) = {
     narrowNarrowers(insertNarrowers(b, runner), "narrower")
   }
@@ -619,8 +619,8 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     curBlock
   }
 
-  var lastGraph : String = ""
-  
+  var lastGraph: String = ""
+
   def prepareGraphData(block: Block[_], comments: Boolean = true) {
     lastGraph = try {
       val analyzer = newFieldAnalyzer(block)
@@ -628,7 +628,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
       analyzer.addComments = comments
       analyzer.exportToGraph
     } catch {
-      case e => e.getMessage+"\n"+e.getStackTraceString
+      case e => e.getMessage + "\n" + e.getStackTraceString
     }
   }
   /*
@@ -725,11 +725,37 @@ trait CaseClassTypeFactory extends TypeFactory {
 
 trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElseFat with LoopFusionOpt {
   val IR: DListOpsExp with IfThenElseFatExp
-  
-  import IR.{ collectYields, fresh, toAtom2,SimpleLoop,reifyEffects, ShapeDep, mtype,
-      IteratorCollect, Block, Dummy, IteratorValue, yields, skip, doApply, ifThenElse, reflectMutableSym, 
-      reflectMutable, Reflect, Exp, Def, Reify, Gen, Yield, IfThenElse, Skip, reflectEffect, ForeachElem,
-      summarizeEffects }
+
+  import IR.{
+    collectYields,
+    fresh,
+    toAtom2,
+    SimpleLoop,
+    reifyEffects,
+    ShapeDep,
+    mtype,
+    IteratorCollect,
+    Block,
+    Dummy,
+    IteratorValue,
+    yields,
+    skip,
+    doApply,
+    ifThenElse,
+    reflectMutableSym,
+    reflectMutable,
+    Reflect,
+    Exp,
+    Def,
+    Reify,
+    Gen,
+    Yield,
+    IfThenElse,
+    Skip,
+    reflectEffect,
+    ForeachElem,
+    summarizeEffects
+  }
 
   override def unapplySimpleIndex(e: Def[Any]) = e match {
     case IteratorValue(a, i) => Some((a, i))
@@ -744,7 +770,6 @@ trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElse
     case IteratorCollect(Def(Reflect(Yield(_, a), _, _)), _) => Some(a.head)
     case _ => super.unapplySimpleCollect(e)
   }
-
 
   // take d's context (everything between loop body and yield) and duplicate it into r
   override def plugInHelper[A, T: Manifest, U: Manifest](oldGen: Exp[Gen[A]], context: Exp[Gen[T]], plug: Exp[Gen[U]]): Exp[Gen[U]] = context match {
@@ -769,7 +794,7 @@ trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElse
     case (IteratorCollect(g, Block(a)), IteratorCollect(g2, Block(b))) =>
       println("Yield should be: " + g2)
       IteratorCollect(g2, Block(plugInHelper(g, a, b)))
-      
+
     case _ => super.applyPlugIntoContext(d, r)
   }
 

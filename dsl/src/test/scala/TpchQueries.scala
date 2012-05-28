@@ -3,7 +3,7 @@ import java.io.StringWriter
 import java.io.FileWriter
 import ch.epfl.distributed._
 import org.scalatest._
-import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps, LiftNumeric}
+import scala.virtualization.lms.common.{ Base, StructExp, PrimitiveOps, LiftNumeric }
 import scala.util.Random
 
 trait TpchQueriesApp extends DListProgram with ApplicationOps {
@@ -15,7 +15,7 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
       .filter(_.l_linestatus == 'F')
       .map(x => (x.l_receiptdate, x.l_comment))
       .save(getArgs(1))
-      
+
     unit(())
   }
 
@@ -73,14 +73,14 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
         val part2: Rep[(Int, Int)] = (count, 1 - count)
         (x._2._1.l_shipmode, part2)
     }
-    
+
     // aggregate and save
     val reduced = joinedTupled.groupByKey.reduce((x, y) => (x._1 + y._1, x._2 + y._2))
     reduced.map {
       x =>
         "shipmode " + x._1 + ": high " + x._2._1 + ", low " + x._2._2
     }.save(getArgs(1))
-    
+
     unit(())
   }
 
@@ -100,16 +100,19 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
 
   val appname = "TpchQueries"
   val unoptimizedAppname = appname + "_Orig"
-  
-    /**
-     * Variants:
-     *  	FR	LF
-     * v0:	-	-
-     * v1:	x	-
-     * v2:	-	x
-     * v3:	x 	x
-     * 
-     */
+
+  // format: OFF
+  /**
+   * Variants:
+   *  		FR	LF 	IN
+   * v0:	-	-	-
+   * v1:	x	-	-
+   * v2:	-	x	-
+   * v3:	-	x	x
+   * v4:	x 	x	-
+   * v5:	x	x 	x
+   */
+  // format: ON
   def testBoth {
     tryCompile {
       println("-- begin")
@@ -117,13 +120,13 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       val dsl = new TpchQueriesApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp {
         override val verbosity = 1
       }
-      val codegenSpark = new SparkGen { 
-        val IR: dsl.type = dsl 
+      val codegenSpark = new SparkGen {
+        val IR: dsl.type = dsl
         import IR._
-        override def shouldApplyFusion(currentScope: List[Stm])(result: List[Exp[Any]]): Boolean = applyFusion  
+        override def shouldApplyFusion(currentScope: List[Stm])(result: List[Exp[Any]]): Boolean = applyFusion
       }
-      val codegenScoobi = new ScoobiGen { 
-        val IR: dsl.type = dsl 
+      val codegenScoobi = new ScoobiGen {
+        val IR: dsl.type = dsl
         override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = applyFusion
       }
       val list = List(codegenSpark, codegenScoobi)
@@ -132,39 +135,46 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
         codegenSpark.emitProgram(dsl.query12, appname, pw, version)
         writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
         release(pw)
-//        pw = setUpPrintWriter
-//        codegenScoobi.emitProgram(dsl.query12, appname, pw, version)
-//        writeToProject(pw, "scoobi", appname, version, codegenScoobi.lastGraph)
-//        release(pw)
+        //        pw = setUpPrintWriter
+        //        codegenScoobi.emitProgram(dsl.query12, appname, pw, version)
+        //        writeToProject(pw, "scoobi", appname, version, codegenScoobi.lastGraph)
+        //        release(pw)
       }
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false
         codegen.insertNarrowingMaps = false
         codegen.loopFusion = false
         codegen.inlineClosures = true
+        codegen.inlineInLoopFusion = false
       }
       writeVersion("v0")
-      
+
       list.foreach { codegen =>
         codegen.narrowExistingMaps = true
         codegen.insertNarrowingMaps = true
       }
       writeVersion("v1")
-      
+
       list.foreach { codegen =>
         codegen.loopFusion = true
         codegen.inlineClosures = false
       }
-      writeVersion("v3")
-      
+      writeVersion("v4")
+
+      list.foreach { _.inlineInLoopFusion = true }
+      writeVersion("v5")
+
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false
         codegen.insertNarrowingMaps = false
       }
+      writeVersion("v3")
+
+      list.foreach { _.inlineInLoopFusion = false }
       writeVersion("v2")
       println("-- end")
     }
-    
-  } 
+
+  }
 
 }

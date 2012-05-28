@@ -39,12 +39,12 @@ trait DListsProg extends DListProgram with ComplexBase {
 
   def simple(x: Rep[Unit]) = {
     val words1 = DList(getArgs(0))
-    words1.map(x => Complex(x.toDouble, x.toDouble+5.0))
+    words1.map(x => Complex(x.toDouble, x.toDouble + 5.0))
       .map(x => (x.im))
-        .save(getArgs(1))
+      .save(getArgs(1))
 
-//    val tupled = words1
-//    tupled.map(x => (x, unit(1))).groupByKey.save(getArgs(1))
+    //    val tupled = words1
+    //    tupled.map(x => (x, unit(1))).groupByKey.save(getArgs(1))
     //    tupled.map(x => (x, unit(1))).groupByKey.save(getArgs(2))
 
     //    words1
@@ -117,7 +117,6 @@ class TestDLists2 extends CodeGeneratorTestSuite {
     }
 
   }*/
-  
 
   def testSpark {
     tryCompile {
@@ -125,9 +124,9 @@ class TestDLists2 extends CodeGeneratorTestSuite {
 
       val dsl = new DListsProg with DListProgramExp with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
 
-      val codegen = new SparkGen { 
-        val IR: dsl.type = dsl 
-       override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = true  
+      val codegen = new SparkGen {
+        val IR: dsl.type = dsl
+        override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = true
       }
       val pw = setUpPrintWriter
       codegen.emitSource(dsl.simple, "flatMapFusionTest", pw)

@@ -50,9 +50,9 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
       IR.findDefinition(defToSearch).get
     }
     lazy val loops = statements.flatMap {
-      case SomeDef(s@IR.SimpleLoop(x,y,z)) => Some(s)
-      case Def(x) => {println("Did not match def "+x); None}
-      case x => {println("Did not match "+x); None}
+      case SomeDef(s @ IR.SimpleLoop(x, y, z)) => Some(s)
+      case Def(x) => { println("Did not match def " + x); None }
+      case x => { println("Did not match " + x); None }
     }
     lazy val lambdas = statements.flatMap {
       case SomeDef(l @ Lambda(f, x, y)) => Some(l)
@@ -85,13 +85,13 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
       .filter { x =>
         getInputs(x).size != x.metaInfos.getOrElse("insertedNarrowers", 0)
       }
-      .filter{ x => 
-        getInputs(x).map{
-          case x: DListNode if x.metaInfos.contains("narrower") 
-             || x.metaInfos.contains("toNarrow")=> true
+      .filter { x =>
+        getInputs(x).map {
+          case x: DListNode if x.metaInfos.contains("narrower")
+            || x.metaInfos.contains("toNarrow") => true
           case _ => false
         }.reduce(_ && _)
-       }
+      }
       .filter {
         case x: ComputationNode => !isSimpleType(x.getElementTypes._1)
         case DListJoin(l, r) => true
@@ -150,8 +150,8 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
     var addComments = true
 
     def exportToGraph = {
-//      println("All loops:")
-//      loops.foreach(println)
+      //      println("All loops:")
+      //      loops.foreach(println)
       val buf = Buffer[String]()
       buf += "digraph g {"
       for (node <- nodes) {
@@ -331,7 +331,7 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
           val reads = computeFieldReads(node)
           node.directFieldReads ++= reads
           getInputs(node).foreach { _.successorFieldReads ++= reads }
-          //println("Computed field reads for " + node + " got " + reads)
+        //println("Computed field reads for " + node + " got " + reads)
       }
     }
 

@@ -32,8 +32,8 @@ trait SparkDListOps extends DListOps {
 
 trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
   case class DListReduceByKey[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], closure: Exp[(V, V) => V])
-    extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
-    with PreservingTypeComputation[DList[(K, V)]] {
+      extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
+      with PreservingTypeComputation[DList[(K, V)]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     def getClosureTypes = ((manifest[V], manifest[V]), manifest[V])
@@ -186,7 +186,7 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
 }
 
 trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransformations
-  with SparkTransformations with Matchers with SparkDListFieldAnalysis with CaseClassTypeFactory {
+    with SparkTransformations with Matchers with SparkDListFieldAnalysis with CaseClassTypeFactory {
 
   val IR: SparkDListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -252,14 +252,16 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
 
-    if (loopFusion){
+    if (loopFusion) {
       y = new MonadicToLoopsTransformation().run(y)
-    
-      println("************************* Before Start **********************************")
-      newAnalyzer(y).statements.foreach{println}
-      y = new InlineTransformation().run(y)
-      println("************************* After End **********************************")
-      newAnalyzer(y).statements.foreach { println }
+
+      if (inlineInLoopFusion) {
+        println("************************* Before Start **********************************")
+        newAnalyzer(y).statements.foreach { println }
+        y = new InlineTransformation().run(y)
+        println("************************* After End **********************************")
+        newAnalyzer(y).statements.foreach { println }
+      }
     }
     y
   }
@@ -302,12 +304,15 @@ object %s {
       emitBlock(y)
     }
     println("old vs new syms " + oldAnalysis.statements.size + " " + newAnalysis.statements.size)
-    
-//    innerScope.foreach(println)
-    
+
+    //    innerScope.foreach(println)
+
     //    oldAnalysis.orderedStatements.foreach(println)
     //    newAnalysis.orderedStatements.foreach(println)
-    stream.println("}")
+
+    stream.println("""
+        System.exit(0)
+        }""")
     stream.println("}")
     stream.println("// Types that are used in this program")
     val restTypes = types.filterKeys(x => !skipTypes.contains(x))
@@ -355,13 +360,14 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
           stream.println("val " + quote(sym.head) + " = " + quote(sd) + """.mapPartitions(it => {
         new Iterator[""" + stripGen(g.tp) + """] {
           private[this] val buff = new Array[""" + stripGen(g.tp) + """](1 << 22)
+          private[this] val stopAt = (1 << 22) - (1 << 12);
   		  private[this] final var start = 0
           private[this] final var end = 0
 
           @inline
           private[this] final def load = {
             var i = 0
-            while (it.hasNext && i < buff.length) {
+            while (it.hasNext && i < stopAt) {
           """)
         case ForeachElem(y) =>
           stream.println("{ val it = " + quote(sd) + ".iterator") // hack for the wrong interface
@@ -415,6 +421,6 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
 
 trait SparkGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with SparkGenDList with ScalaGenSparkFat {
   val IR: SparkDListOpsExp
-  
+
 }
 

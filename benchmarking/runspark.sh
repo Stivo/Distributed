@@ -13,19 +13,22 @@ HEAP=4g
 CORES=1
 
 #TIME=/usr/bin/time -f $TIMEARGS
-./warmup.sh
+
 
 #set -x
 
-for version in {0..3}
+for version in {0..6}
 do
-#PROG=spark.examples.v$version.WordCountApp
-PROG=spark.examples.v$version.TpchQueries
+#./warmup.sh
+PROG=spark.examples.v$version.WordCountApp
+#PROG=spark.examples.v$version.TpchQueries
 OUTPUT=output_v$version
-INPUTS="/home/stivo/master/testdata/tpch/mb200/ $OUTPUT 1995-01-01 TRUCK SHIP"
+#INPUTS="/home/stivo/master/testdata/tpch/mb200/ $OUTPUT 1995-01-01 TRUCK SHIP"
+INPUTS="/home/stivo/Downloads/wex/start.tsv.head $OUTPUT"
+cat /home/stivo/Downloads/wex/start.tsv.head > /dev/null
 TIMEARGS="$version\t%e\t%S\t%U\t%M\t%P"
 #-XX:MaxInlineSize=1000
-/usr/bin/time -f $TIMEARGS -o /dev/stdout env JAVA_OPTS="-Xmx$HEAP -XX:MaxInlineSize=1000" scala -cp $CLASSPATH $PROG local[$CORES] $INPUTS 2> ./spark_$PROG.txt 
+/usr/bin/time -f $TIMEARGS -o /dev/stdout env JAVA_OPTS="-Xmx$HEAP" scala -cp $CLASSPATH $PROG local[$CORES] $INPUTS 2> ./spark_$PROG.txt 
 done
 
 #time env JAVA_OPTS="-Xmx$HEAP" scala -cp $CLASSPATH $PROG mesos://master@localhost:5050 $@ 2> ./spark_$PROG.txt

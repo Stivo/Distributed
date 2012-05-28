@@ -14,8 +14,8 @@ import java.io.FileWriter
 trait ScoobiProgram extends DListProgram
 
 trait ScoobiGenDList extends ScalaGenBase
-  with DListFieldAnalysis
-  with DListTransformations with Matchers with CaseClassTypeFactory {
+    with DListFieldAnalysis
+    with DListTransformations with Matchers with CaseClassTypeFactory {
 
   val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -108,7 +108,7 @@ trait ScoobiGenDList extends ScalaGenBase
     // inserting narrower maps and narrow
     y = insertNarrowersAndNarrow(y, new NarrowerInsertionTransformation)
     if (loopFusion) {
-    	y = new MonadicToLoopsTransformation().run(y)
+      y = new MonadicToLoopsTransformation().run(y)
     }
     y
   }
@@ -235,10 +235,9 @@ trait ScalaGenScoobiFat extends ScalaGenLoopsFat {
         case ForeachElem(y) =>
           stream.println("}")
       }
-      case _ => super.emitFatNode(sym, rhs)
+    case _ => super.emitFatNode(sym, rhs)
   }
 }
 
 trait ScoobiGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with ScoobiGenDList with ScalaGenScoobiFat
-
 

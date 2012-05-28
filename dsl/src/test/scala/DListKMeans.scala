@@ -63,8 +63,8 @@ trait VectorBaseExp extends VectorBase with BaseExp {
 trait ScalaVectorCodeGen extends ScalaCodegen {
   val IR: VectorBaseExp
   import IR._
-    def writeLoop(initOutVar: String, loopBody: String, desc: String, var1: String, var2: String = "") = {
-      val out = """ {
+  def writeLoop(initOutVar: String, loopBody: String, desc: String, var1: String, var2: String = "") = {
+    val out = """ {
           // %s
     		%s
     	    var out = %s
@@ -74,30 +74,31 @@ trait ScalaVectorCodeGen extends ScalaCodegen {
     			i += 1
     		}
     	    out
-    		}""".format(desc, 
-    	        if (var2 != "") """if ($var1.size != $var2.size) 
-    	        						throw new IllegalArgumentException("Should have same length")""" else "",
-    	        initOutVar, loopBody)
-       out.replaceAll("\\$var1",var1).replaceAll("\\$var2",var2)
-    }
+    		}""".format(desc,
+      if (var2 != "") """if ($var1.size != $var2.size) 
+    	        						throw new IllegalArgumentException("Should have same length")"""
+      else "",
+      initOutVar, loopBody)
+    out.replaceAll("\\$var1", var1).replaceAll("\\$var2", var2)
+  }
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case nv @ NewVector(elems) => emitValDef(sym, quote(elems))
     case VectorSimpleOp(v1, v2, op) => {
       val q1 = quote(v1)
       val q2 = quote(v2)
-      emitValDef(sym, writeLoop("new Array[Double]($var1.size)", "out(i) = $var1(i) "+op+" $var2(i)", "Vector Simple Op", q1, q2))
+      emitValDef(sym, writeLoop("new Array[Double]($var1.size)", "out(i) = $var1(i) " + op + " $var2(i)", "Vector Simple Op", q1, q2))
     }
     case VectorPointWiseOp(v, d, op) => {
       val qv = quote(v)
       val qd = quote(d)
-      emitValDef(sym, writeLoop("new Array[Double]($var1.size)", "out(i) = $var1(i) "+op+" "+qd, "Vector Point wise op", qv))
+      emitValDef(sym, writeLoop("new Array[Double]($var1.size)", "out(i) = $var1(i) " + op + " " + qd, "Vector Point wise op", qv))
     }
     case VectorSquaredDist(v1, v2) => {
       val q1 = quote(v1)
       val q2 = quote(v2)
       emitValDef(sym, writeLoop("0.0", "val dist = $var1(i) - $var2(i); out += dist * dist", "Vector Squared Dist", q1, q2))
     }
-    
+
     case VectorPrint(v1) => {
       emitValDef(sym, """%s.mkString("(", ",", ")")""".format(quote(v1)))
     }
@@ -196,9 +197,9 @@ class KMeansAppGenerator extends CodeGeneratorTestSuite {
 
       val dsl = new KMeansApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp with VectorBaseExp
 
-      val codegen = new SparkGen with ScalaVectorCodeGen with ScalaGenIterableOps { 
+      val codegen = new SparkGen with ScalaVectorCodeGen with ScalaGenIterableOps {
         val IR: dsl.type = dsl
-        
+
       }
       codegen.reduceByKey = true
       var pw = setUpPrintWriter

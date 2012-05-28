@@ -14,14 +14,14 @@ trait WordCountApp extends DListProgram with ApplicationOps with SparkDListOps w
   }
 
   def wikiArticleWordcount2012(x: Rep[Unit]) = {
-    val splitted = stopwords.split("\\s").
-      toList.filter(_.length > 1).
-      flatMap { x => scala.collection.immutable.List(x, x.capitalize) }
-    val stopWordsList = unit(splitted.toArray)
-    val stopWordsSet = Set[String]()
-    stopWordsList.foreach { x =>
-      stopWordsSet.add(x)
-    }
+    //    val splitted = stopwords.split("\\s").
+    //      toList.filter(_.length > 1).
+    //      flatMap { x => scala.collection.immutable.List(x, x.capitalize) }
+    //    val stopWordsList = unit(splitted.toArray)
+    //    val stopWordsSet = Set[String]()
+    //    stopWordsList.foreach { x =>
+    //      stopWordsSet.add(x)
+    //    }
     val read = DList(getArgs(0))
     val parsed = read.map(WikiArticle.parse(_, "\t"))
 
@@ -33,7 +33,7 @@ trait WordCountApp extends DListProgram with ApplicationOps with SparkDListOps w
       //      .flatMap(_.split("[^a-zA-Z0-9']+").toSeq)
       .flatMap(_.replaceAll("""\\[nNt]""", " ").split("[^a-zA-Z0-9']+").toSeq)
       .filter(x => x.length > 1)
-      .filter(x => !stopWordsSet.contains(x))
+      //      .filter(x => !stopWordsSet.contains(x))
       .map(x => if (x.matches("^((left|right)*(thumb)(nail|left|right)*)+[0-9A-Z].*?")) x.replaceAll("((left|right)*thumb(nail|left|right)*)+", "") else x)
       //      .filter(x => !((x.contains("thumb") || x.contains("0px")) && x.matches("(\\d+px|left|right|thumb|nail)+")))
       .map(x => (x, unit(1)))
@@ -272,7 +272,20 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
 
   val appname = "WordCountApp"
   val unoptimizedAppname = appname + "_Orig"
-
+  
+  // format: OFF
+  /**
+   * Variants:
+   *  		CM	FR	LF	IN
+   * v0:	-	-	-	-
+   * v1:	x	-	-	-
+   * v2:	-	x	-	-
+   * v3:	-	-	x	-
+   * v4:	x 	x	-	-
+   * v5:	x	x 	x	-
+   * v6:	x	x 	x	x
+   */
+  // format: ON
   def testBoth {
     tryCompile {
       println("-- begin")
@@ -294,18 +307,42 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false
         codegen.insertNarrowingMaps = false
+        codegen.inlineInLoopFusion = false
+        codegen.loopFusion = false
       }
+
       dsl.disablePatterns = true
       writeVersion("v0")
-      
+
       dsl.disablePatterns = false
       writeVersion("v1")
-      
+
+      list.foreach { codegen =>
+        codegen.narrowExistingMaps = true
+        codegen.insertNarrowingMaps = true
+      }
+      writeVersion("v4")
+
+      list.foreach { _.loopFusion = true }
+      writeVersion("v5")
+      list.foreach { _.inlineInLoopFusion = true }
+      writeVersion("v6")
+
+      list.foreach { codegen =>
+        codegen.narrowExistingMaps = false
+        codegen.insertNarrowingMaps = false
+        codegen.inlineInLoopFusion = false
+      }
+      dsl.disablePatterns = true
+      writeVersion("v3")
+
+      list.foreach { _.loopFusion = false }
       list.foreach { codegen =>
         codegen.narrowExistingMaps = true
         codegen.insertNarrowingMaps = true
       }
       writeVersion("v2")
+
       println("-- end")
     }
   }
