@@ -135,10 +135,10 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
         codegenSpark.emitProgram(dsl.query12, appname, pw, version)
         writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
         release(pw)
-        //        pw = setUpPrintWriter
-        //        codegenScoobi.emitProgram(dsl.query12, appname, pw, version)
-        //        writeToProject(pw, "scoobi", appname, version, codegenScoobi.lastGraph)
-        //        release(pw)
+        pw = setUpPrintWriter
+        codegenScoobi.emitProgram(dsl.query12, appname, pw, version)
+        writeToProject(pw, "scoobi", appname, version, codegenScoobi.lastGraph)
+        release(pw)
       }
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false

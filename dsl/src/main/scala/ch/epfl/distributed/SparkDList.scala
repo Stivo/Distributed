@@ -12,7 +12,8 @@ import java.io.StringWriter
 trait SparkProgram extends DListOpsExp with DListImplOps with SparkDListOpsExp
 
 trait SparkDListOps extends DListOps {
-  implicit def repVecToSparkVecOps[A: Manifest](dlist: Rep[DList[A]]) = new dlistSparkOpsCls(dlist)
+  implicit def repDListToSparkDListOps[A: Manifest](dlist: Rep[DList[A]]) = new dlistSparkOpsCls(dlist)
+  implicit def varDListToSparkDListOps[A: Manifest](dlist: Var[DList[A]]) = new dlistSparkOpsCls(readVar(dlist))
   class dlistSparkOpsCls[A: Manifest](dlist: Rep[DList[A]]) {
     def cache() = dlist_cache(dlist)
     def collect() = dlist_collect(dlist)
@@ -251,7 +252,9 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     y = doNarrowExistingMaps(y)
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
-
+    
+    prepareGraphData(y, true)
+    
     if (loopFusion) {
       y = new MonadicToLoopsTransformation().run(y)
 
@@ -268,6 +271,10 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
 
   val collectionName = "RDD"
 
+  override def getParams() : List[(String, Any)] = {
+    super.getParams() ++ List(("reduce by key", reduceByKey))
+  }
+    
   override def emitProgram[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter, pack: String)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
 
     val x = fresh[A]
@@ -288,13 +295,14 @@ import SparkContext._
 import com.esotericsoftware.kryo.Kryo
 
 object %s {
+        %s
         def main(sparkInputArgs: Array[String]) {
     System.setProperty("spark.serializer", "spark.KryoSerializer")
     System.setProperty("spark.kryo.registrator", "spark.examples%s.Registrator_%s")
     System.setProperty("spark.kryoserializer.buffer.mb", "20")
         
     		val sc = new SparkContext(sparkInputArgs(0), "%s")
-        """.format(packName, className, packName, className, className))
+        """.format(packName, className, getOptimizations(), packName, className, className))
 
     val oldAnalysis = newAnalyzer(y)
 
@@ -333,7 +341,6 @@ object %s {
 
     stream.flush
 
-    prepareGraphData(y, true)
     types.clear()
     //writeGraphToFile(y, "test.dot", true)
     reset

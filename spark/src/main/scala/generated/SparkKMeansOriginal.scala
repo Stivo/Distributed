@@ -32,6 +32,10 @@ object SparkKMeans {
     return bestIndex
   }
 
+  def report(x: String) {
+    println(System.currentTimeMillis + " " + x)
+  }
+
   def main(args: Array[String]) {
     if (args.length < 4) {
       System.err.println("Usage: SparkLocalKMeans <master> <file> <k> <convergeDist>")
@@ -43,6 +47,7 @@ object SparkKMeans {
     val K = args(2).toInt
     val convergeDist = args(3).toDouble
 
+    report("Taking sample")
     var points = data.takeSample(false, K, 42)
     var kPoints = new HashMap[Int, Vector]
     var tempDist = 1.0
@@ -51,9 +56,9 @@ object SparkKMeans {
       kPoints.put(i, points(i - 1))
     }
 
+    report("Starting big while")
     var i = 0
     while (tempDist > convergeDist) {
-      println(System.currentTimeMillis + " Iteration " + i + " started ")
       var closest = data.map(p => (closestPoint(p, kPoints), (p, 1)))
 
       var pointStats = closest.reduceByKey { case ((x1, y1), (x2, y2)) => (x1 + x2, y1 + y2) }
@@ -68,12 +73,12 @@ object SparkKMeans {
       for (newP <- newPoints) {
         kPoints.put(newP._1, newP._2)
       }
+      report("Iteration " + i + " done, distance: " + tempDist)
       i += 1
-      println(System.currentTimeMillis + " Iteration " + i + " done, dist: " + tempDist)
     }
 
     //println("Final centers: " + kPoints.toBuffer.sortBy { x: (Int, Vector) => x._1 })
-    println("Found centers with distance " + tempDist)
+    println("Found final centers")
     System.exit(0)
   }
 }

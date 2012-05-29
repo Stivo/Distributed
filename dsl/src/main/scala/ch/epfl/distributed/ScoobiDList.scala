@@ -107,8 +107,13 @@ trait ScoobiGenDList extends ScalaGenBase
     y = doNarrowExistingMaps(y)
     // inserting narrower maps and narrow
     y = insertNarrowersAndNarrow(y, new NarrowerInsertionTransformation)
+    
+    prepareGraphData(y, true)
+    
     if (loopFusion) {
       y = new MonadicToLoopsTransformation().run(y)
+      if (inlineInLoopFusion)
+    	  y = new InlineTransformation().run(y)
     }
     y
   }
@@ -132,6 +137,7 @@ import com.nicta.scoobi.WireFormat
 import ch.epfl.distributed.datastruct._
    
 object %s {
+   %s
    def mkAbstractWireFormat1[T, A <: T: Manifest: WireFormat](): WireFormat[T] = new WireFormat[T] {
     import java.io.{ DataOutput, DataInput }
 
@@ -158,7 +164,7 @@ object %s {
     	implicit val grouping_datetime = makeGrouping[DateTime]
     	
         ###wireFormats###
-        """.format(makePackageName(pack), className, className))
+        """.format(makePackageName(pack), className, getOptimizations(), className))
 
     val x = fresh[A]
     var y = reifyBlock(f(x))
@@ -179,7 +185,7 @@ object %s {
       "*******************************************/")
 
     stream.flush
-    prepareGraphData(y, true)
+    
     val out = capture.toString
     val newOut = out.replace("###wireFormats###", mkWireFormats)
     streamIn.print(newOut)

@@ -553,6 +553,17 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   var loopFusion = true
   var inlineInLoopFusion = true
 
+  def getParams() : List[(String, Any)] = {
+    List(
+        ("field reduction", narrowExistingMaps && insertNarrowingMaps),
+        ("loop fusion", loopFusion),
+        ("inline in loop fusion", inlineInLoopFusion),
+        ("regex patterns pre compiled", !IR.disablePatterns)
+        )
+  }
+  
+  def getOptimizations() = getParams().map(x => "// "+x._1+": "+x._2).mkString("\n")
+  
   def markMapsToNarrow(b: Block[_]) {
     val analyzer = newFieldAnalyzer(b)
     analyzer.nodes.foreach {

@@ -26,6 +26,10 @@ trait StringAndNumberOps extends PrimitiveOps with StringOps with OverloadHack {
   def string_toNumber[A <: AnyVal: Manifest](s: Rep[String])(implicit ctx: SourceContext): Rep[A]
   def string_toChar(s: Rep[String])(implicit ctx: SourceContext): Rep[Char]
   def string_substring(s: Rep[String], start: Rep[Int])(implicit ctx: SourceContext): Rep[String]
+  
+  def report(x: Rep[String]) = report_time(x: Rep[String])
+  def report_time(x: Rep[String]) : Rep[Unit]
+
   //  def long_modulo( l : Rep[Long], mod : Rep[Long])(implicit ctx: SourceContext) : Rep[Long]
   //  implicit def repStringToStringOps(s: Rep[String]) = new stringOpsCls(s)
   //  class stringOpsCls(s: Rep[String]) {
@@ -44,10 +48,14 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
 
   case class StringToChar(s: Exp[String]) extends Def[Char]
 
+  case class ReportTime(x: Exp[String]) extends Def[Unit]
+  
   //  case class LongModulo(l : Exp[Long], mod : Exp[Long]) extends Def[Long]
   //  
   override def string_toNumber[A <: AnyVal: Manifest](s: Rep[String])(implicit ctx: SourceContext) = StringToNumber[A](s)
   //  override def long_modulo( l : Exp[Long], mod : Exp[Long])(implicit ctx: SourceContext) = LongModulo(l, mod)
+
+  override def report_time(x: Exp[String]) = reflectEffect(ReportTime(x: Exp[String]))
 
   def string_toChar(s: Rep[String])(implicit ctx: SourceContext) = StringToChar(s)
   def string_substring(s: Exp[String], start: Exp[Int])(implicit ctx: SourceContext) = StringSubstring(s, start)
@@ -55,6 +63,7 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
     case n @ StringToNumber(s) => StringToNumber(f(s))(n.m)
     case StringSubstring(s, i) => StringSubstring(f(s), f(i))
     case n @ StringToChar(s) => StringToChar(f(s))
+    case ReportTime(x) => ReportTime(f(x))
     case _ => super.mirrorDef(e, f)
   }).asInstanceOf[Def[A]]
 
@@ -109,6 +118,7 @@ trait StringAndNumberOpsCodeGen extends ScalaCodegen {
     case StringToChar(s) => emitValDef(sym, "%s.charAt(0)".format(quote(s)))
     case n @ StringToNumber(s) => emitValDef(sym, "%s.to%s".format(quote(s), n.typeName))
     case StringSubstring(s, start) => emitValDef(sym, "%s.substring(%s)".format(quote(s), quote(start)))
+    case ReportTime(x) => stream.println("""println(System.currentTimeMillis+" "+%s)""".format(quote(x)))
     case _ => super.emitNode(sym, rhs)
   }
 

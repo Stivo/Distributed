@@ -32,7 +32,6 @@ trait VectorBase extends Base with OverloadHack {
   def vec_pointWiseOp(v: Rep[Vector], o: Rep[Double], op: String): Rep[Vector]
   def vec_squaredDist(v: Rep[Vector], o: Rep[Vector]): Rep[Double]
   def vec_print(v: Rep[Vector]): Rep[String]
-
 }
 
 trait VectorBaseExp extends VectorBase with BaseExp {
@@ -143,14 +142,14 @@ trait KMeansApp extends DListProgram with ApplicationOps with SparkDListOps with
     val data = lines.map(parseVector).cache()
     val K = getArgs(1).toInt
     val convergeDist = getArgs(2).toDouble
+    report("Taking sample")
     // TODO spark code uses take Sample, not available in scoobi
     var centers = data.takeSample(false, K, 42).toArray
     var tempDist = unit(1.0)
     var i = 0
-    println(unit("Starting big while"))
+    report("Starting big while")
 
     while (tempDist > convergeDist) {
-      println("iteration " + i)
       val closest = data.map { p =>
         val tup: Rep[(Vector, Int)] = (p, unit(1))
         (closestPoint(p, centers), tup)
@@ -170,16 +169,16 @@ trait KMeansApp extends DListProgram with ApplicationOps with SparkDListOps with
 
       centers = newPoints.toArray.sortBy(_._1).map(_._2)
 
-      println("iteration " + i + " done")
+      report("Iteration " + i + " done, distance "+tempDist)
 
       i = i + 1
-
       unit(())
     }
-    println(unit("final Centers"))
-    for (center <- centers) {
-      println(center.print())
-    }
+    
+    report("final Centers found")
+//    for (center <- centers) {
+//      println(center.print())
+//    }
 
     unit(())
   }
