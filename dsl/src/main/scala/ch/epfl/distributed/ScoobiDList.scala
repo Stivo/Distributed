@@ -215,6 +215,7 @@ trait ScalaGenScoobiFat extends ScalaGenLoopsFat {
         case ForeachElem(y) =>
           stream.println("{ val it = " + quote(sd) + ".iterator") // hack for the wrong interface
           stream.println("while(it.hasNext) { // flatMap")
+          stream.println("val input = it.next()")
       }
 
       val gens = for ((l, r) <- (sym zip rhs) if !r.isInstanceOf[ForeachElem[_]]) yield r match {

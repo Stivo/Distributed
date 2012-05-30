@@ -44,7 +44,7 @@ trait WordCountApp extends DListProgram with ApplicationOps with SparkDListOps w
     unit(())
   }
 
-  def wikiArticleWordcount2009(x: Rep[Unit]) = {
+  def wikiArticleWordcount2009Stopwords(x: Rep[Unit]) = {
     val splitted = stopwords.split("\\s").
       toList.filter(_.length > 1).
       flatMap { x => scala.collection.immutable.List(x, x.capitalize) }
@@ -266,6 +266,25 @@ yourself
 yourselves
 """
 
+  def wikiArticleWordcount2009(x: Rep[Unit]) = {
+    val read = DList(getArgs(0))
+    val parsed = read.map(WikiArticle.parse(_, "\t"))
+
+    parsed
+      .map("\\n"+_.plaintext)
+      .map(_.replaceAll("""\[\[.*?\]\]""", " "))
+      .map(_.replaceAll("""(\\[ntT]|\.)\s*(thumb|left|right)*""", " "))
+      .flatMap(_.split("[^a-zA-Z0-9']+").toSeq)
+      //.map(x => if (x.matches("(thumb)+[A-Z].*?")) x.replaceAll("(thumb)+", "") else x)
+      .filter(x => x.length > 1)
+      .filter(x => !x.matches("""(thumb|left|right|\d+px){2,}"""))
+      .map(x => (x, unit(1)))
+      .groupByKey
+      .reduce(_ + _)
+      .save(getArgs(1))
+    unit(())
+  }
+
 }
 
 class WordCountAppGenerator extends CodeGeneratorTestSuite {
@@ -295,12 +314,13 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
       val codegenScoobi = new ScoobiGen { val IR: dsl.type = dsl }
       val list = List(codegenSpark, codegenScoobi)
       def writeVersion(version: String) {
+        //if (version != "v5") return
         var pw = setUpPrintWriter
-        codegenSpark.emitProgram(dsl.wikiArticleWordcount2012, appname, pw, version)
+        codegenSpark.emitProgram(dsl.wikiArticleWordcount2009, appname, pw, version)
         writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
         release(pw)
         pw = setUpPrintWriter
-        codegenScoobi.emitProgram(dsl.wikiArticleWordcount2012, appname, pw, version)
+        codegenScoobi.emitProgram(dsl.wikiArticleWordcount2009, appname, pw, version)
         writeToProject(pw, "scoobi", appname, version, codegenScoobi.lastGraph)
         release(pw)
       }

@@ -193,9 +193,9 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
       }.asInstanceOf[Exp[C]]
       def h = wt.IR.mtype _
       class LambdaConstructor[A: Manifest, B: Manifest](target: Lambda[A, B]) {
-        val newResult = build("input", wt(targetSym))
-        val newLam = Lambda(target.f, target.x, wt.IR.Block(wt(newResult)))(wt.IR.mtype(target.mA), wt.IR.mtype(target.mB)).asInstanceOf[Lambda[A, B]]
-        val newLamAtom = IR.toAtom2(newLam)(target.m, FakeSourceContext())
+        lazy val newResult = build("input", wt(targetSym))
+        lazy val newLam = Lambda(target.f, target.x, wt.IR.Block(wt(newResult)))(wt.IR.mtype(target.mA), wt.IR.mtype(target.mB)).asInstanceOf[Lambda[A, B]]
+        lazy val newLamAtom = IR.toAtom2(newLam)(target.m, FakeSourceContext())
       }
       val lc = new LambdaConstructor(target)(wt.IR.mtype(target.mA), wt.IR.mtype(target.mB))
       wt.register(targetLambda)(lc.newLamAtom)
