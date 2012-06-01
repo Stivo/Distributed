@@ -341,7 +341,6 @@ object %s {
 
     stream.flush
 
-    types.clear()
     //writeGraphToFile(y, "test.dot", true)
     reset
     Nil

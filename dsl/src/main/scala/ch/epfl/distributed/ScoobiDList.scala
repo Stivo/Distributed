@@ -75,6 +75,10 @@ trait ScoobiGenDList extends ScalaGenBase
     // TODO: This is a bit of a hack. Cleaner solution pending.
     if (!types.values.exists(_.trim.startsWith("trait"))) return ""
     val out = new StringBuilder
+    out ++= """implicit val wireFormat_simpledate = mkCaseWireFormatGen(SimpleDate, SimpleDate.unapply _)
+        implicit val wireFormat_datetime = mkCaseWireFormatGen(DateTime, DateTime.unapply _)
+   		implicit val wireFormat_date = mkAbstractWireFormat[Date, SimpleDate, DateTime]
+        """
     def findName(s: String) = s.takeWhile('_' != _)
     val groupedNames = types.keySet.groupBy(findName).map { x => (x._1, (x._2 - (x._1)).toList.sorted) }.toMap
     var index = -1
@@ -169,9 +173,6 @@ object %s extends ScoobiApp {
         val scoobiInputArgs = args
         import WireFormat.{ mkAbstractWireFormat }
         import WireFormatsGen.{ mkCaseWireFormatGen }
-        implicit val wireFormat_simpledate = mkCaseWireFormatGen(SimpleDate, SimpleDate.unapply _)
-        implicit val wireFormat_datetime = mkCaseWireFormatGen(DateTime, DateTime.unapply _)
-   		implicit val wireFormat_date = mkAbstractWireFormat[Date, SimpleDate, DateTime]
     	implicit val grouping_date = makeGrouping[Date]
     	implicit val grouping_simpledate = makeGrouping[SimpleDate]
     	implicit val grouping_datetime = makeGrouping[DateTime]
@@ -202,7 +203,6 @@ object %s extends ScoobiApp {
     val out = capture.toString
     val newOut = out.replace("###wireFormats###", mkWireFormats)
     streamIn.print(newOut)
-    types.clear()
     reset
     Nil
   }
