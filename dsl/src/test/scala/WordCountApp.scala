@@ -319,10 +319,16 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
         codegenSpark.emitProgram(dsl.wikiArticleWordcount2009, appname, pw, version)
         writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
         release(pw)
-        pw = setUpPrintWriter
-        codegenScoobi.emitProgram(dsl.wikiArticleWordcount2009, appname, pw, version)
-        writeToProject(pw, "scoobi", appname, version, codegenScoobi.lastGraph)
-        release(pw)
+        var pw2 = setUpPrintWriter
+        codegenScoobi.useWritables = false
+        codegenScoobi.emitProgram(dsl.wikiArticleWordcount2009, appname, pw2, version)
+        writeToProject(pw2, "scoobi", appname, version, codegenScoobi.lastGraph)
+        release(pw2)
+        var pw3 = setUpPrintWriter
+        codegenScoobi.useWritables = true
+        codegenScoobi.emitProgram(dsl.wikiArticleWordcount2009, appname, pw3, version+"w")
+        writeToProject(pw3, "scoobi", appname, version+"w", codegenScoobi.lastGraph)
+        release(pw3)
       }
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false

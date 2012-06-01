@@ -229,6 +229,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   override def mirror[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Exp[A] = (e match {
     case SimpleLoop(s, i, IteratorCollect(g, y)) if f.hasContext =>
       val newBlock = reifyEffectsHere(f.reflectBlock(y))
+      //      toAtom(SimpleLoop(f(s), f(i).asInstanceOf[Sym[Int]], IteratorCollect(f(g), reifyEffectsHere(f.reflectBlock(y)))))(mtype(manifest[A]), implicitly[SourceContext])
       toAtom(SimpleLoop(f(s), f(i).asInstanceOf[Sym[Int]], IteratorCollect(f(g), newBlock)))(mtype(manifest[A]), implicitly[SourceContext])
     case _ => super.mirror(e, f)
   }).asInstanceOf[Exp[A]]
@@ -292,22 +293,22 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
     lazy val defs = statements.flatMap(_.defs)
   }
 
+  trait PartInfo[A] {
+    def m: Manifest[A]
+    def niceName: String
+  }
+  case class FieldInfo[A: Manifest](val name: String, val niceType: String, position: Int) extends PartInfo[A] {
+    val m = manifest[A]
+    def niceName = niceType
+    //      lazy val containingType = typeInfos2.map(_._2).filter(_.fields.size > position).find(_.fields(position) == this).get
+    def getType = typeHandler.typeInfos2(niceType)
+  }
+  case class TypeInfo[A: Manifest](val name: String, val fields: List[FieldInfo[_]]) extends PartInfo[A] {
+    val m = manifest[A]
+    def getField(field: String) = fields.find(_.name == field)
+    def niceName = name
+  }
   class TypeHandler(block: Block[_]) extends BlockVisitor(block) {
-    trait PartInfo[A] {
-      def m: Manifest[A]
-      def niceName: String
-    }
-    case class FieldInfo[A: Manifest](val name: String, val niceType: String, position: Int) extends PartInfo[A] {
-      val m = manifest[A]
-      def niceName = niceType
-      //      lazy val containingType = typeInfos2.map(_._2).filter(_.fields.size > position).find(_.fields(position) == this).get
-      def getType = typeInfos2(niceType)
-    }
-    case class TypeInfo[A: Manifest](val name: String, val fields: List[FieldInfo[_]]) extends PartInfo[A] {
-      val m = manifest[A]
-      def getField(field: String) = fields.find(_.name == field)
-      def niceName = name
-    }
     val objectCreations = statements.flatMap {
       case TP(_, s @ SimpleStruct(tag, elems)) => Some(s)
       //case TTP(_, ThinDef(s @ SimpleStruct(tag, elems))) => Some(s)
@@ -553,17 +554,17 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   var loopFusion = true
   var inlineInLoopFusion = true
 
-  def getParams() : List[(String, Any)] = {
+  def getParams(): List[(String, Any)] = {
     List(
-        ("field reduction", narrowExistingMaps && insertNarrowingMaps),
-        ("loop fusion", loopFusion),
-        ("inline in loop fusion", inlineInLoopFusion),
-        ("regex patterns pre compiled", !IR.disablePatterns)
-        )
+      ("field reduction", narrowExistingMaps && insertNarrowingMaps),
+      ("loop fusion", loopFusion),
+      ("inline in loop fusion", inlineInLoopFusion),
+      ("regex patterns pre compiled", !IR.disablePatterns)
+    )
   }
-  
-  def getOptimizations() = getParams().map(x => "// "+x._1+": "+x._2).mkString("\n")
-  
+
+  def getOptimizations() = getParams().map(x => "// " + x._1 + ": " + x._2).mkString("\n")
+
   def markMapsToNarrow(b: Block[_]) {
     val analyzer = newFieldAnalyzer(b)
     analyzer.nodes.foreach {
@@ -652,86 +653,6 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     out.close
   }
   */
-}
-
-trait TypeFactory extends ScalaGenDList {
-  val IR: DListOpsExp
-  import IR.{ Sym, Def }
-
-  def makeTypeFor(name: String, fields: Iterable[String]): String
-
-  val types = mutable.Map[String, String]()
-
-  val skipTypes = mutable.Set[String]()
-
-  def restTypes = types.filterKeys(x => !skipTypes.contains(x))
-
-  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
-    val out = rhs match {
-      case IR.Field(tuple, x, tp) => emitValDef(sym, "%s.%s".format(quote(tuple), x))
-      //case IR.SimpleStruct(tag, elems) => emitValDef(sym, "Creating struct with %s and elems %s".format(tag, elems))
-      case IR.SimpleStruct(x: IR.ClassTag[_], elems) if (x.name == "tuple2s") => {
-        emitValDef(sym, "(%s, %s)".format(quote(elems("_1")), quote(elems("_2")))) //fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
-        //emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
-      }
-      case IR.SimpleStruct(IR.ClassTag(name), fields) => {
-        try {
-          val typeInfo = typeHandler.typeInfos2(name)
-          val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)
-          val typeName = makeTypeFor(name, fieldsList.map(_._1))
-          emitValDef(sym, "%s(%s)".format(typeName, fieldsList.map(_._2).map(quote).mkString(", ")))
-        } catch {
-          case e =>
-            emitValDef(sym, "Exception " + e + " when accessing " + fields + " of " + name)
-            e.printStackTrace
-        }
-      }
-
-      case _ => super.emitNode(sym, rhs)
-    }
-  }
-
-}
-
-trait CaseClassTypeFactory extends TypeFactory {
-  def makeTypeFor(name: String, fields: Iterable[String]): String = {
-
-    // fields is a sorted list of the field names
-    // typeInfo is the type with all fields and all infos
-    val typeInfo = typeHandler.typeInfos2(name)
-    // this is just a set to have contains
-    val fieldsSet = fields.toSet
-    val fieldsInType = typeInfo.fields
-    val fieldsHere = typeInfo.fields.filter(x => fieldsSet.contains(x.name))
-    if (!types.contains(name)) {
-      types(name) = "trait %s extends Serializable {\n%s\n} ".format(name,
-        fieldsInType.map {
-          fi =>
-            """def %s : %s = throw new RuntimeException("Should not try to access %s here, internal error")"""
-              .format(fi.name, fi.niceName, fi.name)
-        }.mkString("\n"))
-    }
-    val typeName = name + ((List("") ++ fieldsHere.map(_.position + "")).mkString("_"))
-    if (!types.contains(typeName)) {
-      val args = fieldsHere.map { fi => "override val %s : %s".format(fi.name, fi.niceName) }.mkString(", ")
-      types(typeName) = """case class %s(%s) extends %s {
-   override def toString() = {
-        val sb = new StringBuilder()
-        sb.append("%s(")
-        %s
-        sb.append(")")
-        sb.toString()
-   }
-}""".format(typeName, args, name, name,
-        fieldsInType
-          .map(x => if (fieldsSet.contains(x.name)) x.name else "")
-          .map(x => """%s sb.append(",")""".format(if (x.isEmpty) "" else "sb.append(%s); ".format(x)))
-          .mkString(";\n"))
-    }
-
-    typeName
-  }
-
 }
 
 trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElseFat with LoopFusionOpt {

@@ -26,9 +26,9 @@ trait StringAndNumberOps extends PrimitiveOps with StringOps with OverloadHack {
   def string_toNumber[A <: AnyVal: Manifest](s: Rep[String])(implicit ctx: SourceContext): Rep[A]
   def string_toChar(s: Rep[String])(implicit ctx: SourceContext): Rep[Char]
   def string_substring(s: Rep[String], start: Rep[Int])(implicit ctx: SourceContext): Rep[String]
-  
+
   def report(x: Rep[String]) = report_time(x: Rep[String])
-  def report_time(x: Rep[String]) : Rep[Unit]
+  def report_time(x: Rep[String]): Rep[Unit]
 
   //  def long_modulo( l : Rep[Long], mod : Rep[Long])(implicit ctx: SourceContext) : Rep[Long]
   //  implicit def repStringToStringOps(s: Rep[String]) = new stringOpsCls(s)
@@ -49,7 +49,7 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
   case class StringToChar(s: Exp[String]) extends Def[Char]
 
   case class ReportTime(x: Exp[String]) extends Def[Unit]
-  
+
   //  case class LongModulo(l : Exp[Long], mod : Exp[Long]) extends Def[Long]
   //  
   override def string_toNumber[A <: AnyVal: Manifest](s: Rep[String])(implicit ctx: SourceContext) = StringToNumber[A](s)

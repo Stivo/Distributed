@@ -164,7 +164,6 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
       }
 
       def build[C](path: String, readFromSym: Exp[C]): Exp[C] = {
-        import typeHandler.{ TypeInfo, FieldInfo }
         val node = out.resolve(path).get
         val typeInfo = typeHandler.getTypeAt(path, target.y.res.tp)
         printdbg("Typeinfo for path " + path + " is " + typeInfo)

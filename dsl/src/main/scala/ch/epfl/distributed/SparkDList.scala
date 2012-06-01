@@ -252,9 +252,9 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     y = doNarrowExistingMaps(y)
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
-    
+
     prepareGraphData(y, true)
-    
+
     if (loopFusion) {
       y = new MonadicToLoopsTransformation().run(y)
 
@@ -271,10 +271,10 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
 
   val collectionName = "RDD"
 
-  override def getParams() : List[(String, Any)] = {
+  override def getParams(): List[(String, Any)] = {
     super.getParams() ++ List(("reduce by key", reduceByKey))
   }
-    
+
   override def emitProgram[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter, pack: String)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
 
     val x = fresh[A]

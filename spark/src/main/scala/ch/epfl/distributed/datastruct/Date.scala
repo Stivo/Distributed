@@ -1,5 +1,6 @@
 package ch.epfl.distributed.datastruct
-
+import java.io.{DataInput, DataOutput}
+import org.apache.hadoop.io.Writable
 object Date {
   def apply(year: Int, month: Int, day: Int): Date = new SimpleDate(year, month, day)
   def apply(year: Int, month: Int, day: Int, hour: Int, minute: Int, second: Int) = DateTime(year, month, day, hour, minute, second)
@@ -10,9 +11,17 @@ object Date {
   }
 }
 
-abstract class Date(val year: Int, val month: Int, val day: Int) extends Serializable {
+class Date(var year: Int, var month: Int, var day: Int) extends Serializable with Writable {
+  def this() = this(0, 0, 0)
   //Intervals
-  def +(interval: Interval): Date
+  def +(interval: Interval) = {
+    import java.util.Calendar
+    val date = new java.util.GregorianCalendar(year, month, day)
+    date.add(Calendar.YEAR, interval.years)
+    date.add(Calendar.MONTH, interval.months)
+    date.add(Calendar.DAY_OF_MONTH, interval.days)
+    new SimpleDate(date.get(Calendar.YEAR), date.get(Calendar.MONTH), date.get(Calendar.DAY_OF_MONTH))
+  }
 
   //Comparisons
   def <=(that: Date) = {
@@ -26,13 +35,24 @@ abstract class Date(val year: Int, val month: Int, val day: Int) extends Seriali
   def <(that: Date) = (year < that.year) || (year == that.year && (month < that.month || (month == that.month && day < that.day)))
 
   def ni = throw new RuntimeException("not implemented")
+  override def readFields(in: DataInput) {
+    year = in.readInt()
+    month = in.readByte()
+    day = in.readByte()
+  }
+  override def write(out: DataOutput) {
+    out.writeInt(year)
+    out.writeByte(month)
+    out.writeByte(day)
+  }
+
 }
 
 case class SimpleDate(_year: Int, _month: Int, _day: Int) extends Date(_year, _month, _day) {
   assert(month > 0 && month <= 12, "invalid month in date")
   assert(day > 0 && day <= 31, "invalid day in date")
 
-  def +(interval: Interval) = {
+  override def +(interval: Interval) = {
     import java.util.Calendar
     val date = new java.util.GregorianCalendar(year, month, day)
     date.add(Calendar.YEAR, interval.years)
@@ -50,7 +70,7 @@ case class SimpleDate(_year: Int, _month: Int, _day: Int) extends Date(_year, _m
 
 case class DateTime(_year: Int, _month: Int, _day: Int, hour: Int, minute: Int, second: Int) extends Date(_year, _month, _day) {
 
-  def +(interval: Interval) = ni
+  override def +(interval: Interval) = ni
 
 }
 
