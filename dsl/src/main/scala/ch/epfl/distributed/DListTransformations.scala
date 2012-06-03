@@ -44,7 +44,6 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
 
       override def apply[A](x: Exp[A]): Exp[A] = x match {
         case s: Sym[A] if symSubst.contains(s) =>
-          println("Special substitution!!" + s)
           symSubst(s)().asInstanceOf[Sym[A]]
         case _ =>
           super.apply(x)
@@ -56,11 +55,6 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
         res
       }
 
-      def runAgain[A: Manifest](s: Block[A]): Block[A] = {
-        val r = transformBlock(s)
-        subst = Map.empty
-        r
-      }
     }
 
     def run[T: Manifest](y: Block[T]): Block[T] = {
@@ -325,68 +319,43 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
   class InlineTransformation extends TransformationRunner {
     import wt.IR.{
       toAtom2,
-      reifyEffects,
-      IteratorCollect,
       Block,
       IteratorValue,
       Apply,
-      reflectEffect,
-      summarizeEffects,
-      Summary,
-      Reflect,
       Exp
     }
 
-    override def run[T: Manifest](y: IR.Block[T]) = {
+    override def run[T: Manifest](y: IR.Block[T]): IR.Block[T] = {
+      // due to correctness issues this transformer runs one inlining at a time
       registerTransformations(newAnalyzer(y))
-      if (wt.nextSubst.isEmpty) {
+      if (wt.nextSubst.isEmpty)
         y
-      } else {
-        println("Running")
-        var newY = wt.run(y)
-        //        newY = wt.runOne(newY)
-        newY
+      else {
+        run(runOne(y))
       }
+
     }
 
-    def runOne[T: Manifest](y: IR.Block[T]) = {
-
-      // collect the transformer
-      val tmpSubst = wt.subst.map(x => x)
-      println("subst:")
-      tmpSubst.foreach { println }
-      println("params:")
-      paramSubst.foreach { println }
-      wt.symSubst = paramSubst
-        .map(x => x._1 -> (tmpSubst(x._2._1), x._2._2))
-        .map(x => x._1 -> (() => toAtom2(IteratorValue(wt(x._2._1), wt(x._2._2).asInstanceOf[Exp[Int]])).asInstanceOf[Sym[Any]])).toMap
-      wt.subst = Map.empty
-
-      println("--------------------------------------------------------------- Again")
-      wt.runAgain(y)
+    private def runOne[T: Manifest](y: IR.Block[T]) = {
+        val blocksInlined = wt.run(y)
+        wt.runOnce(blocksInlined)
     }
-
-    val paramSubst = new scala.collection.mutable.HashMap[Sym[Any], (Exp[Any], Exp[Int])]()
 
     def registerTransformations(analyzer: Analyzer) {
-      analyzer.orderedStatements.collectFirst { //collectFirst {
+      // selects the first candidate for inlining
+      analyzer.orderedStatements.collectFirst {
         case s @ SomeDef(m @ IR.Apply(lm @ Def(Lambda(f, in, bl @ Block(inBl))), vl @ Def(value @ IteratorValue(a, b)))) =>
           // the whole apply with the body of the lambda (parameters are now hanging)
           wt.registerFunction(s.syms.head) { () =>
             wt.reflectBlock(bl)
           }
-
-          // map that declares which parameter should be plugged with the iterator value
-          paramSubst += (in -> (a, b))
-        //          wt.symSubst += s.syms.head -> (() => wt.reflectBlock(bl).asInstanceOf[wt.IR.Sym[Any]])
-
-//        case _ =>
+          
+          // substitute the dangling parameter symbols with the value in the next run
+      	  wt.symSubst += in -> (() => toAtom2(IteratorValue(wt(a), wt(b))).asInstanceOf[Sym[Int]])
       }
     }
   }
-  /*val iv = toAtom2(IteratorValue(wt(a), wt(b)))
-            wt.symSubst += in -> (() => wt(iv).asInstanceOf[Sym[Any]])
-            toAtom2(Apply(toAtom2(Lambda(wt(f), in, Block(wt.reflectBlock(bl)))), wt(iv)))*/
+  
   /**
    * Should inline occurences of Apply(Lambda(f, v, b), value) to produce just the block b with input simbol rewired to value.
    */

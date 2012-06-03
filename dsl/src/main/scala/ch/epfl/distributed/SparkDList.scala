@@ -261,18 +261,9 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
 
       writeGraphToFile(y, "loop-lowering.dot", true)
 
-      if (inlineInLoopFusion) {
-        println("************************* Before Start **********************************")
-        newAnalyzer(y).statements.foreach { println }
-        for (i <- 0 to 10) {
-          val trans = new InlineTransformation() 
-          y = trans.run(y)
-          writeGraphToFile(y, "inline-lambda.dot", true)
-          y = trans.runOne(y)
-        }
-        println("************************* After End **********************************")
-        newAnalyzer(y).statements.foreach { println }
-      }
+      if (inlineInLoopFusion) 
+        y = new InlineTransformation().run(y)
+      
     }
     y
   }
