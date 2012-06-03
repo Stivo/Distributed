@@ -26,9 +26,9 @@ trait StringAndNumberOps extends PrimitiveOps with StringOps with OverloadHack {
   def string_toNumber[A <: AnyVal: Manifest](s: Rep[String])(implicit ctx: SourceContext): Rep[A]
   def string_toChar(s: Rep[String])(implicit ctx: SourceContext): Rep[Char]
   def string_substring(s: Rep[String], start: Rep[Int])(implicit ctx: SourceContext): Rep[String]
-  
+
   def report(x: Rep[String]) = report_time(x: Rep[String])
-  def report_time(x: Rep[String]) : Rep[Unit]
+  def report_time(x: Rep[String]): Rep[Unit]
 
   //  def long_modulo( l : Rep[Long], mod : Rep[Long])(implicit ctx: SourceContext) : Rep[Long]
   //  implicit def repStringToStringOps(s: Rep[String]) = new stringOpsCls(s)
@@ -49,7 +49,7 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
   case class StringToChar(s: Exp[String]) extends Def[Char]
 
   case class ReportTime(x: Exp[String]) extends Def[Unit]
-  
+
   //  case class LongModulo(l : Exp[Long], mod : Exp[Long]) extends Def[Long]
   //  
   override def string_toNumber[A <: AnyVal: Manifest](s: Rep[String])(implicit ctx: SourceContext) = StringToNumber[A](s)
@@ -68,18 +68,26 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
   }).asInstanceOf[Def[A]]
 
 }
+package datastruct {
+  class FastSplitter
+}
 
 trait StringPatternOpsExp extends StringOps with StringOpsExp {
 
   var disablePatterns = false
-
+  var useFastSplitter = true
+  import datastruct.FastSplitter
   case class StringPattern(regex: Exp[String]) extends Def[java.util.regex.Pattern]
   case class StringSplitPattern(s: Exp[String], pattern: Exp[java.util.regex.Pattern], limit: Exp[Int]) extends Def[Array[String]]
+  case class StringFastSplitter(pattern: Exp[String]) extends Def[FastSplitter]
+  case class StringSplitFastSplitter(s: Exp[String], pattern: Exp[FastSplitter], limit: Exp[Int]) extends Def[Array[String]]
   case class StringMatchesPattern(string: Exp[String], pattern: Exp[java.util.regex.Pattern]) extends Def[Boolean]
   case class StringReplaceAllPattern(string: Exp[String], pattern: Exp[java.util.regex.Pattern], repl: Exp[String]) extends Def[String]
 
   override def string_split(s: Rep[String], separators: Rep[String], limit: Rep[Int]) =
-    if (disablePatterns)
+    if (useFastSplitter)
+      StringSplitFastSplitter(s, StringFastSplitter(separators), limit)
+    else if (disablePatterns)
       super.string_split(s, separators, limit)
     else
       StringSplitPattern(s, StringPattern(separators), limit)
@@ -96,7 +104,9 @@ trait StringPatternOpsExp extends StringOps with StringOpsExp {
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit ctx: SourceContext): Def[A] = (e match {
     case StringPattern(regex) => StringPattern(f(regex))
+    case StringFastSplitter(regex) => StringFastSplitter(f(regex))
     case StringSplitPattern(s, pat, l) => StringSplitPattern(f(s), f(pat), f(l))
+    case StringSplitFastSplitter(s, pat, l) => StringSplitFastSplitter(f(s), f(pat), f(l))
     case StringReplaceAllPattern(s, pat, l) => StringReplaceAllPattern(f(s), f(pat), f(l))
     case StringMatchesPattern(s, pat) => StringMatchesPattern(f(s), f(pat))
     case _ => super.mirrorDef(e, f)
@@ -130,7 +140,9 @@ trait StringPatternOpsCodeGen extends ScalaCodegen {
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case StringSplitPattern(s, pattern, limit) => emitValDef(sym, "%s.split(%s, %s)".format(quote(pattern), quote(s), quote(limit)))
+    case StringSplitFastSplitter(s, pattern, limit) => emitValDef(sym, "%s.split(%s, %s)".format(quote(pattern), quote(s), quote(limit)))
     case StringPattern(s) => emitValDef(sym, "java.util.regex.Pattern.compile(%s)".format(quote(s)))
+    case StringFastSplitter(s) => emitValDef(sym, "new ch.epfl.distributed.datastruct.FastSplitter(%s)".format(quote(s)))
     case StringMatchesPattern(s, pattern) => emitValDef(sym, "%s.matcher(%s).matches()".format(quote(pattern), quote(s)))
     case StringReplaceAllPattern(s, pattern, repl) => emitValDef(sym, "%s.matcher(%s).replaceAll(%s)".format(quote(pattern), quote(s), quote(repl)))
     case _ => super.emitNode(sym, rhs)

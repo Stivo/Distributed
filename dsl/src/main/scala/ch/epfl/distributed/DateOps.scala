@@ -1,10 +1,13 @@
 package ch.epfl.distributed
 
-import ch.epfl.distributed.datastruct.Date
-
 import java.io.PrintWriter
 import scala.virtualization.lms.common.{ ScalaGenBase, ScalaGenEffect, BaseExp, Base }
 import scala.reflect.SourceContext
+
+package datastruct {
+  class Date
+}
+import datastruct.Date
 
 trait DateOps extends Base {
 

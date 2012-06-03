@@ -15,11 +15,11 @@ trait CodeGenerator {
 
   def writeToProject(pw: PrintWriter, projName: String, filename: String, pack: String = "", dotFile: String = "") {
     val packPath = if (pack == "") "" else pack + "/"
-    writeToFile(pw, "%s/src/main/scala/generated/%s%s.scala".format(projName, packPath, filename))
-    if (dotFile != "") {
+    writeToFile(pw, "%s/src/main/scala/generated/%s%s%s.scala".format(projName, packPath, filename, pack))
+    if (false && dotFile != "") {
       val newPw = setUpPrintWriter()
       newPw.write(dotFile)
-      writeToFile(newPw, "%s/src/main/scala/generated/%s%s.dot".format(projName, packPath, filename))
+      writeToFile(newPw, "%s/src/main/scala/generated/%s%s%s.dot".format(projName, packPath, filename, pack))
       release(newPw)
     }
   }

@@ -122,24 +122,37 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       }
       val codegenSpark = new SparkGen {
         val IR: dsl.type = dsl
-        import IR._
-        override def shouldApplyFusion(currentScope: List[Stm])(result: List[Exp[Any]]): Boolean = applyFusion
       }
       val codegenScoobi = new ScoobiGen {
         val IR: dsl.type = dsl
-        override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = applyFusion
       }
-      val list = List(codegenSpark, codegenScoobi)
+      val codegenCrunch = new CrunchGen {
+        val IR: dsl.type = dsl
+      }
+      val list = List(codegenSpark, codegenScoobi, codegenCrunch)
       def writeVersion(version: String) {
+//        if (version != "v5") return
+        //if (codegenSpark.inlineInLoopFusion) return
         var pw = setUpPrintWriter
         codegenSpark.emitProgram(dsl.query12, appname, pw, version)
         writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
         release(pw)
-        pw = setUpPrintWriter
-        codegenScoobi.emitProgram(dsl.query12, appname, pw, version)
-        writeToProject(pw, "scoobi", appname, version, codegenScoobi.lastGraph)
-        release(pw)
+        var pw4 = setUpPrintWriter
+        codegenCrunch.emitProgram(dsl.query12, appname, pw4, version)
+        writeToProject(pw4, "crunch", appname, version, codegenCrunch.lastGraph)
+        release(pw4)
+        var pw2 = setUpPrintWriter
+        codegenScoobi.useWritables = false
+        codegenScoobi.emitProgram(dsl.query12, appname, pw2, version)
+        writeToProject(pw2, "scoobi", appname, version, codegenScoobi.lastGraph)
+        release(pw2)
+        var pw3 = setUpPrintWriter
+        codegenScoobi.useWritables = true
+        codegenScoobi.emitProgram(dsl.query12, appname, pw3, version+"w")
+        writeToProject(pw3, "scoobi", appname, version+"w", codegenScoobi.lastGraph)
+        release(pw3)
       }
+//      dsl.useFastSplitter = false
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false
         codegen.insertNarrowingMaps = false
