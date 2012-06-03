@@ -75,7 +75,9 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   case class ShapeDep[T](s: Rep[T]) extends Def[Int]
   case class Dummy() extends Def[Unit]
   case class IteratorCollect[T](gen: Rep[Gen[T]], block: Block[Gen[T]]) extends Def[DList[T]]
-  case class IteratorValue[T: Manifest, Coll[_]](l: Rep[Coll[T]], v: Rep[Int]) extends Def[T]
+  case class IteratorValue[A: Manifest, Coll[_]](l: Rep[Coll[A]], v: Rep[Int]) extends Def[A] {
+    val mA = manifest[A]
+  }
   case class ForeachElem[T](y: Block[Gen[T]]) extends Def[Gen[T]]
 
   override def syms(e: Any): List[Sym[Any]] = e match {
@@ -221,15 +223,24 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   override def mirrorFatDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
-    case IteratorCollect(g, y) => IteratorCollect(f(g), f(y))
-    case ForeachElem(y) => ForeachElem(f(y))
+    case IteratorCollect(g, y) => IteratorCollect(f(g), if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y))
+    case ForeachElem(y) => ForeachElem(if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y))
     case _ => super.mirrorFatDef(e, f)
   }).asInstanceOf[Def[A]]
 
   override def mirror[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Exp[A] = (e match {
+    case d @ IteratorValue(in, i) =>
+        toAtom(IteratorValue(f(in), f(i))(d.mA))(mtype(manifest[A]), implicitly[SourceContext])
+    case ForeachElem(y) =>
+          toAtom(ForeachElem(if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y)))(mtype(manifest[A]), implicitly[SourceContext])
     case SimpleLoop(s, i, IteratorCollect(g, y)) if f.hasContext =>
-      val newBlock = reifyEffectsHere(f.reflectBlock(y))
-      toAtom(SimpleLoop(f(s), f(i).asInstanceOf[Sym[Int]], IteratorCollect(f(g), newBlock)))(mtype(manifest[A]), implicitly[SourceContext])
+      // Here we have a need for specific order of mirroring due to generator g which is duplicated in IteratorCollect
+      val ns = f(s)
+      val ni = f(i).asInstanceOf[Sym[Int]]
+      val nb = reifyEffectsHere(f.reflectBlock(y))
+      val ng = f(g)
+      toAtom(SimpleLoop(ns, ni, IteratorCollect(ng, nb)))(mtype(manifest[A]), implicitly[SourceContext])
+      
     case _ => super.mirror(e, f)
   }).asInstanceOf[Exp[A]]
 
@@ -245,9 +256,9 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       case d @ DListReduce(dlist, func) => DListReduce(f(dlist), f(func))(d.mKey, d.mValue)
       case d @ DListFlatten(dlists) => DListFlatten(f(dlists))(d.mA)
       case d @ DListGroupByKey(dlist) => DListGroupByKey(f(dlist))(d.mKey, d.mValue)
-      case d @ IteratorCollect(g, y) => IteratorCollect(f(g), f(y))
-      case d @ ForeachElem(y) => ForeachElem(f(y))
-      case d @ IteratorValue(in, i) => IteratorValue(f(in), f(i))
+      case d @ IteratorCollect(g, y) => IteratorCollect(f(g), if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y))
+      case d @ ForeachElem(y) => ForeachElem(if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y))
+      case d @ IteratorValue(in, i) => IteratorValue(f(in), f(i))(d.mA)
       case d @ ShapeDep(in) => ShapeDep(f(in))
       case _ => super.mirrorDef(e, f)
     }
@@ -642,16 +653,14 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
       case e => e.getMessage + "\n" + e.getStackTraceString
     }
   }
-  /*
+  
   def writeGraphToFile(block: Block[_], name: String, comments: Boolean = true) {
     val out = new FileOutputStream(name)
-    val analyzer = newFieldAnalyzer(block)
-    analyzer.makeFieldAnalysis
-    analyzer.addComments = comments
-    out.write(analyzer.exportToGraph.getBytes)
+    val analyzer = newAnalyzer(block)
+    out.write(analyzer.exportToGraphRaw.getBytes)
     out.close
   }
-  */
+  
 }
 
 trait TypeFactory extends ScalaGenDList {
@@ -803,7 +812,6 @@ trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElse
 
   override def applyPlugIntoContext(d: Def[Any], r: Def[Any]) = (d, r) match {
     case (IteratorCollect(g, Block(a)), IteratorCollect(g2, Block(b))) =>
-      println("Yield should be: " + g2)
       IteratorCollect(g2, Block(plugInHelper(g, a, b)))
 
     case _ => super.applyPlugIntoContext(d, r)

@@ -32,7 +32,8 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
     val wt = new WorklistTransformer() {
       val IR: DListTransformations.this.IR.type = DListTransformations.this.IR
 
-      var symSubst: Map[Sym[Any], () => Sym[Any]] = Map.empty
+      var symSubst: scala.collection.immutable.Map[Sym[Any], () => Sym[Any]] = Map.empty
+      var previousSubst = new mutable.HashMap[Exp[Any], Exp[Any]]
 
       def registerFunction[A](x: Exp[A])(y: () => Exp[A]): Unit = if (nextSubst.contains(x.asInstanceOf[Sym[A]]))
         printdbg("discarding, already have a replacement for " + x)
@@ -51,11 +52,17 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
 
       override def runOnce[A: Manifest](s: Block[A]): Block[A] = {
         val res = super.runOnce(s)
-
         symSubst = Map.empty
         res
       }
+
+      def runAgain[A: Manifest](s: Block[A]): Block[A] = {
+        val r = transformBlock(s)
+        subst = Map.empty
+        r
+      }
     }
+
     def run[T: Manifest](y: Block[T]): Block[T] = {
       registerTransformations(newAnalyzer(y))
       if (wt.nextSubst.isEmpty) {
@@ -231,13 +238,12 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
 
     def monadicOp(a: Any) = a match {
       case SomeDef(_: (DListFilter[_])) | SomeDef(_: DListMap[_, _]) | SomeDef(_: DListFlatMap[_, _]) => true
-      case _ => false
+      case _ => true
     }
 
     def registerTransformations(analyzer: Analyzer) {
       analyzer.nodes.foreach {
-        case m @ DListFilter(r, lm @ Def(Lambda(f, in, bl)))
-          if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp)=>
+        case m @ DListFilter(r, lm @ Def(Lambda(f, in, bl))) if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp) =>
           val stm = findDefinition(m).get
           wt.register(stm.syms.head) {
             val i = fresh[Int]
@@ -280,7 +286,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
           }
           System.out.println("Registering " + stm + " to a map loop")
           wt.registerFunction(stm.syms.head)(eval)
-        case m @ DListFlatMap(r, lm @ Def(Lambda(f, in, bl))) if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp) =>
+        case m @ DListFlatMap(r, lm @ Def(lmdef @ Lambda(f, in, bl))) if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp) =>
           val stm = findDefinition(m).get
 
           val eval = () => {
@@ -293,7 +299,8 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
                 val shape2 = toAtom2(ShapeDep(coll))
                 val j = fresh[Int]
 
-                val innerBody = reifyEffects { yields(d, List(j, i), toAtom2(IteratorValue(coll, j))) }
+                // Somehow the mirroring order here is wrong
+                val innerBody = reifyEffects { yields(d, List(j, i), toAtom2(IteratorValue(coll, j)))(lmdef.mB.typeArguments.head.asInstanceOf[Manifest[Any]]) }
                 reflectEffect(SimpleLoop(shape2, j, ForeachElem(innerBody).asInstanceOf[Def[Gen[Any]]]), summarizeEffects(innerBody))
               }
             }
@@ -336,29 +343,82 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
         y
       } else {
         println("Running")
-        val newY = wt.run(y)
-        println("************************* After Start but Before End **********************************")
-        newAnalyzer(newY).orderedStatements.foreach { println }
-        println("************************* Register transformations again ****************************")
-        registerTransformations(newAnalyzer(newY))
-        wt.run(newY)
+        var newY = wt.run(y)
+        //        newY = wt.runOne(newY)
+        newY
       }
+    }
 
+    def runOne[T: Manifest](y: IR.Block[T]) = {
+
+      // collect the transformer
+      val tmpSubst = wt.subst.map(x => x)
+      println("subst:")
+      tmpSubst.foreach { println }
+      println("params:")
+      paramSubst.foreach { println }
+      wt.symSubst = paramSubst
+        .map(x => x._1 -> (tmpSubst(x._2._1), x._2._2))
+        .map(x => x._1 -> (() => toAtom2(IteratorValue(wt(x._2._1), wt(x._2._2).asInstanceOf[Exp[Int]])).asInstanceOf[Sym[Any]])).toMap
+      wt.subst = Map.empty
+
+      println("--------------------------------------------------------------- Again")
+      wt.runAgain(y)
+    }
+
+    val paramSubst = new scala.collection.mutable.HashMap[Sym[Any], (Exp[Any], Exp[Int])]()
+
+    def registerTransformations(analyzer: Analyzer) {
+      analyzer.orderedStatements.collectFirst { //collectFirst {
+        case s @ SomeDef(m @ IR.Apply(lm @ Def(Lambda(f, in, bl @ Block(inBl))), vl @ Def(value @ IteratorValue(a, b)))) =>
+          // the whole apply with the body of the lambda (parameters are now hanging)
+          wt.registerFunction(s.syms.head) { () =>
+            wt.reflectBlock(bl)
+          }
+
+          // map that declares which parameter should be plugged with the iterator value
+          paramSubst += (in -> (a, b))
+        //          wt.symSubst += s.syms.head -> (() => wt.reflectBlock(bl).asInstanceOf[wt.IR.Sym[Any]])
+
+//        case _ =>
+      }
+    }
+  }
+  /*val iv = toAtom2(IteratorValue(wt(a), wt(b)))
+            wt.symSubst += in -> (() => wt(iv).asInstanceOf[Sym[Any]])
+            toAtom2(Apply(toAtom2(Lambda(wt(f), in, Block(wt.reflectBlock(bl)))), wt(iv)))*/
+  /**
+   * Should inline occurences of Apply(Lambda(f, v, b), value) to produce just the block b with input simbol rewired to value.
+   */
+  class InlineTransformation1 extends TransformationRunner {
+    import wt.IR.{
+      toAtom2,
+      reifyEffects,
+      IteratorCollect,
+      Block,
+      IteratorValue,
+      Apply,
+      reflectEffect,
+      summarizeEffects,
+      Summary,
+      Reflect,
+      Exp
     }
 
     def registerTransformations(analyzer: Analyzer) {
-      analyzer.orderedStatements.reverse.foreach {
-        case s @ SomeDef(m @ IR.Apply(Def(Lambda(null, lIn, bl)), vl @ Def(value @ IteratorValue(a, b)))) =>
-          wt.registerFunction(s.syms.head) { () => wt.reflectBlock(bl) }
+      analyzer.orderedStatements.reverse.collectFirst { //collectFirst {
         case s @ SomeDef(m @ IR.Apply(lm @ Def(Lambda(f, in, bl @ Block(inBl))), vl @ Def(value @ IteratorValue(a, b)))) =>
 
-          wt.symSubst += in -> (() => wt(vl).asInstanceOf[wt.IR.Sym[Any]])
-          wt.registerFunction(s.syms.head) { () => wt.reflectBlock(bl) }
+          wt.registerFunction(s.syms.head) { () =>
+            {
+              println("1. Reflect block")
+              println("wt substitutions =>" + wt.subst)
+              wt.reflectBlock(bl)
+            }
+          }
 
-          System.out.println("Substituting " + in + " with " + vl + "")
           System.out.println("Registering inlining of " + m)
-
-        case _ =>
+        //        case _ =>
       }
     }
   }

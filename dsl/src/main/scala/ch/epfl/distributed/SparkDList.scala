@@ -33,8 +33,8 @@ trait SparkDListOps extends DListOps {
 
 trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
   case class DListReduceByKey[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], closure: Exp[(V, V) => V])
-      extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
-      with PreservingTypeComputation[DList[(K, V)]] {
+    extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
+    with PreservingTypeComputation[DList[(K, V)]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     def getClosureTypes = ((manifest[V], manifest[V]), manifest[V])
@@ -187,7 +187,7 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
 }
 
 trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransformations
-    with SparkTransformations with Matchers with SparkDListFieldAnalysis with CaseClassTypeFactory {
+  with SparkTransformations with Matchers with SparkDListFieldAnalysis with CaseClassTypeFactory {
 
   val IR: SparkDListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -252,16 +252,24 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     y = doNarrowExistingMaps(y)
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
-    
+
     prepareGraphData(y, true)
-    
+
     if (loopFusion) {
+      writeGraphToFile(y, "narrow.dot", true)
       y = new MonadicToLoopsTransformation().run(y)
+
+      writeGraphToFile(y, "loop-lowering.dot", true)
 
       if (inlineInLoopFusion) {
         println("************************* Before Start **********************************")
         newAnalyzer(y).statements.foreach { println }
-        y = new InlineTransformation().run(y)
+        for (i <- 0 to 10) {
+          val trans = new InlineTransformation() 
+          y = trans.run(y)
+          writeGraphToFile(y, "inline-lambda.dot", true)
+          y = trans.runOne(y)
+        }
         println("************************* After End **********************************")
         newAnalyzer(y).statements.foreach { println }
       }
@@ -271,10 +279,10 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
 
   val collectionName = "RDD"
 
-  override def getParams() : List[(String, Any)] = {
+  override def getParams(): List[(String, Any)] = {
     super.getParams() ++ List(("reduce by key", reduceByKey))
   }
-    
+
   override def emitProgram[A, B](f: Exp[A] => Exp[B], className: String, stream: PrintWriter, pack: String)(implicit mA: Manifest[A], mB: Manifest[B]): List[(Sym[Any], Any)] = {
 
     val x = fresh[A]
@@ -342,7 +350,7 @@ object %s {
     stream.flush
 
     types.clear()
-    //writeGraphToFile(y, "test.dot", true)
+    //    writeGraphToFile(y, "test.dot", true)
     reset
     Nil
   }
@@ -363,10 +371,11 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
       val ii = x
 
       for ((l, r) <- (sym zip rhs)) r match {
-        case IteratorCollect(g, Block(y)) =>
+        // temporary workaround for lost types
+        case IteratorCollect(g @ Def(Reflect(ys @ YieldSingle(_, _), _, _)), b @ Block(y)) =>
           stream.println("val " + quote(sym.head) + " = " + quote(sd) + """.mapPartitions(it => {
-        new Iterator[""" + stripGen(g.tp) + """] {
-          private[this] val buff = new Array[""" + stripGen(g.tp) + """](1 << 22)
+        new Iterator[""" + stripGen(ys.mA) + """] {
+          private[this] val buff = new Array[""" + stripGen(ys.mA) + """](1 << 22)
           private[this] val stopAt = (1 << 22) - (1 << 12);
   		  private[this] final var start = 0
           private[this] final var end = 0

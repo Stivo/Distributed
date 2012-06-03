@@ -149,6 +149,7 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
 
     var addComments = true
 
+    
     def exportToGraph = {
       //      println("All loops:")
       //      loops.foreach(println)
@@ -168,6 +169,24 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
         val readPathsSorted = readPaths.toList.distinct.sorted
         buf += """%s -> %s [label="%s"]; """.format(getIdForNode(input1), getIdForNode(node),
           readPathsSorted.mkString(","))
+      }
+      buf += "}"
+      buf.mkString("\n")
+    }
+    
+    /**
+     * Exports the raw IR to .dot format. 
+     */
+    def exportToGraphRaw = {
+      val buf = Buffer[String]()
+      buf += "digraph g {"
+      for (sym <- statements.flatMap(_.syms)) {
+        val df = IR.findDefinition(sym)
+        buf += """%s [label="%s"];"""
+          .format(sym.id, df.get.toString)
+      }
+      for (sym <- statements.flatMap(_.syms); input1 <- getInputSyms(sym)) {
+        buf += """%s -> %s [label="%s"]; """.format(sym.id, input1.id, sym.id)
       }
       buf += "}"
       buf.mkString("\n")
