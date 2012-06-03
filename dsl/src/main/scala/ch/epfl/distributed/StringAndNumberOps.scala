@@ -85,7 +85,7 @@ trait StringPatternOpsExp extends StringOps with StringOpsExp {
   case class StringReplaceAllPattern(string: Exp[String], pattern: Exp[java.util.regex.Pattern], repl: Exp[String]) extends Def[String]
 
   override def string_split(s: Rep[String], separators: Rep[String], limit: Rep[Int]) =
-    if (useFastSplitter) 
+    if (useFastSplitter)
       StringSplitFastSplitter(s, StringFastSplitter(separators), limit)
     else if (disablePatterns)
       super.string_split(s, separators, limit)

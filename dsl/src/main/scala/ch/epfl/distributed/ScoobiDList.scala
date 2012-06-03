@@ -64,7 +64,7 @@ trait ScoobiGenDList extends ScalaGenBase
 
   override val typesInInlinedClosures = true
 
-  def mkWireFormats() : String = {
+  def mkWireFormats(): String = {
     // TODO: This is a bit of a hack. Cleaner solution pending.
     if (!types.values.exists(_.trim.startsWith("trait"))) return ""
     val out = new StringBuilder

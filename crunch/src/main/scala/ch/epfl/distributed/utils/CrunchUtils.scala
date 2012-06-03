@@ -8,7 +8,7 @@ import java.io.DataInput
 import com.cloudera.crunch.PTable
 import com.cloudera.crunch.{ Pair => CPair }
 import com.cloudera.crunch.DoFn
-import com.cloudera.crunch.`type`.writable.Writables
+import com.cloudera.crunch.`types`.writable.Writables
 import org.apache.hadoop.conf.Configuration
 import com.cloudera.crunch.Emitter
 import scala.collection.mutable

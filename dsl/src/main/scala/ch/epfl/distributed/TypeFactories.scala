@@ -37,7 +37,7 @@ trait TypeFactory extends ScalaGenDList {
       case _ => super.emitNode(sym, rhs)
     }
   }
-  
+
   override def reset {
     types.clear
     super.reset
@@ -51,7 +51,7 @@ trait TypeFactoryUtils extends TypeFactory {
     val set = fields.toSet
     getFieldList(name).filter(x => set.contains(x.name))
   }
-  def getNameFor(fieldsHere: List[FieldInfo[_]]) = fieldsHere.map(_.position + "").mkString("_", "_","")
+  def getNameFor(fieldsHere: List[FieldInfo[_]]) = fieldsHere.map(_.position + "").mkString("_", "_", "")
 }
 
 trait CaseClassTypeFactory extends TypeFactory with TypeFactoryUtils {
@@ -96,70 +96,70 @@ trait CaseClassTypeFactory extends TypeFactory with TypeFactoryUtils {
 }
 
 trait WritableTypeFactoryUtils extends TypeFactoryUtils {
-    val bitsetFieldName = "__bitset"
-    val readBitSetLine = bitsetFieldName + " = WritableUtils.readVLong(in)"
-    val writeBitSetLine  = "WritableUtils.writeVLong(out, " + bitsetFieldName + ")"
-    def getDefaultValueForType(x: Manifest[_]) = {
-      x match {
-        case _ if x <:< manifest[String] => """" """"
-        case _ if x <:< manifest[Double] => "0"
-        case _ if x <:< manifest[Long] => "0L"
-        case _ if x <:< manifest[Int] => "0"
-        case _ if x <:< manifest[Char] => "' '"
-        case _ if x.toString == "ch.epfl.distributed.datastruct.Date" => "new ch.epfl.distributed.datastruct.Date()"
-        case x => throw new RuntimeException("Implement default value for " + x)
-      }
+  val bitsetFieldName = "__bitset"
+  val readBitSetLine = bitsetFieldName + " = WritableUtils.readVLong(in)"
+  val writeBitSetLine = "WritableUtils.writeVLong(out, " + bitsetFieldName + ")"
+  def getDefaultValueForType(x: Manifest[_]) = {
+    x match {
+      case _ if x <:< manifest[String] => """" """"
+      case _ if x <:< manifest[Double] => "0"
+      case _ if x <:< manifest[Long] => "0L"
+      case _ if x <:< manifest[Int] => "0"
+      case _ if x <:< manifest[Char] => "' '"
+      case _ if x.toString == "ch.epfl.distributed.datastruct.Date" => "new ch.epfl.distributed.datastruct.Date()"
+      case x => throw new RuntimeException("Implement default value for " + x)
+    }
   }
   def generateWriteField(x: FieldInfo[_], read: Boolean) = {
-        if (x.m.toString == "ch.epfl.distributed.datastruct.Date") {
-          if (read) {
-            x.name + ".readFields(in)"
-          } else {
-            x.name + ".write(out)"
-          }
-        } else if (x.m <:< manifest[Int]) {
-          if (read) {
-            x.name + "= WritableUtils.readVInt(in)"
-          } else {
-            "WritableUtils.writeVInt(out, " + x.name + ")"
-          }
-        } else if (x.m <:< manifest[Long]) {
-          if (read) {
-            x.name + "= WritableUtils.readVLong(in)"
-          } else {
-            "WritableUtils.writeVLong(out, " + x.name + ")"
-          }
-        } else {
-          val t = x.m match {
-            case _ if x.m <:< manifest[String] => "UTF"
-//            case _ if x.m <:< manifest[Int] => "Int"
-            case _ if x.m <:< manifest[Double] => "Double"
-            case _ if x.m <:< manifest[Char] => "Char"
-            case _ => throw new RuntimeException("Implement read/write functionality for " + x)
-          }
-          val format = if (read) "%s = in.read%s" else "out.write%2$s(%1$s)"
-          format.format(x.name, t)
-        }
+    if (x.m.toString == "ch.epfl.distributed.datastruct.Date") {
+      if (read) {
+        x.name + ".readFields(in)"
+      } else {
+        x.name + ".write(out)"
+      }
+    } else if (x.m <:< manifest[Int]) {
+      if (read) {
+        x.name + "= WritableUtils.readVInt(in)"
+      } else {
+        "WritableUtils.writeVInt(out, " + x.name + ")"
+      }
+    } else if (x.m <:< manifest[Long]) {
+      if (read) {
+        x.name + "= WritableUtils.readVLong(in)"
+      } else {
+        "WritableUtils.writeVLong(out, " + x.name + ")"
+      }
+    } else {
+      val t = x.m match {
+        case _ if x.m <:< manifest[String] => "UTF"
+        //            case _ if x.m <:< manifest[Int] => "Int"
+        case _ if x.m <:< manifest[Double] => "Double"
+        case _ if x.m <:< manifest[Char] => "Char"
+        case _ => throw new RuntimeException("Implement read/write functionality for " + x)
+      }
+      val format = if (read) "%s = in.read%s" else "out.write%2$s(%1$s)"
+      format.format(x.name, t)
+    }
   }
 
-  def getBitValue(fields: Iterable[FieldInfo[_]],typeInfo: TypeInfo[_]) = fields.map(x => x.position).map(1 << _).reduce(_ + _)
-  
+  def getBitValue(fields: Iterable[FieldInfo[_]], typeInfo: TypeInfo[_]) = fields.map(x => x.position).map(1 << _).reduce(_ + _)
+
   def writeClass(name: String, bitset: Boolean, body: String) = {
     val fields = getFieldList(name)
-     val bitSetField = if (bitset)
-        "var %s: Long = %s;".format(bitsetFieldName, (1 << fields.size) - 1)
-      else
-        ""
-        
-     val constructor = "def this() = this(%s = %s)\n"
-       .format(fields.head.name, getDefaultValueForType(fields.head.m))
+    val bitSetField = if (bitset)
+      "var %s: Long = %s;".format(bitsetFieldName, (1 << fields.size) - 1)
+    else
+      ""
+
+    val constructor = "def this() = this(%s = %s)\n"
+      .format(fields.head.name, getDefaultValueForType(fields.head.m))
     """
     case class %s(%s) extends Writable {
         %s
     	%s
   		%s
   	}
-    """.format(name, getFieldList(name).map{ fi =>
+    """.format(name, getFieldList(name).map { fi =>
       """var %s : %s = %s""".format(fi.name, fi.niceName, getDefaultValueForType(fi.m))
     }.mkString(", "), constructor, bitSetField, body)
   }
@@ -170,9 +170,9 @@ trait WritableTypeFactory extends TypeFactory with WritableTypeFactoryUtils {
   import IR.{ Sym, Def }
 
   var useBitset = true
-    
+
   override def makeTypeFor(name: String, fields: Iterable[String]): String = {
-	
+
     val fieldsHere = getFilteredFieldList(name, fields)
 
     def readAndWriteFields(fields: Iterable[FieldInfo[_]]) = {
@@ -204,11 +204,11 @@ trait WritableTypeFactory extends TypeFactory with WritableTypeFactoryUtils {
     }
     if (!types.contains(name)) {
       val body = readAndWriteFields(getFieldList(name))
-       types(name) = writeClass(name, useBitset, body)
+      types(name) = writeClass(name, useBitset, body)
     }
     name
   }
-  override def emitNode(sym: Sym[Any], rhs: Def[Any]) : Unit = {
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]): Unit = {
     val out = rhs match {
       case IR.SimpleStruct(x: IR.ClassTag[_], elems) if (x.name == "tuple2s") => {
         emitValDef(sym, "(%s, %s)".format(quote(elems("_1")), quote(elems("_2")))) //fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
@@ -221,7 +221,7 @@ trait WritableTypeFactory extends TypeFactory with WritableTypeFactoryUtils {
           val typeName = makeTypeFor(name, fieldsList.map(_._1))
           emitValDef(sym, "new %s(%s)".format(typeName, fieldsList.map { case (name, elem) => name + " = " + quote(elem) }.mkString(", ")))
           if (useBitset)
-            stream.println(quote(sym)+"."+bitsetFieldName + " = " + fieldsList.map(x => typeInfo.getField(x._1).get.position).map(1 << _).reduce(_ + _))
+            stream.println(quote(sym) + "." + bitsetFieldName + " = " + fieldsList.map(x => typeInfo.getField(x._1).get.position).map(1 << _).reduce(_ + _))
         } catch {
           case e =>
             emitValDef(sym, "Exception " + e + " when accessing " + fields + " of " + name)
@@ -239,10 +239,10 @@ trait FastWritableTypeFactory extends TypeFactory with WritableTypeFactoryUtils 
   import IR.{ Sym, Def }
 
   var useBitset = true
-  
+
   // the bitsets for all combinations that are encountered.
-  var combinations : Map[String, mutable.Set[Long]]= Map.empty
-  
+  var combinations: Map[String, mutable.Set[Long]] = Map.empty
+
   override def reset {
     combinations = Map.empty
     super.reset
@@ -267,31 +267,31 @@ trait FastWritableTypeFactory extends TypeFactory with WritableTypeFactoryUtils 
     val bitsets = combinations(name)
     var methods = ""
     bitsets.foreach { long =>
-    	val fieldsHere = fields.filter(fi => ((1 << fi.position) & long) > 0)
-    	val suffix = getNameFor(fieldsHere)
-    	caseBody += "case %s => %%1$s%s(%%2$s)\n".format(long, suffix)
-    	val readFieldsBody = fieldsHere.map { fi =>
-        	generateWriteField(fi, true)
-    	}.mkString("\n")
-    	
-    	val writeFieldsBody = fieldsHere.map { fi =>
-        	generateWriteField(fi, false)
-    	}.mkString("\n")
-    	methods += """def readFields%s(in : DataInput) { 
+      val fieldsHere = fields.filter(fi => ((1 << fi.position) & long) > 0)
+      val suffix = getNameFor(fieldsHere)
+      caseBody += "case %s => %%1$s%s(%%2$s)\n".format(long, suffix)
+      val readFieldsBody = fieldsHere.map { fi =>
+        generateWriteField(fi, true)
+      }.mkString("\n")
+
+      val writeFieldsBody = fieldsHere.map { fi =>
+        generateWriteField(fi, false)
+      }.mkString("\n")
+      methods += """def readFields%s(in : DataInput) { 
     %s 
     } 
     	  """.format(suffix, readFieldsBody)
-    	methods += """def write%s(out : DataOutput) { 
+      methods += """def write%s(out : DataOutput) { 
     %s 
     } 
     	  """.format(suffix, writeFieldsBody)
     }
     val readFieldsBody = readFields.format(readBitSetLine, bitsetFieldName, caseBody.format("readFields", "in"))
     val writeFieldsBody = writeFields.format(writeBitSetLine, bitsetFieldName, caseBody.format("write", "out"))
-    
-    types(name) = writeClass(name, true, readFieldsBody+"\n"+writeFieldsBody+"\n\n"+methods) 
+
+    types(name) = writeClass(name, true, readFieldsBody + "\n" + writeFieldsBody + "\n\n" + methods)
   }
-  
+
   override def makeTypeFor(name: String, fields: Iterable[String]): String = {
     if (!combinations.contains(name)) {
       combinations += name -> mutable.Set[Long]()
@@ -302,8 +302,8 @@ trait FastWritableTypeFactory extends TypeFactory with WritableTypeFactoryUtils 
     updateType(name)
     name
   }
- 
-  override def emitNode(sym: Sym[Any], rhs: Def[Any]) : Unit = {
+
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]): Unit = {
     val out = rhs match {
       case IR.SimpleStruct(x: IR.ClassTag[_], elems) if (x.name == "tuple2s") => {
         emitValDef(sym, "(%s, %s)".format(quote(elems("_1")), quote(elems("_2")))) //fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
@@ -316,7 +316,7 @@ trait FastWritableTypeFactory extends TypeFactory with WritableTypeFactoryUtils 
           val typeName = makeTypeFor(name, fieldsList.map(_._1))
           emitValDef(sym, "new %s(%s)".format(typeName, fieldsList.map { case (name, elem) => name + " = " + quote(elem) }.mkString(", ")))
           if (useBitset)
-            stream.println(quote(sym)+"."+bitsetFieldName + " = " + getBitValue(fieldsList.map(x => typeInfo.getField(x._1).get), typeInfo))
+            stream.println(quote(sym) + "." + bitsetFieldName + " = " + getBitValue(fieldsList.map(x => typeInfo.getField(x._1).get), typeInfo))
         } catch {
           case e =>
             emitValDef(sym, "Exception " + e + " when accessing " + fields + " of " + name)
@@ -334,21 +334,21 @@ trait SwitchingTypeFactory extends TypeFactory with CaseClassTypeFactory with Fa
   val IR: DListOpsExp
   import IR.{ Sym, Def }
   var useWritables = true
-  override def getParams() : List[(String, Any)] = {
+  override def getParams(): List[(String, Any)] = {
     super.getParams() ++ List(("using writables", useWritables))
   }
   override def makeTypeFor(name: String, fields: Iterable[String]): String = {
-	if (useWritables) {
-	  super.makeTypeFor(name, fields)
-	} else {
-	  super[CaseClassTypeFactory].makeTypeFor(name, fields)
-	 }
+    if (useWritables) {
+      super.makeTypeFor(name, fields)
+    } else {
+      super[CaseClassTypeFactory].makeTypeFor(name, fields)
+    }
   }
-  override def emitNode(sym: Sym[Any], rhs: Def[Any]) : Unit = {
-	if (useWritables) {
-	  super.emitNode(sym, rhs)
-	} else {
-	  super[CaseClassTypeFactory].emitNode(sym, rhs)
-	 }
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]): Unit = {
+    if (useWritables) {
+      super.emitNode(sym, rhs)
+    } else {
+      super[CaseClassTypeFactory].emitNode(sym, rhs)
+    }
   }
 }
