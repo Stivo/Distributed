@@ -342,7 +342,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
     }
 
     def registerTransformations(analyzer: Analyzer) {
-      // selects the first candidate for inlining
+      // selects the first candidate to inline
       analyzer.orderedStatements.collectFirst {
         case s @ SomeDef(m @ IR.Apply(lm @ Def(Lambda(f, in, bl @ Block(inBl))), vl @ Def(value @ IteratorValue(a, b)))) =>
           // the whole apply with the body of the lambda (parameters are now hanging)
@@ -356,42 +356,6 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
     }
   }
   
-  /**
-   * Should inline occurences of Apply(Lambda(f, v, b), value) to produce just the block b with input simbol rewired to value.
-   */
-  class InlineTransformation1 extends TransformationRunner {
-    import wt.IR.{
-      toAtom2,
-      reifyEffects,
-      IteratorCollect,
-      Block,
-      IteratorValue,
-      Apply,
-      reflectEffect,
-      summarizeEffects,
-      Summary,
-      Reflect,
-      Exp
-    }
-
-    def registerTransformations(analyzer: Analyzer) {
-      analyzer.orderedStatements.reverse.collectFirst { //collectFirst {
-        case s @ SomeDef(m @ IR.Apply(lm @ Def(Lambda(f, in, bl @ Block(inBl))), vl @ Def(value @ IteratorValue(a, b)))) =>
-
-          wt.registerFunction(s.syms.head) { () =>
-            {
-              println("1. Reflect block")
-              println("wt substitutions =>" + wt.subst)
-              wt.reflectBlock(bl)
-            }
-          }
-
-          System.out.println("Registering inlining of " + m)
-        //        case _ =>
-      }
-    }
-  }
-
   /*  
 
   class MergeFlattenTransformation extends Transformation {
