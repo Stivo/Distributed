@@ -95,6 +95,24 @@ trait DListsProg extends DListProgram with ComplexBase {
 }
 
 class TestDLists2 extends CodeGeneratorTestSuite {
+  def testCrunch {
+    tryCompile {
+      println("-- begin")
+
+      val dsl = new DListsProg with DListProgramExp with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
+
+      val codegen = new CrunchGen {
+        val IR: dsl.type = dsl
+        override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = true
+      }
+      val pw = setUpPrintWriter
+      codegen.emitSource(dsl.flatMapFusionTest, "TestBasic", pw)
+
+      writeToProject(pw, "crunch", "TestBasic")
+      release(pw)
+      println("-- end")
+    }
+  }
 
   /*
   def testPrinter {

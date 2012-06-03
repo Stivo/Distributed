@@ -1,7 +1,11 @@
 #!/bin/bash
 set -e
-cp dsl/src/main/resources/*.scala spark/src/main/scala/ch/epfl/distributed/datastruct/
-cp dsl/src/main/resources/*.scala scoobi/src/main/scala/ch/epfl/distributed/datastruct/
+for backend in spark scoobi crunch
+do
+DIR=$backend/src/main/scala/ch/epfl/distributed/datastruct/
+mkdir -p $DIR
+cp dsl/src/main/resources/*.scala $DIR
+done
 #pkill feh || true
 
 for x in $(find | grep .dot$)

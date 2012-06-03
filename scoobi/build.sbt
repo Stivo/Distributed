@@ -1,4 +1,4 @@
-name := "Scoobi Examples"
+name := "scoobi-gen"
 
 version := "0.1"
 

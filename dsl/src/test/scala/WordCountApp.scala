@@ -312,13 +312,18 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
       val dsl = new WordCountApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
       val codegenSpark = new SparkGen { val IR: dsl.type = dsl }
       val codegenScoobi = new ScoobiGen { val IR: dsl.type = dsl }
-      val list = List(codegenSpark, codegenScoobi)
+      val codegenCrunch = new CrunchGen { val IR: dsl.type = dsl }
+      val list = List(codegenSpark, codegenScoobi, codegenCrunch)
       def writeVersion(version: String) {
         //if (version != "v5") return
         var pw = setUpPrintWriter
         codegenSpark.emitProgram(dsl.wikiArticleWordcount2009, appname, pw, version)
         writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
         release(pw)
+        var pw4 = setUpPrintWriter
+        codegenCrunch.emitProgram(dsl.wikiArticleWordcount2009, appname, pw4, version)
+        writeToProject(pw4, "crunch", appname, version, codegenCrunch.lastGraph)
+        release(pw4)
         var pw2 = setUpPrintWriter
         codegenScoobi.useWritables = false
         codegenScoobi.emitProgram(dsl.wikiArticleWordcount2009, appname, pw2, version)

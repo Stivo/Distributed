@@ -31,6 +31,7 @@ class FastSplitter(matchOn: String) extends Serializable {
     private[this] val ends = Array.ofDim[Int](max)
     ends(max - 1) = s.length
     ranges(0) = 0
+    val bytes = s.getBytes
     def apply(num: Int): String = {
       while (at <= num + 1 && at < max) {
         atChar = s.indexOf(byte, atChar)
