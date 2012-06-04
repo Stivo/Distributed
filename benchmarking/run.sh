@@ -13,7 +13,8 @@ A=""
 for x in {0..5}
 do
 A="$A$x\n"
-#A="$A${x}w\n"
+A="$A${x}w\n"
+A="$A${x}k\n"
 done
 
 for version in $(echo -e $A | sort )
@@ -24,17 +25,18 @@ PROG=scoobi.generated.v$version.TpchQueries
 OUTPUT=output_v$version
 
 rm -rf $OUTPUT
+TPCHDATA="/home/stivo/master/testdata/tpch/smaller/"
 INPUTS="/home/stivo/master/testdata/wiki2009-articles-10k.tsv $OUTPUT"
-INPUTS="/home/stivo/master/testdata/tpch/small/ $OUTPUT 1995-01-01 TRUCK SHIP"
-cat /home/stivo/master/testdata/tpch/small/orders.tbl /home/stivo/master/testdata/tpch/small/lineitem.tbl > /dev/null
+INPUTS="$TPCHDATA $OUTPUT 1995-01-01 TRUCK SHIP"
+cat $TPCHDATA/orders.tbl $TPCHDATA/lineitem.tbl > /dev/null
 TIMEARGS="s$version\t%e\t%S\t%U\t%M\t%P"
 #-XX:MaxInlineSize=1000
 /usr/bin/time -f $TIMEARGS -o /dev/stdout env HADOOP_HEAPSIZE="4096" hadoop jar progs/scoobi-gen*.jar $PROG $INPUTS 2> ./scoobi_$PROG.txt
-cat /home/stivo/master/testdata/tpch/small/orders.tbl /home/stivo/master/testdata/tpch/small/lineitem.tbl > /dev/null
+cat $TPCHDATA/orders.tbl $TPCHDATA/lineitem.tbl > /dev/null
 
 #du -h $OUTPUT
 TIMEARGS="c$version\t%e\t%S\t%U\t%M\t%P"
 PROG=crunch.generated.v$version.TpchQueries
-/usr/bin/time -f $TIMEARGS -o /dev/stdout env HADOOP_HEAPSIZE="4096" hadoop jar progs/crunch-gen.jar $PROG "asdf" $INPUTS 2> ./crunch_$PROG.txt 
+#/usr/bin/time -f $TIMEARGS -o /dev/stdout env HADOOP_HEAPSIZE="4096" hadoop jar progs/crunch-gen*.jar $PROG "asdf" $INPUTS 2> ./crunch_$PROG.txt 
 done
 

@@ -55,6 +55,7 @@ trait TypeFactoryUtils extends TypeFactory {
 }
 
 trait CaseClassTypeFactory extends TypeFactory with TypeFactoryUtils {
+  def getSuperTraitsForTrait: String = "extends Serializable"
   def makeTypeFor(name: String, fields: Iterable[String]): String = {
 
     // fields is a sorted list of the field names
@@ -65,7 +66,8 @@ trait CaseClassTypeFactory extends TypeFactory with TypeFactoryUtils {
     val fieldsInType = typeInfo.fields
     val fieldsHere = typeInfo.fields.filter(x => fieldsSet.contains(x.name))
     if (!types.contains(name)) {
-      types(name) = "trait %s extends Serializable {\n%s\n} ".format(name,
+      types(name) = "trait %s %s {\n%s\n} ".format(name,
+        getSuperTraitsForTrait,
         fieldsInType.map {
           fi =>
             """def %s : %s = throw new RuntimeException("Should not try to access %s here, internal error")"""

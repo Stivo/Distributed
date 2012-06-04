@@ -241,7 +241,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
           wt.register(stm.syms.head) {
             val i = fresh[Int]
             val d = reflectMutableSym(fresh[Int])
-            val value = toAtom2(IteratorValue(wt(r), i))
+            val value = toAtom2(IteratorValue(wt(r), i))(mtype(r.tp), FakeSourceContext())
             val (g, y) = collectYields {
               reifyEffects {
                 // Yield the iterator value in the block
@@ -263,7 +263,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
             val i = fresh[Int]
             val d = reflectMutableSym(fresh[Int])
 
-            val yld = doApply(wt(lm), toAtom2(IteratorValue(wt(r), i)))
+            val yld = doApply(wt(lm), toAtom2(IteratorValue(wt(r), i))(mtype(r.tp), FakeSourceContext()))
             val (g, y) = collectYields {
               reifyEffects {
                 yields(d, List(i), yld)(lmdef.mB)
@@ -288,12 +288,12 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
 
             val (g, y) = collectYields {
               reifyEffects {
-                val coll = doApply(wt(lm), toAtom2(IteratorValue(wt(r), i)))
+                val coll = doApply(wt(lm), toAtom2(IteratorValue(wt(r), i))(mtype(r.tp), FakeSourceContext()))
                 val shape2 = toAtom2(ShapeDep(coll))
                 val j = fresh[Int]
 
                 // Somehow the mirroring order here is wrong
-                val innerBody = reifyEffects { yields(d, List(j, i), toAtom2(IteratorValue(coll, j)))(lmdef.mB.typeArguments.head.asInstanceOf[Manifest[Any]]) }
+                val innerBody = reifyEffects { yields(d, List(j, i), toAtom2(IteratorValue(coll, j))(mtype(coll.tp.typeArguments(0)), FakeSourceContext()))(lmdef.mB.typeArguments.head.asInstanceOf[Manifest[Any]]) }
                 reflectEffect(SimpleLoop(shape2, j, ForeachElem(innerBody).asInstanceOf[Def[Gen[Any]]]), summarizeEffects(innerBody))
               }
             }
@@ -336,8 +336,8 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
     }
 
     private def runOne[T: Manifest](y: IR.Block[T]) = {
-        val blocksInlined = wt.run(y)
-        wt.runOnce(blocksInlined)
+      val blocksInlined = wt.run(y)
+      wt.runOnce(blocksInlined)
     }
 
     def registerTransformations(analyzer: Analyzer) {
@@ -348,13 +348,13 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
           wt.registerFunction(s.syms.head) { () =>
             wt.reflectBlock(bl)
           }
-          
+
           // substitute the dangling parameter symbols with the value in the next run
-      	  wt.symSubst += in -> (() => toAtom2(IteratorValue(wt(a), wt(b))).asInstanceOf[Sym[Int]])
+          wt.symSubst += in -> (() => (toAtom2(IteratorValue(wt(a), wt(b)))(in.tp, FakeSourceContext())).asInstanceOf[Sym[Int]])
       }
     }
   }
-  
+
   /*  
 
   class MergeFlattenTransformation extends Transformation {

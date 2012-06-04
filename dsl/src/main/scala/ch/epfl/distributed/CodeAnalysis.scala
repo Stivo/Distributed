@@ -149,7 +149,6 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
 
     var addComments = true
 
-    
     def exportToGraph = {
       //      println("All loops:")
       //      loops.foreach(println)
@@ -173,9 +172,9 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
       buf += "}"
       buf.mkString("\n")
     }
-    
+
     /**
-     * Exports the raw IR to .dot format. 
+     * Exports the raw IR to .dot format.
      */
     def exportToGraphRaw = {
       val buf = Buffer[String]()
