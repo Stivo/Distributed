@@ -169,16 +169,16 @@ trait KMeansApp extends DListProgram with ApplicationOps with SparkDListOps with
 
       centers = newPoints.toArray.sortBy(_._1).map(_._2)
 
-      report("Iteration " + i + " done, distance "+tempDist)
+      report("Iteration " + i + " done, distance " + tempDist)
 
       i = i + 1
       unit(())
     }
-    
+
     report("final Centers found")
-//    for (center <- centers) {
-//      println(center.print())
-//    }
+    //    for (center <- centers) {
+    //      println(center.print())
+    //    }
 
     unit(())
   }
@@ -200,6 +200,7 @@ class KMeansAppGenerator extends CodeGeneratorTestSuite {
         val IR: dsl.type = dsl
 
       }
+      codegen.loopFusion = false
       codegen.reduceByKey = true
       var pw = setUpPrintWriter
       codegen.emitSource(dsl.kmeans, appname, pw)

@@ -108,6 +108,7 @@ trait CrunchGenDList extends ScalaGenBase
         emitValDef(sym, "CPair.of(%s, %s)".format(castPrimitive(elems("_1")), castPrimitive(elems("_2")))) //fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
       }
       case IR.Field(tuple, x, tp) if (tuple.tp.toString.startsWith("scala.Tuple2")) => emitValDef(sym, "%s.%s".format(quote(tuple), if (x == "_1") "first()" else "second()"))
+      case IR.Field(tuple, x, tp) if (x == "_1" || x == "_2") => emitValDef(sym, "%s.%s // TODO This is a hack, the symbol for %s should have a tuple type instead of %s".format(quote(tuple), if (x == "_1") "first()" else "second()", Def.unapply(tuple), tp))
       case nv @ NewDList(filename) => emitValDef(sym, "pipeline.readTextFile(%s)".format(quote(filename)))
       case vs @ DListSave(dlist, filename) => stream.println("pipeline.writeTextFile(%s, %s)".format(quote(dlist), quote(filename)))
       case vm @ DListMap(dlist, function) => {

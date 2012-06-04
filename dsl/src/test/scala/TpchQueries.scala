@@ -126,13 +126,15 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       val codegenScoobi = new ScoobiGen {
         val IR: dsl.type = dsl
       }
+      val codegenKryoScoobi = new KryoScoobiGen {
+        val IR: dsl.type = dsl
+      }
       val codegenCrunch = new CrunchGen {
         val IR: dsl.type = dsl
       }
-      val list = List(codegenSpark, codegenScoobi, codegenCrunch)
+      val list = List(codegenSpark, codegenScoobi, codegenKryoScoobi, codegenCrunch)
       def writeVersion(version: String) {
-//        if (version != "v5") return
-        //if (codegenSpark.inlineInLoopFusion) return
+//        if (version != "v0") return
         var pw = setUpPrintWriter
         codegenSpark.emitProgram(dsl.query12, appname, pw, version)
         writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
@@ -146,10 +148,15 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
         codegenScoobi.emitProgram(dsl.query12, appname, pw2, version)
         writeToProject(pw2, "scoobi", appname, version, codegenScoobi.lastGraph)
         release(pw2)
-        var pw3 = setUpPrintWriter
+        pw2 = setUpPrintWriter
         codegenScoobi.useWritables = true
-        codegenScoobi.emitProgram(dsl.query12, appname, pw3, version+"w")
-        writeToProject(pw3, "scoobi", appname, version+"w", codegenScoobi.lastGraph)
+        codegenScoobi.emitProgram(dsl.query12, appname, pw2, version+"w")
+        writeToProject(pw2, "scoobi", appname, version+"w", codegenScoobi.lastGraph)
+        release(pw2)
+        var pw3 = setUpPrintWriter
+        codegenKryoScoobi.useWritables = false
+        codegenKryoScoobi.emitProgram(dsl.query12, appname, pw3, version+"k")
+        writeToProject(pw3, "scoobi", appname, version+"k", codegenKryoScoobi.lastGraph)
         release(pw3)
       }
 //      dsl.useFastSplitter = false

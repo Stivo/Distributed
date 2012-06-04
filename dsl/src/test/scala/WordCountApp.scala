@@ -271,7 +271,7 @@ yourselves
     val parsed = read.map(WikiArticle.parse(_, "\t"))
 
     parsed
-      .map("\\n"+_.plaintext)
+      .map("\\n" + _.plaintext)
       .map(_.replaceAll("""\[\[.*?\]\]""", " "))
       .map(_.replaceAll("""(\\[ntT]|\.)\s*(thumb|left|right)*""", " "))
       .flatMap(_.split("[^a-zA-Z0-9']+").toSeq)

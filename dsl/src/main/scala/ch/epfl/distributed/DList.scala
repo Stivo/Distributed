@@ -230,9 +230,9 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
 
   override def mirror[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Exp[A] = (e match {
     case d @ IteratorValue(in, i) =>
-        toAtom(IteratorValue(f(in), f(i))(d.mA))(mtype(manifest[A]), implicitly[SourceContext])
+      toAtom(IteratorValue(f(in), f(i))(d.mA))(mtype(manifest[A]), implicitly[SourceContext])
     case ForeachElem(y) =>
-          toAtom(ForeachElem(if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y)))(mtype(manifest[A]), implicitly[SourceContext])
+      toAtom(ForeachElem(if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y)))(mtype(manifest[A]), implicitly[SourceContext])
     case SimpleLoop(s, i, IteratorCollect(g, y)) if f.hasContext =>
       // Here we have a need for specific order of mirroring due to generator g which is duplicated in IteratorCollect
       val ns = f(s)
@@ -240,7 +240,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       val nb = reifyEffectsHere(f.reflectBlock(y))
       val ng = f(g)
       toAtom(SimpleLoop(ns, ni, IteratorCollect(ng, nb)))(mtype(manifest[A]), implicitly[SourceContext])
-      
+
     case _ => super.mirror(e, f)
   }).asInstanceOf[Exp[A]]
 
@@ -653,14 +653,14 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
       case e => e.getMessage + "\n" + e.getStackTraceString
     }
   }
-  
+
   def writeGraphToFile(block: Block[_], name: String, comments: Boolean = true) {
     val out = new FileOutputStream(name)
     val analyzer = newAnalyzer(block)
     out.write(analyzer.exportToGraphRaw.getBytes)
     out.close
   }
-  
+
 }
 
 trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElseFat with LoopFusionOpt {

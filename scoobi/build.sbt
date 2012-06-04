@@ -1,3 +1,5 @@
+import AssemblyKeys._ // put this at the top of the file
+
 name := "scoobi-gen"
 
 version := "0.1"
@@ -10,8 +12,10 @@ resolvers += "sonatype snapshots" at "https://oss.sonatype.org/content/repositor
 
 resolvers += "Packaged Avro" at "http://nicta.github.com/scoobi/releases/"
 
-libraryDependencies += "com.nicta" %% "scoobi" % "0.4.0-SNAPSHOT" // % "provided"
-
+libraryDependencies += "com.nicta" %% "scoobi" % "0.4.0-SNAPSHOT" excludeAll( // % "provided" 
+   ExclusionRule(organization = "javax.servlet.jsp")
+ )
+ 
 libraryDependencies += "dk.brics.automaton" % "automaton" % "1.11-8"
 
 libraryDependencies ++= Seq(
@@ -21,3 +25,13 @@ libraryDependencies ++= Seq(
     ExclusionRule(organization = "javax.jms")
   )
 )
+
+assemblySettings
+
+mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
+  {
+    case x if x.startsWith("javax/servlet") => MergeStrategy.first
+    case x if x.startsWith("org/xmlpull") => MergeStrategy.first
+    case x => old(x)
+  }
+}
