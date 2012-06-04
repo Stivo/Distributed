@@ -210,7 +210,8 @@ import com.cloudera.crunch._
 
 object %1$s {
   def main(args: Array[String]) {
-    ToolRunner.run(new Configuration(), new %1$s(), args);
+    val newArgs = (List("asdf") ++ args.toList).toArray
+    ToolRunner.run(new Configuration(), new %1$s(), newArgs);
   }
 }
         

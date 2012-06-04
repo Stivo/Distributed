@@ -44,8 +44,14 @@ object RegexFrontend {
         j = pattern.lastIndexOf(javaRegexOnly(i), j)
         if (j > 0) {
           var precedingEsc: Int = precedingEscapes(pattern, j)
-          if (precedingEsc % 2 == 0)
-            return 0
+          if (precedingEsc % 2 == 0) {
+            val x = javaRegexOnly(i)
+            if (x == "^" && j > 0 && pattern.charAt(j - 1) == '['
+              && precedingEscapes(pattern, j - 1) % 2 == 1) {
+              return 0
+            } else
+              j -= 1
+          }
           j = j - precedingEsc
         } else if (j == 0)
           return 0
@@ -53,7 +59,7 @@ object RegexFrontend {
       i += 1;
     }
 
-    var index: Int = pattern.indexOf('[')
+    var index = pattern.indexOf('[')
     if (index >= 0) {
       var precedingEsc: Int = precedingEscapes(pattern, index)
       if (index != 0) {
@@ -103,8 +109,12 @@ object RegexFrontend {
       while (index != -1) {
         if (precedingEsc % 2 == 0 && (index + 1) < pattern.length) {
           pattern.charAt(index + 1) match {
-            case '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'a' | 'e' | '0' | 'x' | 'u' | 'c' | 'Q' | 'w' | 'W' | 'd' | 'D' | 's' | 'S' | 'p' | 'P' | 'b' | 'B' | 'A' | 'G' | 'z' | 'Z' =>
+            case '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+              | 'a' | 'e' | '0' | 'x' | 'u' | 'c' | 'Q' | 'w' | 'W'
+              | 'd' | 'D' | 's' | 'S' | 'p' | 'P' | 'b' | 'B' | 'A'
+              | 'G' | 'z' | 'Z' =>
               return 0
+            case _ =>
           }
         }
         index = index - (precedingEsc + 1)
@@ -132,8 +142,8 @@ object RegexFrontend {
 
           j -= 1;
         }
-        return precedingEscapes
       }
+      return precedingEscapes
     } else if (startIndex == 0) {
       return 0
     }
@@ -145,15 +155,20 @@ object RegexFrontend {
 import dk.brics.automaton.RegExp;
 import dk.brics.automaton.RunAutomaton;
 
-class RegexFrontend(val matchOn: String, optimize: Boolean = true) extends Serializable {
+class RegexFrontend(val original: String, optimize: Boolean = true) extends Serializable {
 
   var matchByte: Byte = -1
   var useFinder = true
   var pattern: Pattern = null
   var runAutomaton: RunAutomaton = null
 
+  val matchOn = original.replaceAll("(?<!\\\\)\\\\d", "[0-9]")
+    .replaceAll("(?<!\\\\)\\\\s", "[ \t\n\f\r]")
+    .replaceAll("(?<!\\\\)\\\\w", "[a-zA-Z_0-9]")
   val method = if (optimize) RegexFrontend.determineBestRegexMethod(matchOn) else 0
 
+  val changed = if (original == matchOn) "" else " (converted from " + original + ")"
+  println("Method for " + matchOn + changed + " is " + method)
   if (optimize) {
     // TODO this logic is not correct, splitting on \d for example will yield incorrect results
     // Pig has logic for this in StorageUtil and PigStorage
@@ -175,7 +190,6 @@ class RegexFrontend(val matchOn: String, optimize: Boolean = true) extends Seria
       // initialize matcher
       runAutomaton = new RunAutomaton(new RegExp(matchOn).toAutomaton)
   }
-
   def split(s: String, max: Int = 0): IndexedSeq[String] = {
     if (useFinder && max > 0)
       new Finder(s, max)
@@ -232,6 +246,36 @@ class RegexFrontend(val matchOn: String, optimize: Boolean = true) extends Seria
   }
 }
 
+class RegexFrontendVerifier(override val original: String, val o2: Boolean = true) extends RegexFrontend(original, true) {
+
+  override def split(s: String, max: Int = 0): IndexedSeq[String] = {
+    val correct = s.split(original, max)
+    val optimized = super.split(s, max)
+    if (correct.mkString("#########") != optimized.mkString("#########")) {
+      throw new RuntimeException("split on " + matchOn + changed + " not correct for " + s + " " + max)
+    }
+    optimized
+  }
+
+  override def matches(s: String): Boolean = {
+    val out = super.matches(s)
+    if (s.matches(original) != out) {
+      throw new RuntimeException("matches on " + matchOn + changed + " not correct for " + s)
+    }
+    return out
+  }
+
+  override def replaceAll(input: String, subst: String): String = {
+    val correct = input.replaceAll(original, subst)
+    val optimized = super.replaceAll(input, subst)
+    if (correct != optimized) {
+      throw new RuntimeException("replaceAll on " + matchOn + changed + " not correct for " + input + " " + subst)
+    }
+    return optimized
+  }
+
+}
+
 import java.util.ArrayList
 class StringOpsOpt(val runAutomaton: RunAutomaton, val text: CharSequence) {
   import java.lang.{ StringBuilder => JStringBuilder }
@@ -263,7 +307,17 @@ class StringOpsOpt(val runAutomaton: RunAutomaton, val text: CharSequence) {
     matchList.take(resultSize).toArray
   }
 
-  final def find: Boolean = matcher.find()
+  final def find: Boolean = {
+    val out = matcher.find()
+    if (out) {
+      first = matcher.start
+      last = matcher.end()
+    } else {
+      first = -1
+      last = 0
+    }
+    out
+  }
 
   final def start(group: Int): Int = matcher.start(group)
 
