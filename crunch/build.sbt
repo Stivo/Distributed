@@ -12,6 +12,8 @@ resolvers ++= Seq(
   "Cloudera Third-Party Releases" at "https://repository.cloudera.com/content/repositories/third-party/"
 )
 
+libraryDependencies += "dk.brics.automaton" % "automaton" % "1.11-8"
+
 libraryDependencies ++= Seq(
   "com.cloudera.crunch" % "crunch" % "0.3.0" excludeAll(
     ExclusionRule(organization = "com.sun.jdmk"),
