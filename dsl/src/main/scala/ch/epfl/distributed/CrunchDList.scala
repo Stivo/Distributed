@@ -16,7 +16,6 @@ trait CrunchGenDList extends ScalaGenBase
     with DListTransformations with Matchers with FastWritableTypeFactory {
   /*
  * TODO:
- * - Cleaner join handling. Current join will fail in many cases.
  * - More PTypes, cleaner tuple handling etc
  * Maybe:
  * - kryo instead of writable. Makes join easier and other stuff too.
@@ -24,6 +23,14 @@ trait CrunchGenDList extends ScalaGenBase
  * 
  * Unsupported:
  * - Usage of vars: collection name changes
+ * Idea:
+ * Implement a PType for KryoFormat => BytesWritable
+ * Same kryo scheme as in scoobi
+ * one PType that converts from Kryo to BytesWritable
+ * use that instead of generating Writables
+ *  
+ * => Advantage:
+ * Kryo serialization works, Writable
  */
   val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -127,12 +134,16 @@ trait CrunchGenDList extends ScalaGenBase
       case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
       case v @ DListJoin(left, right) => {
         // create tagged value subclass
-        val tv = """class TaggedValue_%1$s_%2$s(left: Boolean, v1: %1$s, v2: %2$s) extends TaggedValue[%1$s, %2$s](left, v1, v2) {
+        if (typeHandler.remappings.contains(v.mV1) && typeHandler.remappings.contains(v.mV2)) {
+          val tv = """class TaggedValue_%1$s_%2$s(left: Boolean, v1: %1$s, v2: %2$s) extends TaggedValue[%1$s, %2$s](left, v1, v2) {
     	   def this() = this(false, new %1$s(), new %2$s())
         }""".format(remap(v.mV1), remap(v.mV2))
-        val tvname = "TaggedValue_%1$s_%2$s".format(remap(v.mV1), remap(v.mV2))
-        types += tvname -> tv
-        emitValDef(sym, "join(classOf[%s], %s, %s)".format(tvname, quote(left), quote(right)))
+          val tvname = "TaggedValue_%1$s_%2$s".format(remap(v.mV1), remap(v.mV2))
+          types += tvname -> tv
+          emitValDef(sym, "joinWritables(classOf[%s], %s, %s)".format(tvname, quote(left), quote(right)))
+        } else {
+          emitValDef(sym, "join(%s, %s)".format(quote(left), quote(right)))
+        }
       }
       case red @ DListReduce(dlist, f) => emitValDef(sym,
         "%s.combineValues(new CombineWrapper(%s))".format(quote(dlist), handleClosure(f)))
