@@ -1,4 +1,4 @@
-package ch.epfl.distributed.datastruct
+package ch.epfl.distributed.utils
 
 import java.io._
 import java.nio.ByteBuffer

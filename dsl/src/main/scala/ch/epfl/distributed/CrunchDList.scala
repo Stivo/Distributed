@@ -203,8 +203,7 @@ import com.cloudera.crunch.Emitter
 import com.cloudera.crunch.{ Pair => CPair }
 
 import ch.epfl.distributed.utils.JoinHelper._
-import ch.epfl.distributed.utils.CombineWrapper
-import ch.epfl.distributed.utils.TaggedValue
+import ch.epfl.distributed.utils._
         
 import com.cloudera.crunch._
 
@@ -219,7 +218,6 @@ class %1$s extends Configured with Tool with Serializable {
     %3$s
     def run(args: Array[String]): Int = {
   		val pipeline = new MRPipeline(classOf[%1$s], getConf());
-    	implicit def tupleToCPair[T1, T2](t: (T1, T2)) = Pair.of(t._1, t._2)
         """.format(className, makePackageName(pack), getOptimizations()))
 
     val x = fresh[A]
@@ -239,6 +237,10 @@ class %1$s extends Configured with Tool with Serializable {
     stream.println("// Types that are used in this program")
     stream.println(restTypes.values.toList.sorted.mkString("\n"))
 
+    val prevTypes = types.keySet.filter(_ => true)
+    addTypes()
+    stream.print(types.filterKeys(x => !prevTypes.contains(x)).values.mkString("\n"))
+
     stream.println("/*****************************************\n" +
       "  End of Crunch Code                  \n" +
       "*******************************************/")
@@ -252,6 +254,98 @@ class %1$s extends Configured with Tool with Serializable {
     Nil
   }
 
+  def addTypes() {}
+
+}
+
+trait KryoCrunchGenDList extends CrunchGenDList with CaseClassTypeFactory {
+  val IR: DListOpsExp
+  import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
+  import IR.{
+    DListJoin
+  }
+
+  override val fastWritableTypeFactoryEnabled = false
+
+  override def makeTypeFor(name: String, fields: Iterable[String]): String = {
+    super[CaseClassTypeFactory].makeTypeFor(name, fields)
+  }
+
+  override def getSuperTraitsForTrait: String = "extends KryoFormat"
+
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
+    val out = rhs match {
+      case v @ DListJoin(left, right) => {
+        emitValDef(sym, "joinNotNull(%s, %s)".format(quote(left), quote(right)))
+      }
+      case _ => super.emitNode(sym, rhs)
+    }
+  }
+
+  override def castPrimitive(s: Exp[_]) = {
+    val cleaned = remap(s.tp)
+    if (typeHandler.typeInfos2.contains(cleaned)) {
+      quote(s) + ".asInstanceOf[%s]".format(cleaned)
+    } else {
+      super.castPrimitive(s)
+    }
+  }
+
+  override def createPType(x: Manifest[_], topLevel: Boolean = true): String = {
+    val cleaned = remap(x)
+    if (typeHandler.typeInfos2.contains(cleaned)) {
+      return "KryoWritables.make[%s]".format(cleaned);
+    }
+    return super.createPType(x, topLevel)
+  }
+
+  override def addTypes() {
+    types += "Registrator" -> """class Registrator extends KryoRegistrator {
+        import com.esotericsoftware.kryo.Kryo
+        def registerClasses(kryo: Kryo) {
+        %s
+    kryo.register(classOf[ch.epfl.distributed.datastruct.SimpleDate])
+    kryo.register(classOf[ch.epfl.distributed.datastruct.Date])
+    kryo.register(classOf[ch.epfl.distributed.datastruct.DateTime])
+    kryo.register(classOf[ch.epfl.distributed.datastruct.Interval])
+  }
+}""".format(types.keys.toList.sorted.map("kryo.register(classOf[" + _ + "])").mkString("\n"))
+    types += "KryoInstance" -> """object KryoInstance {
+  def apply() = {
+    val ks = new KryoSerializer()
+    val r = new Registrator()
+    r.registerClasses(ks.kryo)
+    ks.newInstance
+  }
+}"""
+    types += "KryoWritables" -> """
+import com.cloudera.crunch.types.writable.KryoWritableType
+import org.apache.hadoop.io.BytesWritable
+
+object KryoWritables {
+  def make[T <: KryoFormat: Manifest] = {
+    type W = BytesWritable
+    val in = new KryoInputFn[T].asInstanceOf[MapFn[W, T]]
+    val out = new KryoOutputFn[T].asInstanceOf[MapFn[T, W]]
+    new KryoWritableType[T, BytesWritable](in, out)
+  }
+}
+
+class KryoInputFn[T <: KryoFormat: Manifest] extends MapFn[BytesWritable, T] {
+  val m = manifest[T]
+  lazy val si = KryoInstance()
+  def map(in: BytesWritable) = {
+    m.erasure.cast(si.deserialize(in.get)).asInstanceOf[T]
+  }
+}
+class KryoOutputFn[T <: KryoFormat] extends MapFn[T, BytesWritable] {
+  lazy val si = KryoInstance()
+  def map(in: T) = {
+    new BytesWritable(si.serialize(in))
+  }
+}
+"""
+  }
 }
 
 trait ScalaGenCrunchFat extends ScalaGenLoopsFat with CrunchGenDList {
@@ -298,3 +392,5 @@ trait ScalaGenCrunchFat extends ScalaGenLoopsFat with CrunchGenDList {
 }
 
 trait CrunchGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with CrunchGenDList with ScalaGenCrunchFat
+
+trait KryoCrunchGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with KryoCrunchGenDList with ScalaGenCrunchFat

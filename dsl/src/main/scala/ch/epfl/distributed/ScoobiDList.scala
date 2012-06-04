@@ -137,6 +137,7 @@ import com.nicta.scoobi.Emitter
 import com.nicta.scoobi.Scoobi._
 import com.nicta.scoobi.WireFormat
 import ch.epfl.distributed.datastruct._
+import ch.epfl.distributed.utils._
 import org.apache.hadoop.io.{Writable, WritableUtils}
 import java.io.{DataInput, DataOutput}
 object %s extends ScoobiApp {

@@ -132,14 +132,21 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       val codegenCrunch = new CrunchGen {
         val IR: dsl.type = dsl
       }
-      val list = List(codegenSpark, codegenScoobi, codegenKryoScoobi, codegenCrunch)
+      val codegenKryoCrunch = new KryoCrunchGen {
+        val IR: dsl.type = dsl
+      }
+      val list = List(codegenSpark, codegenScoobi, codegenKryoScoobi, codegenKryoCrunch, codegenCrunch)
       def writeVersion(version: String) {
-//        if (version != "v0") return
+//        if (version != "v5") return
         var pw = setUpPrintWriter
         codegenSpark.emitProgram(dsl.query12, appname, pw, version)
         writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
         release(pw)
         var pw4 = setUpPrintWriter
+        codegenKryoCrunch.emitProgram(dsl.query12, appname, pw4, version+"k")
+        writeToProject(pw4, "crunch", appname, version+"k", codegenKryoCrunch.lastGraph)
+        release(pw4)
+        pw4 = setUpPrintWriter
         codegenCrunch.emitProgram(dsl.query12, appname, pw4, version)
         writeToProject(pw4, "crunch", appname, version, codegenCrunch.lastGraph)
         release(pw4)

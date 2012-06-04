@@ -76,8 +76,9 @@ trait StringPatternOpsExp extends StringOps with StringOpsExp {
 
   var disablePatterns = false
   var useFastRegex = true
+  var useFastSplitter = true
   import datastruct.RegexFrontend
-  case class StringPattern(regex: Exp[String], useFrontend: Boolean = useFastRegex) extends Def[RegexFrontend]
+  case class StringPattern(regex: Exp[String], useFrontend: Boolean = useFastRegex, useFastSplitter: Boolean = useFastSplitter) extends Def[RegexFrontend]
   case class StringSplitPattern(s: Exp[String], pattern: Exp[RegexFrontend], limit: Exp[Int]) extends Def[Array[String]]
   case class StringMatchesPattern(string: Exp[String], pattern: Exp[RegexFrontend]) extends Def[Boolean]
   case class StringReplaceAllPattern(string: Exp[String], pattern: Exp[RegexFrontend], repl: Exp[String]) extends Def[String]
@@ -99,7 +100,7 @@ trait StringPatternOpsExp extends StringOps with StringOpsExp {
       StringReplaceAllPattern(s, StringPattern(regex), repl)
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit ctx: SourceContext): Def[A] = (e match {
-    case StringPattern(regex, useFrontend) => StringPattern(f(regex), useFrontend)
+    case StringPattern(regex, useFrontend, fs) => StringPattern(f(regex), useFrontend, fs)
     case StringSplitPattern(s, pat, l) => StringSplitPattern(f(s), f(pat), f(l))
     case StringReplaceAllPattern(s, pat, l) => StringReplaceAllPattern(f(s), f(pat), f(l))
     case StringMatchesPattern(s, pat) => StringMatchesPattern(f(s), f(pat))
@@ -134,7 +135,7 @@ trait StringPatternOpsCodeGen extends ScalaCodegen {
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case StringSplitPattern(s, pattern, limit) => emitValDef(sym, "%s.split(%s, %s)".format(quote(pattern), quote(s), quote(limit)))
-    case StringPattern(s, x) => emitValDef(sym, "new ch.epfl.distributed.datastruct.RegexFrontend(%s, %s)".format(quote(s), x))
+    case StringPattern(s, reg, fs) => emitValDef(sym, "new ch.epfl.distributed.datastruct.RegexFrontend(%s, %s, %s)".format(quote(s), reg, fs))
     case StringMatchesPattern(s, pattern) => emitValDef(sym, "%s.matches(%s)".format(quote(pattern), quote(s)))
     case StringReplaceAllPattern(s, pattern, repl) => emitValDef(sym, "%s.replaceAll(%s, %s)".format(quote(pattern), quote(s), quote(repl)))
     case _ => super.emitNode(sym, rhs)

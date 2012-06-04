@@ -315,7 +315,7 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
       val codegenCrunch = new CrunchGen { val IR: dsl.type = dsl }
       val list = List(codegenSpark, codegenScoobi, codegenCrunch)
       def writeVersion(version: String) {
-        //if (version != "v5") return
+//        if (version != "v5") return
         var pw = setUpPrintWriter
         codegenSpark.emitProgram(dsl.wikiArticleWordcount2009, appname, pw, version)
         writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
@@ -329,12 +329,41 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
         codegenScoobi.emitProgram(dsl.wikiArticleWordcount2009, appname, pw2, version)
         writeToProject(pw2, "scoobi", appname, version, codegenScoobi.lastGraph)
         release(pw2)
-        var pw3 = setUpPrintWriter
-        codegenScoobi.useWritables = true
-        codegenScoobi.emitProgram(dsl.wikiArticleWordcount2009, appname, pw3, version+"w")
-        writeToProject(pw3, "scoobi", appname, version+"w", codegenScoobi.lastGraph)
-        release(pw3)
+//        var pw3 = setUpPrintWriter
+//        codegenScoobi.useWritables = true
+//        codegenScoobi.emitProgram(dsl.wikiArticleWordcount2009, appname, pw3, version+"w")
+//        writeToProject(pw3, "scoobi", appname, version+"w", codegenScoobi.lastGraph)
+//        release(pw3)
       }
+      list.foreach { codegen =>
+        codegen.narrowExistingMaps = false
+        codegen.insertNarrowingMaps = false
+        codegen.inlineInLoopFusion = false
+        codegen.loopFusion = false
+      }
+      dsl.useFastSplitter = false
+      dsl.disablePatterns = true
+      dsl.useFastRegex = false
+      writeVersion("v0")
+      
+      list.foreach { codegen =>
+        codegen.narrowExistingMaps = true
+        codegen.insertNarrowingMaps = true
+        codegen.inlineInLoopFusion = true
+        codegen.loopFusion = true
+      }
+      writeVersion("v1")
+
+      dsl.disablePatterns = false
+      writeVersion("v2")
+      
+      dsl.useFastSplitter = true
+      writeVersion("v3")
+      
+      dsl.useFastRegex = true
+      writeVersion("v4")
+
+      /*
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false
         codegen.insertNarrowingMaps = false
@@ -373,7 +402,7 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
         codegen.insertNarrowingMaps = true
       }
       writeVersion("v2")
-
+	  */
       println("-- end")
     }
   }

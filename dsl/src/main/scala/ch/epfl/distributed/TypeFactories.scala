@@ -242,6 +242,8 @@ trait FastWritableTypeFactory extends TypeFactory with WritableTypeFactoryUtils 
 
   var useBitset = true
 
+  val fastWritableTypeFactoryEnabled = true
+
   // the bitsets for all combinations that are encountered.
   var combinations: Map[String, mutable.Set[Long]] = Map.empty
 
@@ -311,7 +313,7 @@ trait FastWritableTypeFactory extends TypeFactory with WritableTypeFactoryUtils 
         emitValDef(sym, "(%s, %s)".format(quote(elems("_1")), quote(elems("_2")))) //fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
         //emitValDef(sym, "(%s)".format(fields.toList.sortBy(_._1).map(_._2).map(quote(_)).mkString(",")))
       }
-      case IR.SimpleStruct(IR.ClassTag(name), fields) => {
+      case IR.SimpleStruct(IR.ClassTag(name), fields) if fastWritableTypeFactoryEnabled => {
         try {
           val typeInfo = typeHandler.typeInfos2(name)
           val fieldsList = fields.toList.sortBy(x => typeInfo.getField(x._1).get.position)

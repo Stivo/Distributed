@@ -155,33 +155,35 @@ object RegexFrontend {
 import dk.brics.automaton.RegExp;
 import dk.brics.automaton.RunAutomaton;
 
-class RegexFrontend(val original: String, optimize: Boolean = true) extends Serializable {
+class RegexFrontend(val original: String, optimizeAll: Boolean = true, useFastSplitter: Boolean = true) extends Serializable {
 
   var matchByte: Byte = -1
-  var useFinder = true
   var pattern: Pattern = null
   var runAutomaton: RunAutomaton = null
 
   val matchOn = original.replaceAll("(?<!\\\\)\\\\d", "[0-9]")
     .replaceAll("(?<!\\\\)\\\\s", "[ \t\n\f\r]")
     .replaceAll("(?<!\\\\)\\\\w", "[a-zA-Z_0-9]")
-  val method = if (optimize) RegexFrontend.determineBestRegexMethod(matchOn) else 0
+  val method = if (optimizeAll) RegexFrontend.determineBestRegexMethod(matchOn) else 0
 
-  val changed = if (original == matchOn) "" else " (converted from " + original + ")"
-  println("Method for " + matchOn + changed + " is " + method)
-  if (optimize) {
+  lazy val changed = if (original == matchOn) "" else " (converted from " + original + ")"
+  //  println("Method for " + matchOn + changed + " is " + method)
+
+  val useFinder = if (useFastSplitter || optimizeAll) {
     // TODO this logic is not correct, splitting on \d for example will yield incorrect results
     // Pig has logic for this in StorageUtil and PigStorage
     if (matchOn.charAt(0) == '\\' && matchOn.length == 2) {
       matchByte = matchOn.charAt(1).toByte
       //    matchByte = StorageUtil.parseFieldDel(matchOn)
+      true
     } else if (matchOn.length == 1) {
       matchByte = matchOn.charAt(0).toByte
       //    matchByte = StorageUtil.parseFieldDel(matchOn)
+      true
     } else {
-      useFinder = false
+      false
     }
-  }
+  } else false
   method match {
     case 0 =>
       // pattern 
@@ -338,10 +340,7 @@ class StringOpsOpt(val runAutomaton: RunAutomaton, val text: CharSequence) {
   final def reset: Unit = {
     first = -1
     last = 0
-    oldLast = -1
     lastAppendPosition = 0
-    from = 0
-    to = getTextLength
   }
 
   final def replaceAll(replacement: String): String = {
@@ -417,8 +416,6 @@ class StringOpsOpt(val runAutomaton: RunAutomaton, val text: CharSequence) {
    */
   def getTextLength: Int = text.length
 
-  private[this] var from: Int = 0
-  private[this] var to: Int = 0
   /**
    * The range of string that last matched the pattern. If the last
    * match failed then first is -1; last initially holds 0 then it
@@ -427,10 +424,6 @@ class StringOpsOpt(val runAutomaton: RunAutomaton, val text: CharSequence) {
    */
   private[this] var first: Int = -1
   private[this] var last: Int = 0
-  /**
-   * The end index of what matched in the last match operation.
-   */
-  private[this] var oldLast: Int = -1
   /**
    * The index of the last position appended in a substitution.
    */

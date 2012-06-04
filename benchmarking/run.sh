@@ -19,24 +19,22 @@ done
 
 for version in $(echo -e $A | sort )
 do
-
-PROG=scoobi.generated.v$version.WordCountApp
-PROG=scoobi.generated.v$version.TpchQueries
-OUTPUT=output_v$version
-
-rm -rf $OUTPUT
-TPCHDATA="/home/stivo/master/testdata/tpch/smaller/"
-INPUTS="/home/stivo/master/testdata/wiki2009-articles-10k.tsv $OUTPUT"
-INPUTS="$TPCHDATA $OUTPUT 1995-01-01 TRUCK SHIP"
-cat $TPCHDATA/orders.tbl $TPCHDATA/lineitem.tbl > /dev/null
-TIMEARGS="s$version\t%e\t%S\t%U\t%M\t%P"
-#-XX:MaxInlineSize=1000
-/usr/bin/time -f $TIMEARGS -o /dev/stdout env HADOOP_HEAPSIZE="4096" hadoop jar progs/scoobi-gen*.jar $PROG $INPUTS 2> ./scoobi_$PROG.txt
-cat $TPCHDATA/orders.tbl $TPCHDATA/lineitem.tbl > /dev/null
-
-#du -h $OUTPUT
-TIMEARGS="c$version\t%e\t%S\t%U\t%M\t%P"
-PROG=crunch.generated.v$version.TpchQueries
-#/usr/bin/time -f $TIMEARGS -o /dev/stdout env HADOOP_HEAPSIZE="4096" hadoop jar progs/crunch-gen*.jar $PROG "asdf" $INPUTS 2> ./crunch_$PROG.txt 
+	for BACKEND in crunch
+	do
+		PROG=$BACKEND.generated.v$version.TpchQueries
+		#PROG=$BACKEND.generated.v$version.WordCountApp
+		DESC=${BACKEND:0:1}_v$version
+		OUTPUT=output_$DESC
+		rm -rf $OUTPUT
+		TPCHDATA="/home/stivo/master/testdata/tpch/small/"
+		INPUTS="/home/stivo/master/testdata/wiki2009-articles-10k.tsv $OUTPUT"
+		INPUTS="$TPCHDATA $OUTPUT 1995-01-01 TRUCK SHIP"
+		cat $TPCHDATA/orders.tbl $TPCHDATA/lineitem.tbl > /dev/null
+		TIMEARGS="${BACKEND}_${version}\t%e\t%S\t%U\t%M\t%P"
+		#echo "$BACKEND $DESC $OUTPUT $PROG"
+		#-XX:MaxInlineSize=1000	
+		/usr/bin/time -f $TIMEARGS -o /dev/stdout env HADOOP_HEAPSIZE="4096" hadoop jar progs/${BACKEND}-gen*.jar $PROG $INPUTS 2> ./${PROG}_${DESC}.txt 
+		
+	done
 done
 
