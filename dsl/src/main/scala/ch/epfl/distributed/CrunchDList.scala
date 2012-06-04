@@ -202,7 +202,7 @@ import com.cloudera.crunch.DoFn
 import com.cloudera.crunch.Emitter
 import com.cloudera.crunch.{ Pair => CPair }
 
-import ch.epfl.distributed.utils.JoinHelper.join
+import ch.epfl.distributed.utils.JoinHelper._
 import ch.epfl.distributed.utils.CombineWrapper
 import ch.epfl.distributed.utils.TaggedValue
         

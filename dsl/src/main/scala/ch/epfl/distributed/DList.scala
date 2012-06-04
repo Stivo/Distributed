@@ -727,7 +727,7 @@ trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElse
       reflectEffect(SimpleLoop(sh, x, ForeachElem(body)), summarizeEffects(body))
 
     case Def(x) =>
-      error("Missed me => " + x + " should find " + Def.unapply(oldGen).getOrElse("None"))
+      sys.error("Missed me => " + x + " should find " + Def.unapply(oldGen).getOrElse("None"))
   }
 
   override def applyPlugIntoContext(d: Def[Any], r: Def[Any]) = (d, r) match {

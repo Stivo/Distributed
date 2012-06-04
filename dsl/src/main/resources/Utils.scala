@@ -22,7 +22,7 @@ package ch.epfl.distributed.datastruct
 import util.control.Breaks._
 import java.util.regex.Pattern
 
-object FastSplitter {
+object RegexFrontend {
   private val javaRegexOnly: Array[String] = Array("&&", "??", "*?", "+?", "}?", "?+", "*+", "++", "}+", "^", "$", "(?")
 
   /**
@@ -145,25 +145,28 @@ object FastSplitter {
 import dk.brics.automaton.RegExp;
 import dk.brics.automaton.RunAutomaton;
 
-class FastSplitter(matchOn: String) extends Serializable {
+class RegexFrontend(val matchOn: String, optimize: Boolean = true) extends Serializable {
 
   var matchByte: Byte = -1
   var useFinder = true
   var pattern: Pattern = null
   var runAutomaton: RunAutomaton = null
-  
-  val method = FastSplitter.determineBestRegexMethod(matchOn)
 
-  if (matchOn.charAt(0) == '\\' && matchOn.length == 2) {
-    matchByte = matchOn.charAt(1).toByte
-    //    matchByte = StorageUtil.parseFieldDel(matchOn)
-  } else if (matchOn.length == 1) {
-    matchByte = matchOn.charAt(0).toByte
-    //    matchByte = StorageUtil.parseFieldDel(matchOn)
-  } else {
-    useFinder = false
+  val method = if (optimize) RegexFrontend.determineBestRegexMethod(matchOn) else 0
+
+  if (optimize) {
+    // TODO this logic is not correct, splitting on \d for example will yield incorrect results
+    // Pig has logic for this in StorageUtil and PigStorage
+    if (matchOn.charAt(0) == '\\' && matchOn.length == 2) {
+      matchByte = matchOn.charAt(1).toByte
+      //    matchByte = StorageUtil.parseFieldDel(matchOn)
+    } else if (matchOn.length == 1) {
+      matchByte = matchOn.charAt(0).toByte
+      //    matchByte = StorageUtil.parseFieldDel(matchOn)
+    } else {
+      useFinder = false
+    }
   }
-  
   method match {
     case 0 =>
       // pattern 
@@ -173,9 +176,8 @@ class FastSplitter(matchOn: String) extends Serializable {
       runAutomaton = new RunAutomaton(new RegExp(matchOn).toAutomaton)
   }
 
-
   def split(s: String, max: Int = 0): IndexedSeq[String] = {
-    if (useFinder)
+    if (useFinder && max > 0)
       new Finder(s, max)
     else
       method match {
@@ -188,23 +190,23 @@ class FastSplitter(matchOn: String) extends Serializable {
   }
 
   def matches(s: String): Boolean = {
-      method match {
-        case 0 =>
-          pattern.matcher(s).matches
-        case 1 =>
-          runAutomaton.run(s)
-      }
+    method match {
+      case 0 =>
+        pattern.matcher(s).matches
+      case 1 =>
+        runAutomaton.run(s)
+    }
   }
 
   def replaceAll(input: String, subst: String): String = {
-      method match {
-        case 0 =>
-          pattern.matcher(input).replaceAll(subst)
-        case 1 =>
-          new StringOpsOpt(runAutomaton, input).replaceAll(subst)
-      }
+    method match {
+      case 0 =>
+        pattern.matcher(input).replaceAll(subst)
+      case 1 =>
+        new StringOpsOpt(runAutomaton, input).replaceAll(subst)
+    }
   }
-  
+
   class Finder(val s: String, val max: Int) extends IndexedSeq[String] {
     private[this] val byte = matchByte
     private[this] var at = 1
@@ -232,9 +234,10 @@ class FastSplitter(matchOn: String) extends Serializable {
 
 import java.util.ArrayList
 class StringOpsOpt(val runAutomaton: RunAutomaton, val text: CharSequence) {
+  import java.lang.{ StringBuilder => JStringBuilder }
   // per input string
   val matcher = runAutomaton.newMatcher(text)
-  
+
   def split(limit: Int): Array[String] = {
     var index: Int = 0
     val matchLimited = limit > 0
@@ -259,7 +262,7 @@ class StringOpsOpt(val runAutomaton: RunAutomaton, val text: CharSequence) {
     })
     matchList.take(resultSize).toArray
   }
-  
+
   final def find: Boolean = matcher.find()
 
   final def start(group: Int): Int = matcher.start(group)
@@ -291,7 +294,7 @@ class StringOpsOpt(val runAutomaton: RunAutomaton, val text: CharSequence) {
     reset
     var result: Boolean = find
     if (result) {
-      val sb = new StringBuilder
+      val sb = new JStringBuilder
       do {
         appendReplacement(sb, replacement)
         result = find
@@ -302,10 +305,10 @@ class StringOpsOpt(val runAutomaton: RunAutomaton, val text: CharSequence) {
     text.toString
   }
 
-  private final def appendReplacement(sb: StringBuilder, replacement: String): Unit = {
+  private final def appendReplacement(sb: JStringBuilder, replacement: String): Unit = {
     if (first < 0) throw new IllegalStateException("No match available")
     var cursor: Int = 0
-    var result = new StringBuilder
+    var result = new JStringBuilder
     while (cursor < replacement.length) {
       var nextChar: Char = replacement.charAt(cursor)
       if (nextChar == '\\') {
@@ -348,7 +351,7 @@ class StringOpsOpt(val runAutomaton: RunAutomaton, val text: CharSequence) {
     lastAppendPosition = last
   }
 
-  private final def appendTail(sb: StringBuilder): StringBuilder = {
+  private final def appendTail(sb: JStringBuilder): JStringBuilder = {
     sb.append(text, lastAppendPosition, getTextLength)
     sb
   }
@@ -359,28 +362,24 @@ class StringOpsOpt(val runAutomaton: RunAutomaton, val text: CharSequence) {
    * @return the index after the last character in the text
    */
   def getTextLength: Int = text.length
-  
 
-  var from: Int = 0
-  var to: Int = 0
+  private[this] var from: Int = 0
+  private[this] var to: Int = 0
   /**
    * The range of string that last matched the pattern. If the last
    * match failed then first is -1; last initially holds 0 then it
    * holds the index of the end of the last match (which is where the
    * next search starts).
    */
-  var first: Int = -1
-  var last: Int = 0
+  private[this] var first: Int = -1
+  private[this] var last: Int = 0
   /**
    * The end index of what matched in the last match operation.
    */
-  var oldLast: Int = -1
+  private[this] var oldLast: Int = -1
   /**
    * The index of the last position appended in a substitution.
    */
-  var lastAppendPosition: Int = 0
+  private[this] var lastAppendPosition: Int = 0
 }
-
-
-
 

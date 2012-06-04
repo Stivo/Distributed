@@ -52,7 +52,7 @@ trait ScoobiGenDList extends ScalaGenBase
         emitValDef(sym, out)
       }
       case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
-      case v @ DListJoin(left, right) => emitValDef(sym, "join(%s,%s)".format(quote(left), quote(right)))
+      case v @ DListJoin(left, right) => emitValDef(sym, "%s.join(%s)".format(quote(left), quote(right)))
       case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.combine(%s)".format(quote(dlist), handleClosure(f)))
       case sd @ IteratorValue(r, i) => emitValDef(sym, "input // loop var " + quote(i))
       case GetArgs() => emitValDef(sym, "scoobiInputArgs")

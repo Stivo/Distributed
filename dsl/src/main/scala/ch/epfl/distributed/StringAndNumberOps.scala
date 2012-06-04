@@ -69,25 +69,21 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
 
 }
 package datastruct {
-  class FastSplitter
+  class RegexFrontend
 }
 
 trait StringPatternOpsExp extends StringOps with StringOpsExp {
 
   var disablePatterns = false
-  var useFastSplitter = true
-  import datastruct.FastSplitter
-  case class StringPattern(regex: Exp[String]) extends Def[java.util.regex.Pattern]
-  case class StringSplitPattern(s: Exp[String], pattern: Exp[java.util.regex.Pattern], limit: Exp[Int]) extends Def[Array[String]]
-  case class StringFastSplitter(pattern: Exp[String]) extends Def[FastSplitter]
-  case class StringSplitFastSplitter(s: Exp[String], pattern: Exp[FastSplitter], limit: Exp[Int]) extends Def[Array[String]]
-  case class StringMatchesPattern(string: Exp[String], pattern: Exp[java.util.regex.Pattern]) extends Def[Boolean]
-  case class StringReplaceAllPattern(string: Exp[String], pattern: Exp[java.util.regex.Pattern], repl: Exp[String]) extends Def[String]
+  var useFastRegex = true
+  import datastruct.RegexFrontend
+  case class StringPattern(regex: Exp[String], useFrontend: Boolean = useFastRegex) extends Def[RegexFrontend]
+  case class StringSplitPattern(s: Exp[String], pattern: Exp[RegexFrontend], limit: Exp[Int]) extends Def[Array[String]]
+  case class StringMatchesPattern(string: Exp[String], pattern: Exp[RegexFrontend]) extends Def[Boolean]
+  case class StringReplaceAllPattern(string: Exp[String], pattern: Exp[RegexFrontend], repl: Exp[String]) extends Def[String]
 
   override def string_split(s: Rep[String], separators: Rep[String], limit: Rep[Int]) =
-    if (useFastSplitter)
-      StringSplitFastSplitter(s, StringFastSplitter(separators), limit)
-    else if (disablePatterns)
+    if (disablePatterns)
       super.string_split(s, separators, limit)
     else
       StringSplitPattern(s, StringPattern(separators), limit)
@@ -103,10 +99,8 @@ trait StringPatternOpsExp extends StringOps with StringOpsExp {
       StringReplaceAllPattern(s, StringPattern(regex), repl)
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit ctx: SourceContext): Def[A] = (e match {
-    case StringPattern(regex) => StringPattern(f(regex))
-    case StringFastSplitter(regex) => StringFastSplitter(f(regex))
+    case StringPattern(regex, useFrontend) => StringPattern(f(regex), useFrontend)
     case StringSplitPattern(s, pat, l) => StringSplitPattern(f(s), f(pat), f(l))
-    case StringSplitFastSplitter(s, pat, l) => StringSplitFastSplitter(f(s), f(pat), f(l))
     case StringReplaceAllPattern(s, pat, l) => StringReplaceAllPattern(f(s), f(pat), f(l))
     case StringMatchesPattern(s, pat) => StringMatchesPattern(f(s), f(pat))
     case _ => super.mirrorDef(e, f)
@@ -140,11 +134,9 @@ trait StringPatternOpsCodeGen extends ScalaCodegen {
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case StringSplitPattern(s, pattern, limit) => emitValDef(sym, "%s.split(%s, %s)".format(quote(pattern), quote(s), quote(limit)))
-    case StringSplitFastSplitter(s, pattern, limit) => emitValDef(sym, "%s.split(%s, %s)".format(quote(pattern), quote(s), quote(limit)))
-    case StringPattern(s) => emitValDef(sym, "java.util.regex.Pattern.compile(%s)".format(quote(s)))
-    case StringFastSplitter(s) => emitValDef(sym, "new ch.epfl.distributed.datastruct.FastSplitter(%s)".format(quote(s)))
-    case StringMatchesPattern(s, pattern) => emitValDef(sym, "%s.matcher(%s).matches()".format(quote(pattern), quote(s)))
-    case StringReplaceAllPattern(s, pattern, repl) => emitValDef(sym, "%s.matcher(%s).replaceAll(%s)".format(quote(pattern), quote(s), quote(repl)))
+    case StringPattern(s, x) => emitValDef(sym, "new ch.epfl.distributed.datastruct.RegexFrontend(%s, %s)".format(quote(s), x))
+    case StringMatchesPattern(s, pattern) => emitValDef(sym, "%s.matches(%s)".format(quote(pattern), quote(s)))
+    case StringReplaceAllPattern(s, pattern, repl) => emitValDef(sym, "%s.replaceAll(%s, %s)".format(quote(pattern), quote(s), quote(repl)))
     case _ => super.emitNode(sym, rhs)
   }
 

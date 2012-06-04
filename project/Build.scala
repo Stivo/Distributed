@@ -13,7 +13,7 @@ object HelloBuild extends Build {
 
    lazy val default = Project(id = "default",
                             base = file("."),
-                            settings = Project.defaultSettings ++ Seq(helloTask)) aggregate(dsl)
+                            settings = Project.defaultSettings ++ Seq(helloTask, helloTask2)) aggregate(dsl)
 
    lazy val dsl = Project(id = "dsl",
                             base = file("dsl"),
@@ -43,6 +43,11 @@ object HelloBuild extends Build {
    val dotGen = TaskKey[Unit]("dotgen", "Runs the dot generation")
    val helloTask = dotGen := {
 	 "bash updateDot.sh" .run
+   }
+
+   val cleanGen = TaskKey[Unit]("cleangen", "Cleans all the generated classes in the projects")
+   val helloTask2 = cleanGen := {
+	 "bash clean.sh" .run
    }
 
 }
