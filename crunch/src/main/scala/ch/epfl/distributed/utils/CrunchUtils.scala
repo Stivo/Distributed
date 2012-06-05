@@ -14,25 +14,7 @@ import com.cloudera.crunch.Emitter
 import scala.collection.mutable
 import com.cloudera.crunch.{ MapFn, CombineFn }
 import com.cloudera.crunch.types.writable.WritableType
-class CombineWrapperOld[T](reduce: Function2[T, T, T]) extends Aggregator[T] {
-  var accum: Option[T] = None
-  def reset() {
-    accum = None
-  }
 
-  def update(value: T) {
-    if (accum.isDefined) {
-      accum = Some(reduce(accum.get, value))
-    } else {
-      accum = Some(value)
-    }
-  }
-
-  def results(): java.lang.Iterable[T] = {
-    Collections.singleton(accum.get)
-  }
-
-}
 class CombineWrapper[K, V](reduce: Function2[V, V, V]) extends CombineFn[K, V] {
 
   @Override

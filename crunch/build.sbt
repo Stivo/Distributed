@@ -27,6 +27,8 @@ libraryDependencies ++= Seq(
   )
 )
 
+libraryDependencies += "de.javakaffee" % "kryo-serializers" % "0.9"
+
 parallelExecution in Test := false
 
 assemblySettings

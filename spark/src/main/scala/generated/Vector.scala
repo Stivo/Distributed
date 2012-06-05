@@ -1,4 +1,4 @@
-package spark.examples
+package dcdsl.generated
 
 class Vector(val elements: Array[Double]) extends Serializable {
   def length = elements.length

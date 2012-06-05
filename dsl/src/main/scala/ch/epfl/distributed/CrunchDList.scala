@@ -182,7 +182,7 @@ trait CrunchGenDList extends ScalaGenBase
     stream.println("/*****************************************\n" +
       "  Emitting Crunch Code                  \n" +
       "*******************************************/")
-    stream.println("""package crunch.generated%2$s;
+    stream.println("""package dcdsl.generated%2$s;
 
 import java.io.DataInput
 import java.io.DataOutput

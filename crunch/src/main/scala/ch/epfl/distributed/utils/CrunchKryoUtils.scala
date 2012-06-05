@@ -1,17 +1,12 @@
-
-import ch.epfl.distributed.datastruct.SerializerInstance
-import org.apache.hadoop.io.BytesWritable
-import crunch.generated.v5.KryoInstance
-
 package ch.epfl.distributed.utils {
 
   import com.cloudera.crunch.types.writable.KryoWritableType
   trait KryoFormat
 }
+
 package com.cloudera.crunch.types.writable {
 
   import ch.epfl.distributed.utils.KryoFormat
-  import ch.epfl.distributed.datastruct.SerializerInstance
   import org.apache.hadoop.io.Writable
   import com.cloudera.crunch.MapFn
   import org.apache.hadoop.io.BytesWritable

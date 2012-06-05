@@ -13,7 +13,9 @@ resolvers += "sonatype snapshots" at "https://oss.sonatype.org/content/repositor
 resolvers += "Packaged Avro" at "http://nicta.github.com/scoobi/releases/"
 
 libraryDependencies += "com.nicta" %% "scoobi" % "0.4.0-SNAPSHOT" excludeAll( // % "provided" 
-   ExclusionRule(organization = "javax.servlet.jsp")
+   ExclusionRule(organization = "javax.servlet.jsp"),
+   ExclusionRule(organization = "org.apache.hadoop"),
+   ExclusionRule(organization = "org.apache.avro")
  )
  
 libraryDependencies += "dk.brics.automaton" % "automaton" % "1.11-8"
@@ -26,6 +28,8 @@ libraryDependencies ++= Seq(
   )
 )
 
+libraryDependencies += "de.javakaffee" % "kryo-serializers" % "0.9"
+
 assemblySettings
 
 mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
@@ -35,3 +39,8 @@ mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
     case x => old(x)
   }
 }
+
+
+//excludedJars in assembly <<= (fullClasspath in assembly) map { cp => 
+//  cp // filter {_.data.getName.contains("org.apache.hadoop")}
+//}

@@ -131,8 +131,8 @@ trait ScoobiGenDList extends ScalaGenBase
       "  Emitting Scoobi Code                  \n" +
       "*******************************************/")
     stream.println("""
-package scoobi.generated%s;
-import scoobi.generated.WireFormatsGen
+package dcdsl.generated%s;
+import ch.epfl.distributed.utils.WireFormatsGen
 import com.nicta.scoobi.Emitter
 import com.nicta.scoobi.Scoobi._
 import com.nicta.scoobi.WireFormat
@@ -246,7 +246,7 @@ trait KryoScoobiGenDList extends ScoobiGenDList {
     ks.newInstance
   }
 }"""
-    implicits += """System.setProperty("spark.kryoserializer.buffer.mb", "20")
+    implicits += """
 
   implicit def KryoWireFormat[A <: KryoFormat] = new WireFormat[A] {
     def toWire(x: A, out: DataOutput) {

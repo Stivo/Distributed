@@ -1,4 +1,4 @@
-package spark.examples
+package dcdsl.generated
 
 import java.util.Random
 import Vector._

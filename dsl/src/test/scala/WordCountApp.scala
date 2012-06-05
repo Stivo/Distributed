@@ -315,7 +315,7 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
       val codegenCrunch = new CrunchGen { val IR: dsl.type = dsl }
       val list = List(codegenSpark, codegenScoobi, codegenCrunch)
       def writeVersion(version: String) {
-//        if (version != "v5") return
+//        if (version != "v4") return
         var pw = setUpPrintWriter
         codegenSpark.emitProgram(dsl.wikiArticleWordcount2009, appname, pw, version)
         writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
@@ -329,11 +329,6 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
         codegenScoobi.emitProgram(dsl.wikiArticleWordcount2009, appname, pw2, version)
         writeToProject(pw2, "scoobi", appname, version, codegenScoobi.lastGraph)
         release(pw2)
-//        var pw3 = setUpPrintWriter
-//        codegenScoobi.useWritables = true
-//        codegenScoobi.emitProgram(dsl.wikiArticleWordcount2009, appname, pw3, version+"w")
-//        writeToProject(pw3, "scoobi", appname, version+"w", codegenScoobi.lastGraph)
-//        release(pw3)
       }
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false

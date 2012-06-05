@@ -286,7 +286,7 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
       "  Emitting Spark Code                  \n" +
       "*******************************************/")
     stream.println("""
-package spark.examples%s;
+package dcdsl.generated%s;
 import scala.math.random
 import spark._
 import SparkContext._
@@ -296,7 +296,7 @@ object %s {
         %s
         def main(sparkInputArgs: Array[String]) {
     System.setProperty("spark.serializer", "spark.KryoSerializer")
-    System.setProperty("spark.kryo.registrator", "spark.examples%s.Registrator_%s")
+    System.setProperty("spark.kryo.registrator", "dcdsl.generated%s.Registrator_%s")
     System.setProperty("spark.kryoserializer.buffer.mb", "20")
         
     		val sc = new SparkContext(sparkInputArgs(0), "%s")
