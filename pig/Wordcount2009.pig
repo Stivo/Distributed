@@ -1,7 +1,7 @@
 
 -- ########### script starts ############
-register piggybank.jar;
-register udfs.jar;
+register ./piggybank.jar;
+register ./udfs.jar;
 
 --import org.apache.pig.piggybank.evaluation.string;
 
@@ -13,12 +13,12 @@ articles = LOAD '$input' USING PigStorage('\t') as (pageId : long, name : charar
 
 --    parsed
 --      .map(_.plaintext)
-plaintext = FOREACH articles GENERATE plaintext; -- CONCAT('\\n', plaintext);
+plaintext = FOREACH articles GENERATE CONCAT('\\n', plaintext);
 plaintext_c1 = FOREACH plaintext GENERATE REPLACE($0, '\\[\\[.*?\\]\\]', ' ');
 plaintext_c2 = FOREACH plaintext_c1 GENERATE REPLACE($0, '(\\\\[ntT]|\\.)\\s*(thumb|left|right)*', ' ');
 
 --      .flatMap(_.split("[^a-zA-Z0-9']+").toSeq)
-words = FOREACH plaintext_c2 GENERATE FLATTEN(udfs.CUSTOMSPLIT($0)) as word:chararray;
+words = FOREACH plaintext_c2 GENERATE FLATTEN(dcdsl.udfs.CUSTOMSPLIT($0)) as word:chararray;
       
 filtered_words_1 = FILTER words BY org.apache.pig.piggybank.evaluation.string.LENGTH(word) > 0;
 filtered_words = FILTER filtered_words_1 BY NOT $0 matches '(thumb|left|right|\\d+px){2,}';
@@ -26,11 +26,11 @@ filtered_words = FILTER filtered_words_1 BY NOT $0 matches '(thumb|left|right|\\
 --      .groupByKey
 --      .reduce(_ + _)
 word_groups = GROUP filtered_words BY word;
-word_count = FOREACH word_groups GENERATE group AS word, COUNT(filtered_words) AS count;
+word_count = FOREACH word_groups GENERATE COUNT(filtered_words) AS count, group AS word;
 
 
 --      .save(getArgs(1))
-STORE word_groups INTO 'output';
+STORE word_count INTO '$output';
 
 
 
