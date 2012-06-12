@@ -22,7 +22,7 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
   def query3nephele(x: Rep[Unit]) = {
     val limit = getArgs(1).toInt
     val date = getArgs(2).toDate
-    val lineitems = DList(getArgs(0) + "/lineitem.tbl")
+    val lineitems = DList(getArgs(0) + "/lineitem*")
       .map(x => LineItem.parse(x, "\\|"))
     val orders = DList(getArgs(0) + "/orders.tbl")
       .map(x => Order.parse(x, "\\|"))
@@ -48,7 +48,7 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
     val shipMode2 = getArgs(4)
 
     // read and parse tables
-    val lineitems = DList(getArgs(0) + "/lineitem.tbl")
+    val lineitems = DList(getArgs(0) + "/lineitem*")
       .map(x => LineItem.parse(x, "\\|"))
     val orders = DList(getArgs(0) + "/orders.tbl")
       .map(x => Order.parse(x, "\\|"))
@@ -84,9 +84,32 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
     unit(())
   }
 
+  def query12Mapper(x: Rep[Unit]) = {
+    // read arguments
+    val inputFolder = getArgs(0)
+    val outputFolder = getArgs(1)
+    val date = getArgs(2).toDate
+    val shipMode1 = getArgs(3)
+    val shipMode2 = getArgs(4)
+
+    // read and parse tables
+    val lineitems = DList(getArgs(0) + "/lineitem*")
+      .map(x => LineItem.parse(x, "\\|"))
+
+    // filter the line items
+    val filteredLineitems = lineitems
+      .filter(x => x.l_shipmode == shipMode1 || x.l_shipmode == shipMode2)
+      .filter(x => date <= x.l_receiptdate)
+      .filter(x => x.l_shipdate < x.l_commitdate)
+      .filter(x => x.l_commitdate < x.l_receiptdate)
+      .filter(x => x.l_receiptdate < date + (1, 0, 0))
+    val lineItemTuples = filteredLineitems.map(x => (x.l_orderkey, x.l_shipmode))
+    lineItemTuples.save(outputFolder)
+  }
+
   /*
   def tupleProblem(x: Rep[Unit]) = {
-    val lineitems = DList(getArgs(0) + "/lineitem.tbl")
+    val lineitems = DList(getArgs(0) + "/lineitem*")
       .map(x => LineItem.parse(x, "\\|"))
     val tupled = lineitems.map(x => ((x.l_linenumber, x.l_orderkey), x.l_comment))
     tupled
@@ -98,8 +121,8 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
 
 class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
 
+  //  val appname = "TpchQueriesMapper"
   val appname = "TpchQueries"
-  val unoptimizedAppname = appname + "_Orig"
 
   // format: OFF
   /**
@@ -111,6 +134,16 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
    * v3:	-	x	x
    * v4:	x 	x	-
    * v5:	x	x 	x
+   * new:
+   * All versions have Regex patterns enabled,
+   * just the fast splitter is disabled.
+   * 		FS 	FR	LF+IN
+   * v0:	- 	- 	-
+   * v1:	x 	- 	-
+   * v2:	- 	x 	-
+   * v3:	- 	- 	x
+   * v4:	x 	x 	x
+   * Scoobi and crunch with writables.
    */
   // format: ON
   def testBoth {
@@ -123,82 +156,73 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       val codegenSpark = new SparkGen {
         val IR: dsl.type = dsl
       }
-      val codegenScoobi = new ScoobiGen {
-        val IR: dsl.type = dsl
+      val codegenScoobi = new ScoobiGen { val IR: dsl.type = dsl
+        override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = applyFusion
       }
-      val codegenKryoScoobi = new KryoScoobiGen {
-        val IR: dsl.type = dsl
-      }
+//      codegenScoobi.useWritables = true
+//      val codegenKryoScoobi = new KryoScoobiGen with Versioned {
+//        val IR: dsl.type = dsl
+//		  val version = "k"      	
+//      }
       val codegenCrunch = new CrunchGen {
         val IR: dsl.type = dsl
       }
-      val codegenKryoCrunch = new KryoCrunchGen {
-        val IR: dsl.type = dsl
-      }
-      val list = List(codegenSpark, codegenScoobi, codegenKryoScoobi, codegenKryoCrunch, codegenCrunch)
+//      val codegenKryoCrunch = new KryoCrunchGen {
+//        val IR: dsl.type = dsl
+//      }
+//      val list = List(codegenSpark, codegenScoobi, codegenCrunch)
+      val list = List(codegenSpark)
       def writeVersion(version: String) {
-//        if (version != "v5") return
-        var pw = setUpPrintWriter
-        codegenSpark.emitProgram(dsl.query12, appname, pw, version)
-        writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
-        release(pw)
-        var pw4 = setUpPrintWriter
-        codegenKryoCrunch.emitProgram(dsl.query12, appname, pw4, version+"k")
-        writeToProject(pw4, "crunch", appname, version+"k", codegenKryoCrunch.lastGraph)
-        release(pw4)
-        pw4 = setUpPrintWriter
-        codegenCrunch.emitProgram(dsl.query12, appname, pw4, version)
-        writeToProject(pw4, "crunch", appname, version, codegenCrunch.lastGraph)
-        release(pw4)
-        var pw2 = setUpPrintWriter
-        codegenScoobi.useWritables = false
-        codegenScoobi.emitProgram(dsl.query12, appname, pw2, version)
-        writeToProject(pw2, "scoobi", appname, version, codegenScoobi.lastGraph)
-        release(pw2)
-        pw2 = setUpPrintWriter
-        codegenScoobi.useWritables = true
-        codegenScoobi.emitProgram(dsl.query12, appname, pw2, version+"w")
-        writeToProject(pw2, "scoobi", appname, version+"w", codegenScoobi.lastGraph)
-        release(pw2)
-        var pw3 = setUpPrintWriter
-        codegenKryoScoobi.useWritables = false
-        codegenKryoScoobi.emitProgram(dsl.query12, appname, pw3, version+"k")
-        writeToProject(pw3, "scoobi", appname, version+"k", codegenKryoScoobi.lastGraph)
-        release(pw3)
+        if (version != "v4") return
+        val func = dsl.query12 _
+        for (gen <- list) {
+          val versionDesc = version+ (gen match {
+            case x: Versioned => x.version
+            case _ => ""
+          })
+          var pw = setUpPrintWriter
+          gen.emitProgram(func, appname, pw, versionDesc)
+          writeToProject(pw, gen.getProjectName, appname, versionDesc, codegenSpark.lastGraph)
+        }
       }
-//      dsl.useFastSplitter = false
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false
         codegen.insertNarrowingMaps = false
         codegen.loopFusion = false
-        codegen.inlineClosures = true
+        codegen.inlineClosures = false
         codegen.inlineInLoopFusion = false
       }
+      applyFusion = false
+      dsl.useFastRegex = false
+      dsl.useFastSplitter = false
       writeVersion("v0")
-
+      
+      dsl.useFastSplitter = true
+      writeVersion("v1")
+      
+      dsl.useFastSplitter = false
       list.foreach { codegen =>
         codegen.narrowExistingMaps = true
         codegen.insertNarrowingMaps = true
       }
-      writeVersion("v1")
-
+      writeVersion("v2")
+      
       list.foreach { codegen =>
         codegen.loopFusion = true
         codegen.inlineClosures = false
+        codegen.inlineInLoopFusion = false
       }
+      applyFusion = true
+      dsl.useFastSplitter = true
       writeVersion("v4")
 
-      list.foreach { _.inlineInLoopFusion = true }
-      writeVersion("v5")
-
+      dsl.useFastSplitter = false
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false
         codegen.insertNarrowingMaps = false
       }
       writeVersion("v3")
-
-      list.foreach { _.inlineInLoopFusion = false }
-      writeVersion("v2")
+      
       println("-- end")
     }
 

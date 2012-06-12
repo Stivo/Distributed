@@ -53,6 +53,8 @@ trait CrunchGenDList extends ScalaGenBase
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
+  val getProjectName = "crunch"
+
   var wireFormats = List[String]()
 
   override def remap[A](x: Manifest[A]) = {
@@ -117,7 +119,7 @@ trait CrunchGenDList extends ScalaGenBase
       case IR.Field(tuple, x, tp) if (tuple.tp.toString.startsWith("scala.Tuple2")) => emitValDef(sym, "%s.%s".format(quote(tuple), if (x == "_1") "first()" else "second()"))
       case IR.Field(tuple, x, tp) if (x == "_1" || x == "_2") => emitValDef(sym, "%s.%s // TODO This is a hack, the symbol for %s should have a tuple type instead of %s".format(quote(tuple), if (x == "_1") "first()" else "second()", Def.unapply(tuple), tp))
       case nv @ NewDList(filename) => emitValDef(sym, "pipeline.readTextFile(%s)".format(quote(filename)))
-      case vs @ DListSave(dlist, filename) => stream.println("pipeline.writeTextFile(%s, %s)".format(quote(dlist), quote(filename)))
+      case vs @ DListSave(dlist, filename) => emitValDef(sym, "pipeline.writeTextFile(%s, %s)".format(quote(dlist), quote(filename)))
       case vm @ DListMap(dlist, function) => {
         // TODO
         emitValDef(sym, createParallelDo(dlist, vm, "emitter.emit(%s(input))".format(handleClosure(vm.closure))))
@@ -140,7 +142,8 @@ trait CrunchGenDList extends ScalaGenBase
         }""".format(remap(v.mV1), remap(v.mV2))
           val tvname = "TaggedValue_%1$s_%2$s".format(remap(v.mV1), remap(v.mV2))
           types += tvname -> tv
-          emitValDef(sym, "joinWritables(classOf[%s], %s, %s)".format(tvname, quote(left), quote(right)))
+          //emitValDef(sym, "joinWritables(classOf[%s], %s, %s)".format(tvname, quote(left), quote(right)))
+          emitValDef(sym, "joinNotNull(%s, %s)".format(quote(left), quote(right)))
         } else {
           emitValDef(sym, "join(%s, %s)".format(quote(left), quote(right)))
         }
@@ -195,8 +198,8 @@ import org.apache.hadoop.io.WritableUtils
 import org.apache.hadoop.util.Tool
 import org.apache.hadoop.util.ToolRunner
 
-//import com.cloudera.crunch.`type`.writable.Writables
-import com.cloudera.crunch.types.writable.Writables
+import com.cloudera.crunch.`type`.writable.Writables
+//import com.cloudera.crunch.types.writable.Writables
 import com.cloudera.crunch.impl.mr.MRPipeline
 import com.cloudera.crunch.DoFn
 import com.cloudera.crunch.Emitter
@@ -319,7 +322,8 @@ trait KryoCrunchGenDList extends CrunchGenDList with CaseClassTypeFactory {
   }
 }"""
     types += "KryoWritables" -> """
-import com.cloudera.crunch.types.writable.KryoWritableType
+//import com.cloudera.crunch.types.writable.KryoWritableType
+import com.cloudera.crunch.`type`.writable.KryoWritableType
 import org.apache.hadoop.io.BytesWritable
 
 object KryoWritables {

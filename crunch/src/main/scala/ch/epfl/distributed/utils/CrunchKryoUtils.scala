@@ -1,10 +1,10 @@
 package ch.epfl.distributed.utils {
 
-  import com.cloudera.crunch.types.writable.KryoWritableType
+  import com.cloudera.crunch.`type`.writable.KryoWritableType
   trait KryoFormat
 }
 
-package com.cloudera.crunch.types.writable {
+package com.cloudera.crunch.`type`.writable {
 
   import ch.epfl.distributed.utils.KryoFormat
   import org.apache.hadoop.io.Writable

@@ -213,10 +213,12 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
   import IR.{ DListReduceByKey, DListCache }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
+  val getProjectName = "spark"
+
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
     val out = rhs match {
       case nv @ NewDList(filename) => emitValDef(sym, "sc.textFile(%s)".format(quote(filename)))
-      case vs @ DListSave(dlist, filename) => stream.println("%s.saveAsTextFile(%s)".format(quote(dlist), quote(filename)))
+      case vs @ DListSave(dlist, filename) => emitValDef(sym, "%s.saveAsTextFile(%s)".format(quote(dlist), quote(filename)))
       case vm @ DListMap(dlist, function) => emitValDef(sym, "%s.map(%s)".format(quote(dlist), handleClosure(vm.closure)))
       case vm @ DListFilter(dlist, function) => emitValDef(sym, "%s.filter(%s)".format(quote(dlist), handleClosure(vm.closure)))
       case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "%s.flatMap(%s)".format(quote(dlist), handleClosure(vm.closure)))
@@ -279,8 +281,8 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     var y = reifyBlock(f(x))
 
     typeHandler = new TypeHandler(y)
-    getSchedule(availableDefs)(y.res, true).foreach { println }
-    getSchedule(availableDefs)(y.res, true).foreach { println }
+    //    getSchedule(availableDefs)(y.res, true).foreach { println }
+    //    getSchedule(availableDefs)(y.res, true).foreach { println }
     val packName = makePackageName(pack)
     stream.println("/*****************************************\n" +
       "  Emitting Spark Code                  \n" +
@@ -293,11 +295,13 @@ import SparkContext._
 import com.esotericsoftware.kryo.Kryo
 
 object %s {
-        %s
-        def main(sparkInputArgs: Array[String]) {
-    System.setProperty("spark.serializer", "spark.KryoSerializer")
-    System.setProperty("spark.kryo.registrator", "dcdsl.generated%s.Registrator_%s")
-    System.setProperty("spark.kryoserializer.buffer.mb", "20")
+    %s
+    def main(sparkInputArgs: Array[String]) {
+        System.setProperty("spark.default.parallelism", "40")
+        System.setProperty("spark.local.dir", "/mnt/tmp")
+        System.setProperty("spark.serializer", "spark.KryoSerializer")
+        System.setProperty("spark.kryo.registrator", "dcdsl.generated%s.Registrator_%s")
+        System.setProperty("spark.kryoserializer.buffer.mb", "20")
         
     		val sc = new SparkContext(sparkInputArgs(0), "%s")
         """.format(packName, className, getOptimizations(), packName, className, className))

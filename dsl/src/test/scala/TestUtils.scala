@@ -1,6 +1,8 @@
 import java.io.{ StringWriter, PrintWriter, File, FileWriter }
 import scala.collection.mutable
 import org.scalatest._
+import ch.epfl.distributed.ScalaGenDList
+import ch.epfl.distributed.TypeFactory
 
 trait CodeGenerator {
 
@@ -44,6 +46,10 @@ trait CodeGenerator {
     pw.close
   }
 
+}
+
+trait Versioned {
+  def version: String
 }
 
 trait CodeGeneratorTestSuite extends Suite with CodeGenerator {

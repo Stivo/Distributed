@@ -15,7 +15,7 @@ resolvers ++= Seq(
 libraryDependencies += "dk.brics.automaton" % "automaton" % "1.11-8"
 
 libraryDependencies ++= Seq(
-  "com.cloudera.crunch" % "crunch" % "0.3.0" excludeAll(
+  "com.cloudera.crunch" % "crunch" % "0.2.4" excludeAll(
     ExclusionRule(organization = "com.sun.jdmk"),
     ExclusionRule(organization = "com.sun.jmx"),
     ExclusionRule(organization = "javax.jms")

@@ -26,7 +26,7 @@ trait VectorBase extends Base with OverloadHack {
     def /(o: Rep[Double])(implicit o2: Overloaded2) = vec_pointWiseOp(v, o, "/")
     def squaredDist(o: Rep[Vector]) = vec_squaredDist(v, o)
     def print() = vec_print(v)
-  }
+  }l
 
   def vec_simpleOp(v: Rep[Vector], o: Rep[Vector], op: String): Rep[Vector]
   def vec_pointWiseOp(v: Rep[Vector], o: Rep[Double], op: String): Rep[Vector]
@@ -149,7 +149,7 @@ trait KMeansApp extends DListProgram with ApplicationOps with SparkDListOps with
     var i = 0
     report("Starting big while")
 
-    while (tempDist > convergeDist) {
+    while (i < 5) {
       val closest = data.map { p =>
         val tup: Rep[(Vector, Int)] = (p, unit(1))
         (closestPoint(p, centers), tup)
@@ -175,7 +175,7 @@ trait KMeansApp extends DListProgram with ApplicationOps with SparkDListOps with
       unit(())
     }
 
-    report("final Centers found")
+    report("5 iterations done")
     //    for (center <- centers) {
     //      println(center.print())
     //    }

@@ -8,12 +8,12 @@ import java.io.DataInput
 import com.cloudera.crunch.PTable
 import com.cloudera.crunch.{ Pair => CPair }
 import com.cloudera.crunch.DoFn
-import com.cloudera.crunch.`types`.writable.Writables
+import com.cloudera.crunch.`type`.writable.Writables
 import org.apache.hadoop.conf.Configuration
 import com.cloudera.crunch.Emitter
 import scala.collection.mutable
 import com.cloudera.crunch.{ MapFn, CombineFn }
-import com.cloudera.crunch.types.writable.WritableType
+import com.cloudera.crunch.`type`.writable.WritableType
 
 class CombineWrapper[K, V](reduce: Function2[V, V, V]) extends CombineFn[K, V] {
 

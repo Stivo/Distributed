@@ -343,14 +343,14 @@ trait SwitchingTypeFactory extends TypeFactory with CaseClassTypeFactory with Fa
   }
   override def makeTypeFor(name: String, fields: Iterable[String]): String = {
     if (useWritables) {
-      super.makeTypeFor(name, fields)
+      super[FastWritableTypeFactory].makeTypeFor(name, fields)
     } else {
       super[CaseClassTypeFactory].makeTypeFor(name, fields)
     }
   }
   override def emitNode(sym: Sym[Any], rhs: Def[Any]): Unit = {
     if (useWritables) {
-      super.emitNode(sym, rhs)
+      super[FastWritableTypeFactory].emitNode(sym, rhs)
     } else {
       super[CaseClassTypeFactory].emitNode(sym, rhs)
     }

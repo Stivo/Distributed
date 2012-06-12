@@ -169,7 +169,7 @@ class RegexFrontend(val original: String, optimizeAll: Boolean = true, useFastSp
   lazy val changed = if (original == matchOn) "" else " (converted from " + original + ")"
   //  println("Method for " + matchOn + changed + " is " + method)
 
-  val useFinder = if (useFastSplitter || optimizeAll) {
+  val useFinder = if (useFastSplitter) {
     // TODO this logic is not correct, splitting on \d for example will yield incorrect results
     // Pig has logic for this in StorageUtil and PigStorage
     if (matchOn.charAt(0) == '\\' && matchOn.length == 2) {

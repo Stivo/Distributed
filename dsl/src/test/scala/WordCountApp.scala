@@ -308,27 +308,28 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
   def testBoth {
     tryCompile {
       println("-- begin")
-
+      var fusionEnabled = false
       val dsl = new WordCountApp with DListProgramExp with ApplicationOpsExp with SparkDListOpsExp
       val codegenSpark = new SparkGen { val IR: dsl.type = dsl }
-      val codegenScoobi = new ScoobiGen { val IR: dsl.type = dsl }
+      val codegenScoobi = new ScoobiGen { val IR: dsl.type = dsl
+        override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = fusionEnabled
+      }
+//      codegenScoobi.useWritables = true;
       val codegenCrunch = new CrunchGen { val IR: dsl.type = dsl }
-      val list = List(codegenSpark, codegenScoobi, codegenCrunch)
+//      val list = List(codegenSpark, codegenScoobi, codegenCrunch)
+      val list = List(codegenCrunch, codegenSpark)
       def writeVersion(version: String) {
-//        if (version != "v4") return
-        var pw = setUpPrintWriter
-        codegenSpark.emitProgram(dsl.wikiArticleWordcount2009, appname, pw, version)
-        writeToProject(pw, "spark", appname, version, codegenSpark.lastGraph)
-        release(pw)
-        var pw4 = setUpPrintWriter
-        codegenCrunch.emitProgram(dsl.wikiArticleWordcount2009, appname, pw4, version)
-        writeToProject(pw4, "crunch", appname, version, codegenCrunch.lastGraph)
-        release(pw4)
-        var pw2 = setUpPrintWriter
-        codegenScoobi.useWritables = false
-        codegenScoobi.emitProgram(dsl.wikiArticleWordcount2009, appname, pw2, version)
-        writeToProject(pw2, "scoobi", appname, version, codegenScoobi.lastGraph)
-        release(pw2)
+//        if (version != "v0") return
+        val func = dsl.wikiArticleWordcount2009 _
+        for (gen <- list) {
+          val versionDesc = version+ (gen match {
+            case x: Versioned => x.version
+            case _ => ""
+          })
+          var pw = setUpPrintWriter
+          gen.emitProgram(func, appname, pw, versionDesc)
+          writeToProject(pw, gen.getProjectName, appname, versionDesc, codegenSpark.lastGraph)
+        }
       }
       list.foreach { codegen =>
         codegen.narrowExistingMaps = false
@@ -336,6 +337,7 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
         codegen.inlineInLoopFusion = false
         codegen.loopFusion = false
       }
+      fusionEnabled = false
       dsl.useFastSplitter = false
       dsl.disablePatterns = true
       dsl.useFastRegex = false
@@ -347,6 +349,7 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
         codegen.inlineInLoopFusion = true
         codegen.loopFusion = true
       }
+      fusionEnabled = true
       writeVersion("v1")
 
       dsl.disablePatterns = false

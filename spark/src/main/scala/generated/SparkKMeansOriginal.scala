@@ -38,10 +38,10 @@ object SparkKMeans {
 
   def main(args: Array[String]) {
     if (args.length < 4) {
-      System.err.println("Usage: SparkLocalKMeans <master> <file> <k> <convergeDist>")
+      System.err.println("Usage: SparkKMeans <master> <file> <k> <convergeDist>")
       System.exit(1)
     }
-    val sc = new SparkContext(args(0), "SparkLocalKMeans")
+    val sc = new SparkContext(args(0), "SparkKMeans")
     val lines = sc.textFile(args(1))
     val data = lines.map(parseVector _).cache()
     val K = args(2).toInt
@@ -58,7 +58,7 @@ object SparkKMeans {
 
     report("Starting big while")
     var i = 0
-    while (tempDist > convergeDist) {
+    while (i < 5) {
       var closest = data.map(p => (closestPoint(p, kPoints), (p, 1)))
 
       var pointStats = closest.reduceByKey { case ((x1, y1), (x2, y2)) => (x1 + x2, y1 + y2) }
@@ -78,7 +78,7 @@ object SparkKMeans {
     }
 
     //println("Final centers: " + kPoints.toBuffer.sortBy { x: (Int, Vector) => x._1 })
-    println("Found final centers")
+    println("5 iterations done")
     System.exit(0)
   }
 }

@@ -12,7 +12,7 @@ resolvers += "sonatype snapshots" at "https://oss.sonatype.org/content/repositor
 
 resolvers += "Packaged Avro" at "http://nicta.github.com/scoobi/releases/"
 
-libraryDependencies += "com.nicta" %% "scoobi" % "0.4.0-SNAPSHOT" excludeAll( // % "provided" 
+libraryDependencies += "com.nicta" %% "scoobi" % "0.4.0" excludeAll( // % "provided" 
    ExclusionRule(organization = "javax.servlet.jsp"),
    ExclusionRule(organization = "org.apache.hadoop"),
    ExclusionRule(organization = "org.apache.avro")

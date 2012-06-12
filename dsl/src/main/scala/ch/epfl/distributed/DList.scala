@@ -468,6 +468,8 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   import IR.{ ClosureNode, freqHot, freqNormal, Lambda, Lambda2, Closure2Node }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
+  def getProjectName: String
+
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case sd @ IteratorValue(r, i) => emitValDef(sym, "it.next // loop var " + quote(i))
     case sd @ ShapeDep(dep) => stream.println("// " + quote(dep))
