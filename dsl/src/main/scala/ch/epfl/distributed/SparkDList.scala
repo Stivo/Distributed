@@ -367,9 +367,10 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
       for ((l, r) <- (sym zip rhs)) r match {
         // temporary workaround for lost types
         case IteratorCollect(g @ Def(Reflect(ys @ YieldSingle(_, _), _, _)), b @ Block(y)) =>
+          val outType = stripGen(g.tp)
           stream.println("val " + quote(sym.head) + " = " + quote(sd) + """.mapPartitions(it => {
-        new Iterator[""" + stripGen(ys.mA) + """] {
-          private[this] val buff = new Array[""" + stripGen(ys.mA) + """](1 << 22)
+        new Iterator[""" + outType + """] {
+          private[this] val buff = new Array[""" + outType + """](1 << 22)
           private[this] val stopAt = (1 << 22) - (1 << 12);
   		  private[this] final var start = 0
           private[this] final var end = 0

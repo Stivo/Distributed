@@ -170,10 +170,10 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
 //      val codegenKryoCrunch = new KryoCrunchGen {
 //        val IR: dsl.type = dsl
 //      }
-//      val list = List(codegenSpark, codegenScoobi, codegenCrunch)
-      val list = List(codegenSpark)
+      val list = List(codegenSpark, codegenScoobi, codegenCrunch)
+//      val list = List(codegenSpark)
       def writeVersion(version: String) {
-        if (version != "v4") return
+//        if (version != "v4") return
         val func = dsl.query12 _
         for (gen <- list) {
           val versionDesc = version+ (gen match {
@@ -210,7 +210,7 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       list.foreach { codegen =>
         codegen.loopFusion = true
         codegen.inlineClosures = false
-        codegen.inlineInLoopFusion = false
+        codegen.inlineInLoopFusion = true
       }
       applyFusion = true
       dsl.useFastSplitter = true

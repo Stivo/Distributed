@@ -26,7 +26,7 @@ trait VectorBase extends Base with OverloadHack {
     def /(o: Rep[Double])(implicit o2: Overloaded2) = vec_pointWiseOp(v, o, "/")
     def squaredDist(o: Rep[Vector]) = vec_squaredDist(v, o)
     def print() = vec_print(v)
-  }l
+  }
 
   def vec_simpleOp(v: Rep[Vector], o: Rep[Vector], op: String): Rep[Vector]
   def vec_pointWiseOp(v: Rep[Vector], o: Rep[Double], op: String): Rep[Vector]
