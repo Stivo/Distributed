@@ -29,11 +29,13 @@ The build should be reproducible now.
 For building you will need:
 * sbt 0.11.3 launcher
 * git
-* mvn3 for the crunch build
 
-To get started, run setup.sh. This will fetch spark and crunch and deploy them to the local repository. Make sure that spark and crunch have been deployed correctly.
+To get started, run setup.sh. This will fetch spark and deploy it to the local repository. Make sure that spark has been deployed correctly.
 When this is done, you can start sbt in the top distributed folder. For generating the classes you can use:
 	~ ; dsl/test ; dotgen ; gens/compile
 This will regenerate all test classes, update the utils, generate dot files and compile the generated files.
 
 For benchmarking and packaging, I use the scripts in benchmarking. They are pretty messy though. Install Cloudera cdh3u4 on your machine to test the generated crunch and scoobi programs.
+
+####Writing a program:
+See the examples in dsl/src/test/scala. To import your own class, create it in the dsl/structs folder, following the examples. Then use the dsl/startLift.sh script to refresh ApplicationOps, which you can then mix into your application.

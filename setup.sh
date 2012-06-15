@@ -6,15 +6,16 @@ set -e
 mkdir deps
 cd deps
 
-git clone https://github.com/mesos/spark
+git clone -b master https://github.com/mesos/spark
 cd spark
+git checkout tags/v0.5.0
 sbt/sbt publish-local assembly
 cp target/spark-core-assembly-*.jar ../../benchmarking/progs/spark-core-assembly.jar
 cd -
 
-git clone https://github.com/cloudera/crunch
-cd crunch
-mvn3 install -DskipTests=true
-cd -
+#git clone https://github.com/cloudera/crunch
+#cd crunch
+#mvn3 install -DskipTests=true
+#cd -
 
 cd ..
