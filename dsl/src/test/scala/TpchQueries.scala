@@ -8,37 +8,6 @@ import scala.util.Random
 
 trait TpchQueriesApp extends DListProgram with ApplicationOps {
 
-  def loadTest(x: Rep[Unit]) = {
-    val read = DList(getArgs(0))
-    val parsed = read.map(x => LineItem.parse(x, "\\|"))
-    parsed
-      .filter(_.l_linestatus == 'F')
-      .map(x => (x.l_receiptdate, x.l_comment))
-      .save(getArgs(1))
-
-    unit(())
-  }
-
-  def query3nephele(x: Rep[Unit]) = {
-    val limit = getArgs(1).toInt
-    val date = getArgs(2).toDate
-    val lineitems = DList(getArgs(0) + "/lineitem*")
-      .map(x => LineItem.parse(x, "\\|"))
-    val orders = DList(getArgs(0) + "/orders.tbl")
-      .map(x => Order.parse(x, "\\|"))
-    val filteredOrders = orders
-      .filter(x => x.o_custkey < limit)
-      .filter(x => date < x.o_orderdate)
-    val lineItemTuples = lineitems.map(x => (x.l_orderkey, x))
-    val orderTuples = filteredOrders.map(x => (x.o_orderkey, x))
-    val joined = lineItemTuples.join(orderTuples)
-    val tupled = joined.map { x => val y: Rep[(Int, Int)] = (x._2._1.l_orderkey, x._2._2.o_shippriority); (y, x._2._1.l_extendedprice) }
-    val grouped = tupled.groupByKey
-    grouped.reduce((x, y) => x + y)
-      .save(getArgs(3))
-    unit(())
-  }
-
   def query12(x: Rep[Unit]) = {
     // read arguments
     val inputFolder = getArgs(0)
@@ -84,39 +53,6 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
     unit(())
   }
 
-  def query12Mapper(x: Rep[Unit]) = {
-    // read arguments
-    val inputFolder = getArgs(0)
-    val outputFolder = getArgs(1)
-    val date = getArgs(2).toDate
-    val shipMode1 = getArgs(3)
-    val shipMode2 = getArgs(4)
-
-    // read and parse tables
-    val lineitems = DList(getArgs(0) + "/lineitem*")
-      .map(x => LineItem.parse(x, "\\|"))
-
-    // filter the line items
-    val filteredLineitems = lineitems
-      .filter(x => x.l_shipmode == shipMode1 || x.l_shipmode == shipMode2)
-      .filter(x => date <= x.l_receiptdate)
-      .filter(x => x.l_shipdate < x.l_commitdate)
-      .filter(x => x.l_commitdate < x.l_receiptdate)
-      .filter(x => x.l_receiptdate < date + (1, 0, 0))
-    val lineItemTuples = filteredLineitems.map(x => (x.l_orderkey, x.l_shipmode))
-    lineItemTuples.save(outputFolder)
-  }
-
-  /*
-  def tupleProblem(x: Rep[Unit]) = {
-    val lineitems = DList(getArgs(0) + "/lineitem*")
-      .map(x => LineItem.parse(x, "\\|"))
-    val tupled = lineitems.map(x => ((x.l_linenumber, x.l_orderkey), x.l_comment))
-    tupled
-      .save(getArgs(3))
-  }
-  */
-
 }
 
 class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
@@ -126,15 +62,6 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
 
   // format: OFF
   /**
-   * Variants:
-   *  		FR	LF 	IN
-   * v0:	-	-	-
-   * v1:	x	-	-
-   * v2:	-	x	-
-   * v3:	-	x	x
-   * v4:	x 	x	-
-   * v5:	x	x 	x
-   * new:
    * All versions have Regex patterns enabled,
    * just the fast splitter is disabled.
    * 		FS 	FR	LF+IN
@@ -159,19 +86,10 @@ class TpchQueriesAppGenerator extends CodeGeneratorTestSuite {
       val codegenScoobi = new ScoobiGen { val IR: dsl.type = dsl
         override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = applyFusion
       }
-//      codegenScoobi.useWritables = true
-//      val codegenKryoScoobi = new KryoScoobiGen with Versioned {
-//        val IR: dsl.type = dsl
-//		  val version = "k"      	
-//      }
       val codegenCrunch = new CrunchGen {
         val IR: dsl.type = dsl
       }
-//      val codegenKryoCrunch = new KryoCrunchGen {
-//        val IR: dsl.type = dsl
-//      }
-//      val list = List(codegenSpark, codegenScoobi, codegenCrunch)
-      val list = List(codegenSpark)
+      val list = List(codegenSpark, codegenScoobi, codegenCrunch)
       def writeVersion(version: String) {
         if (version != "v4") return
         val func = dsl.query12 _
