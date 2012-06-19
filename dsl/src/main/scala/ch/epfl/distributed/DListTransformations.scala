@@ -6,6 +6,7 @@ import scala.collection.mutable
 import scala.virtualization.lms.common.WorklistTransformer
 import scala.virtualization.lms.common.ForwardTransformer
 import scala.virtualization.lms.internal.Utils
+import scala.reflect.SourceContext
 
 trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with Matchers with DListAnalysis with Utils {
 
@@ -94,14 +95,15 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
     }
     def registerTransformations(analyzer: Analyzer) {
       analyzer.narrowBefore.foreach {
-        case gbk @ DListGroupByKey(x) =>
+        case gbk @ DListGroupByKey(x, part) =>
           val stm = findDefinition(gbk).get
-          class GroupByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]]) {
+          class GroupByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], part: Option[Partitioner[K]]) {
             val mapNew = makeNarrower(in)
-            val gbkNew = dlist_groupByKey(mapNew)
+            val gbkNew = toAtom2(new DListGroupByKey(mapNew, part.map(x => wt(x)))(manifest[K], manifest[V]))(mtype(stm.syms.head.tp), FakeSourceContext())
+            //val gbkNew = dlist_groupByKey(mapNew, part.getOrElse(null))
             wt.register(stm.syms.head)(gbkNew)
           }
-          new GroupByKeyTransformer(gbk.dlist)(gbk.mKey, gbk.mValue)
+          new GroupByKeyTransformer(gbk.dlist, part)(gbk.mKey, gbk.mValue)
 
         case j @ DListJoin(l, r) =>
           val stm = findDefinition(j).get

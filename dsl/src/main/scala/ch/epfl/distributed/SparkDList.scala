@@ -32,7 +32,7 @@ trait SparkDListOps extends DListOps {
 }
 
 trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
-  case class DListReduceByKey[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], closure: Exp[(V, V) => V])
+  case class DListReduceByKey[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], closure: Exp[(V, V) => V], partitioner: Option[Partitioner[K]])
       extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
       with PreservingTypeComputation[DList[(K, V)]] {
     val mKey = manifest[K]
@@ -63,7 +63,7 @@ trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
     val out = (e match {
-      case v @ DListReduceByKey(dlist, func) => DListReduceByKey(f(dlist), f(func))(v.mKey, v.mValue)
+      case v @ DListReduceByKey(dlist, func, part) => DListReduceByKey(f(dlist), f(func), part.map(x => f(x)))(v.mKey, v.mValue)
       case v @ DListCache(in) => DListCache(f(in))(v.mA)
       case v @ DListCollect(in) => DListCollect(f(in))(v.mA)
       case v @ DListTakeSample(in, r, n, s) => DListTakeSample(f(in), f(r), f(n), f(s))(v.mA)
@@ -91,10 +91,10 @@ trait SparkTransformations extends DListTransformations {
 
       System.out.println("Found reduces " + reduces)
       reduces.foreach {
-        case d @ DListReduce(Def(DListGroupByKey(r)), f) =>
+        case d @ DListReduce(Def(DListGroupByKey(r, part)), f) =>
           val stm = analyzer.findDef(d)
           wt.register(stm.syms.head) {
-            toAtom2(new DListReduceByKey(wt(r), wt(f))(d.mKey, d.mValue))(mtype(stm.syms.head.tp), implicitly[SourceContext])
+            toAtom2(new DListReduceByKey(wt(r), wt(f), part.map(wt.apply))(d.mKey, d.mValue))(mtype(stm.syms.head.tp), implicitly[SourceContext])
           }
       }
     }
@@ -132,11 +132,11 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
     override def registerTransformations(analyzer: Analyzer) {
       super.registerTransformations(analyzer)
       analyzer.narrowBefore.foreach {
-        case d @ DListReduceByKey(in, func) =>
+        case d @ DListReduceByKey(in, func, part) =>
           val stm = findDefinition(d).get
           class ReduceByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]]) {
             val mapNew = makeNarrower(in)
-            val redNew = DListReduceByKey(mapNew, wt(func))
+            val redNew = DListReduceByKey(mapNew, wt(func), part.map(wt.apply))
             wt.register(stm.syms.head)(IR.toAtom2(redNew)(IR.mtype(d.getTypes._2), implicitly[SourceContext]))
           }
           new ReduceByKeyTransformer(d.in)(d.mKey, d.mValue)
@@ -155,13 +155,13 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
   class SparkFieldAnalyzer(block: Block[_], typeHandler: TypeHandler) extends FieldAnalyzer(block, typeHandler) {
 
     override def isNarrowBeforeCandidate(x: DListNode) = x match {
-      case DListReduceByKey(_, _) => true
+      case DListReduceByKey(_, _, _) => true
       case DListCache(_) => true
       case x => super.isNarrowBeforeCandidate(x)
     }
 
     override def computeFieldReads(node: DListNode): Set[FieldRead] = node match {
-      case v @ DListReduceByKey(in, func) => {
+      case v @ DListReduceByKey(in, func, _) => {
         // analyze function
         // convert the analyzed accesses to accesses of input._2
         val part1 = (analyzeFunction(v) ++ Set(FieldRead("input")))
@@ -226,10 +226,11 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
         var out = v1.map(quote(_)).mkString("(", ").union(", ")")
         emitValDef(sym, out)
       }
-      case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
+      case gbk @ DListGroupByKey(dlist, Some(part)) => emitValDef(sym, "%s.groupByKey(makePartitioner(%s, sc.defaultParallelism))".format(quote(dlist), quote(part)))
       case v @ DListJoin(left, right) => emitValDef(sym, "%s.join(%s)".format(quote(left), quote(right)))
       case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(dlist), handleClosure(red.closure)))
-      case red @ DListReduceByKey(dlist, f) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(dlist), handleClosure(red.closure)))
+      case red @ DListReduceByKey(dlist, f, Some(part)) => emitValDef(sym, "%s.reduceByKey(makePartitioner(%s, sc.defaultParallelism), %s)".format(quote(dlist), handleClosure(part), handleClosure(red.closure)))
+      case red @ DListReduceByKey(dlist, f, None) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(dlist), handleClosure(red.closure)))
       case v @ DListCache(dlist) => emitValDef(sym, "%s.cache()".format(quote(dlist)))
       case v @ DListCollect(dlist) => emitValDef(sym, "%s.collect()".format(quote(dlist)))
       case v @ DListTakeSample(in, r, n, s) => emitValDef(sym, "%s.takeSample(%s, %s, %s)".format(quote(in), quote(r), quote(n), quote(s)))
@@ -293,6 +294,7 @@ import scala.math.random
 import spark._
 import SparkContext._
 import com.esotericsoftware.kryo.Kryo
+import ch.epfl.distributed.utils.Helpers.makePartitioner
 
 object %s {
     %s

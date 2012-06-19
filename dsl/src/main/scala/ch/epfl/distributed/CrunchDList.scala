@@ -133,7 +133,19 @@ trait CrunchGenDList extends ScalaGenBase
         var out = v1.map(quote(_)).mkString("(", ").union(", ")")
         emitValDef(sym, out)
       }
-      case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
+      case gbk @ DListGroupByKey(dlist, Some(part)) => {
+        val keyType = part match {
+          case Def(l : Lambda2[_,_,_]) => l.mA1
+          case _ => manifest[Any]
+        }
+        val id = sym.id+""
+        val name = "Partitioner_"+id
+        types += name -> """class %s extends ClosurePartitioner[%s]{
+        val f = %s
+      }""".format(name, remap(keyType), writeClosure(part))
+        emitValDef(sym, "%s.groupByKey(makeGroupingOptions[%s])".format(quote(dlist), name))
+      }
+      case gbk @ DListGroupByKey(dlist, _) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
       case v @ DListJoin(left, right) => {
         // create tagged value subclass
         if (typeHandler.remappings.contains(v.mV1) && typeHandler.remappings.contains(v.mV2)) {
@@ -207,7 +219,8 @@ import com.cloudera.crunch.{ Pair => CPair }
 
 import ch.epfl.distributed.utils.JoinHelper._
 import ch.epfl.distributed.utils._
-        
+import ch.epfl.distributed.utils.PartitionerUtil._
+
 import com.cloudera.crunch._
 
 object %1$s {

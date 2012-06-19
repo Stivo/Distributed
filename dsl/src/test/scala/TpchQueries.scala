@@ -22,7 +22,7 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
   def query3nephele(x: Rep[Unit]) = {
     val limit = getArgs(1).toInt
     val date = getArgs(2).toDate
-    val lineitems = DList(getArgs(0) + "/lineitem*")
+    val lineitems = DList(getArgs(0) + "/lineitem.tbl")
       .map(x => LineItem.parse(x, "\\|"))
     val orders = DList(getArgs(0) + "/orders.tbl")
       .map(x => Order.parse(x, "\\|"))
@@ -48,7 +48,7 @@ trait TpchQueriesApp extends DListProgram with ApplicationOps {
     val shipMode2 = getArgs(4)
 
     // read and parse tables
-    val lineitems = DList(getArgs(0) + "/lineitem*")
+    val lineitems = DList(getArgs(0) + "/lineitem.tbl")
       .map(x => LineItem.parse(x, "\\|"))
     val orders = DList(getArgs(0) + "/orders.tbl")
       .map(x => Order.parse(x, "\\|"))

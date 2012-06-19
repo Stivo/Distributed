@@ -14,6 +14,8 @@ import com.cloudera.crunch.Emitter
 import scala.collection.mutable
 import com.cloudera.crunch.{ MapFn, CombineFn }
 import com.cloudera.crunch.`type`.writable.WritableType
+import org.apache.hadoop.mapreduce.Partitioner
+import com.cloudera.crunch.GroupingOptions
 
 class CombineWrapper[K, V](reduce: Function2[V, V, V]) extends CombineFn[K, V] {
 
@@ -27,6 +29,21 @@ class CombineWrapper[K, V](reduce: Function2[V, V, V]) extends CombineFn[K, V] {
       }
       emitter.emit(CPair.of(input.first, accum))
     }
+  }
+}
+
+object PartitionerUtil {
+  type IntType = java.lang.Integer
+  trait ClosurePartitioner[K] extends Partitioner[K, Any] {
+    def getPartition(key: K, value: Any, numPartitions: Int): Int = {
+      f(key, numPartitions)
+    }
+    def f: (K, IntType) => IntType
+  }
+  def makeGroupingOptions[C <: ClosurePartitioner[_]: Manifest] = {
+    val builder = new GroupingOptions.Builder()
+    builder.partitionerClass(manifest[C].erasure.asSubclass(classOf[Partitioner[_, _]]))
+    builder.build
   }
 }
 

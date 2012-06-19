@@ -76,7 +76,7 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
     lazy val narrowBeforeCandidates: Iterable[DListNode] = ordered.filter(isNarrowBeforeCandidate)
 
     def isNarrowBeforeCandidate(x: DListNode) = x match {
-      case DListGroupByKey(x) => true
+      case DListGroupByKey(x, _) => true
       case DListJoin(x, y) => true
       case x => false
     }
@@ -308,7 +308,7 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
           }.map(_.mkString("."))
           (part1 ++ part2).map(FieldRead)
 
-        case v @ DListGroupByKey(in) =>
+        case v @ DListGroupByKey(in, _) =>
           // rewrite access to input._2.iterable.X to input._2.X
           // add access to _1
           ((v.successorFieldReads.map(_.getPath).map {
