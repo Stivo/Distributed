@@ -352,8 +352,8 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
 
         case v: EndNode[_] => {
           val elemType = v.getElementTypes._1
-          if (SimpleType.unapply(elemType).isDefined) {
-            Set()
+          if (!isStruct(elemType)) {
+            Set(FieldRead("input"))
           } else {
             // traverse all subtypes, mark all fields as read
             visitAll("input", elemType)

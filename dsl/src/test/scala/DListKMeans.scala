@@ -188,7 +188,6 @@ trait KMeansApp extends DListProgram with ApplicationOps with SparkDListOps with
 class KMeansAppGenerator extends CodeGeneratorTestSuite {
 
   val appname = "KMeansApp"
-  val unoptimizedAppname = appname + "_Orig"
 
   def testSpark {
     tryCompile {

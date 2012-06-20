@@ -368,6 +368,9 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
     def getField(field: String) = fields.find(_.name == field)
     def niceName = name
   }
+  
+  def isStruct(m: Manifest[_]) = typeHandler.remappings.contains(m.asInstanceOf[Manifest[Any]])
+  
   class TypeHandler(block: Block[_]) extends BlockVisitor(block) {
     val objectCreations = statements.flatMap {
       case TP(_, s @ SimpleStruct(tag, elems)) => Some(s)
@@ -612,7 +615,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     if (inlineClosures) {
       writeClosure(closure)
     } else {
-      quote(closure) + " _"
+      quote(closure)
     }
   }
 

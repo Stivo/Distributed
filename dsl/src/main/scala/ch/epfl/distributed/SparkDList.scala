@@ -188,7 +188,7 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
 
       case d @ DListSortByKey(in, _) =>
         node.successorFieldReads.toSet ++
-          (if (!SimpleType.unapply(d.mK).isDefined)
+          (if (isStruct(d.mK))
             visitAll("input", d.mK).filter(_.path.startsWith("input._1"))
           else
             List(FieldRead("input._1")))
