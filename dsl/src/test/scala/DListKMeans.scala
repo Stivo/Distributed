@@ -160,7 +160,7 @@ trait KMeansApp extends DListProgram with ApplicationOps with SparkDListOps with
           (p1._1 + p2._1, p1._2 + p2._2)
       }
 
-      val newPoints = pointStats.map { pair => (pair._1, pair._2._1 / pair._2._2) }.collect().toArray
+      val newPoints = pointStats.map { pair => (pair._1, pair._2._1 / pair._2._2) }.materialize().toArray
 
       tempDist = 0.0
       for (pair <- newPoints) {

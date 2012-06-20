@@ -23,6 +23,7 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
     DListReduce,
     ComputationNode,
     DListNode,
+    EndNode,
     GetArgs
   }
   import IR.{ SubstTransformer, Field }
@@ -62,14 +63,14 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
       case SomeDef(l @ IR.Lambda2(f, x1, x2, y)) => Some(l)
       case _ => None
     }
-    lazy val saves = nodes.filter { case v: DListSave[_] => true; case _ => false }.map(_.asInstanceOf[DListSave[_]])
+    lazy val endnodes = nodes.filter { case v: EndNode[_] => true; case _ => false }.map(_.asInstanceOf[EndNode[_]])
 
     def getInputs(x: DListNode) = {
       val syms = IR.syms(x)
       syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.defs.flatMap { _ match { case x: DListNode => Some(x) case _ => None } } }
     }
 
-    lazy val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
+    lazy val ordered = GraphUtil.stronglyConnectedComponents(endnodes, getInputs).flatten
 
     lazy val orderedStatements = getSchedule(availableDefs)(block.res, true)
 
@@ -210,6 +211,7 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
     DListReduce,
     ComputationNode,
     DListNode,
+    EndNode,
     GetArgs
   }
 
@@ -320,12 +322,13 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
           // just pass on the successor field reads
           v.successorFieldReads.toSet
 
-        case v @ DListSave(_, _) => {
-          if (SimpleType.unapply(v.mA).isDefined) {
+        case v: EndNode[_] => {
+          val elemType = v.getElementTypes._1
+          if (SimpleType.unapply(elemType).isDefined) {
             Set()
           } else {
             // traverse all subtypes, mark all fields as read
-            visitAll("input", v.mA)
+            visitAll("input", elemType)
           }
         }
 

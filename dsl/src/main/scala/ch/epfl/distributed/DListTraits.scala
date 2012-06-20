@@ -26,6 +26,7 @@ trait DListProgramExp extends DListOpsExp
   with FatExpressions with LoopsFatExp with IfThenElseFatExp
 
 trait DListBaseCodeGenPkg extends ScalaCodeGenPkg
+  with ScalaGenIterableOps
   with SimplifyTransform with GenericFatCodegen with LoopFusionOpt
   with FatScheduling with BlockTraversal with ScalaGenIfThenElseFat
   //with LivenessOpt

@@ -44,32 +44,38 @@ trait DListsProg extends DListProgram with ComplexBase {
       .map(x => (x, unit(1))).groupByKey.reduce(_ + _)
       .save(getArgs(1))
   }
-  
+
   def partitioner(x: Rep[Unit]) = {
     val words1 = DList("in")
     words1
-    .map(x => (x, unit(1)))
-    .groupByKey{(x, y) => x.length % y}
-    .reduce(_+_)
-    .save("out")
+      .map(x => (x, unit(1)))
+      .groupByKey { (x, y) => x.length % y }
+      .reduce(_ + _)
+      .save("out")
   }
-  
+
+  def materialize(x: Rep[Unit]) = {
+    val words1 = DList("in")
+    val it = words1.map(x => Complex(x.toDouble, x.toDouble + 5.0)).materialize()
+    println(it.head)
+  }
+
   def simple(x: Rep[Unit]) = {
     val words1 = DList(getArgs(0))
     val complex = words1.map(x => Complex(x.toDouble, x.toDouble + 5.0))
-        val c2 = (
-        if (getArgs(2).toInt > 5)
-          complex.map(x => (x.im))
-        else
-          complex.map(x => (x.re)))
-        val c3 = (
-        if (getArgs(3).toInt > 55)
-          c2.map(x => x+4)
-        else
-          c2.map(x => x-4.0)
-        )
-        c2.save(getArgs(2))
-//    complex.save(getArgs(1))
+    val c2 = (
+      if (getArgs(2).toInt > 5)
+        complex.map(x => (x.im))
+      else
+        complex.map(x => (x.re)))
+    val c3 = (
+      if (getArgs(3).toInt > 55)
+        c2.map(x => x + 4)
+      else
+        c2.map(x => x - 4.0)
+    )
+    c2.save(getArgs(2))
+    //    complex.save(getArgs(1))
     //    val tupled = words1
     //    tupled.map(x => (x, unit(1))).groupByKey.save(getArgs(1))
     //    tupled.map(x => (x, unit(1))).groupByKey.save(getArgs(2))
@@ -122,24 +128,24 @@ trait DListsProg extends DListProgram with ComplexBase {
 }
 
 class TestBasic extends CodeGeneratorTestSuite {
-    def testCrunch {
-      tryCompile {
-        println("-- begin")
-  
-        val dsl = new DListsProg with DListProgramExp with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
-  
-        val codegen = new CrunchGen {
-          val IR: dsl.type = dsl
-          override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = true
-        }
-        val pw = setUpPrintWriter
-        codegen.emitSource(dsl.partitioner, "TestBasic", pw)
-  
-        writeToProject(pw, "crunch", "TestBasic")
-        release(pw)
-        println("-- end")
+  def testCrunch {
+    tryCompile {
+      println("-- begin")
+
+      val dsl = new DListsProg with DListProgramExp with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
+
+      val codegen = new CrunchGen {
+        val IR: dsl.type = dsl
+        override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = true
       }
+      val pw = setUpPrintWriter
+      codegen.emitSource(dsl.materialize, "TestBasic", pw)
+
+      writeToProject(pw, "crunch", "TestBasic")
+      release(pw)
+      println("-- end")
     }
+  }
 
   /*
   def testPrinter {

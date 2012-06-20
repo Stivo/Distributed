@@ -30,6 +30,7 @@ trait ScoobiGenDList extends ScalaGenBase
     DListReduce,
     ComputationNode,
     DListNode,
+    DListMaterialize,
     GetArgs,
     IteratorValue
   }
@@ -46,6 +47,7 @@ trait ScoobiGenDList extends ScalaGenBase
     val out = rhs match {
       case nv @ NewDList(filename) => emitValDef(sym, "TextInput.fromTextFile(%s)".format(quote(filename)))
       case vs @ DListSave(dlist, filename) => emitValDef(sym, "persist(TextOutput.toTextFile(%s,%s))".format(quote(dlist), quote(filename)))
+      case vs @ DListMaterialize(dlist) => emitValDef(sym, "persist(%s.materialize)".format(quote(dlist)))
       case vm @ DListMap(dlist, function) => emitValDef(sym, "%s.map(%s)".format(quote(dlist), handleClosure(vm.closure)))
       case vm @ DListFilter(dlist, function) => emitValDef(sym, "%s.filter(%s)".format(quote(dlist), handleClosure(vm.closure)))
       case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "%s.flatMap(%s)".format(quote(dlist), handleClosure(vm.closure)))

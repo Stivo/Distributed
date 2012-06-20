@@ -46,6 +46,7 @@ trait CrunchGenDList extends ScalaGenBase
     DListReduce,
     ComputationNode,
     DListNode,
+    DListMaterialize,
     GetArgs,
     IteratorValue
   }
@@ -120,6 +121,7 @@ trait CrunchGenDList extends ScalaGenBase
       case IR.Field(tuple, x, tp) if (x == "_1" || x == "_2") => emitValDef(sym, "%s.%s // TODO This is a hack, the symbol for %s should have a tuple type instead of %s".format(quote(tuple), if (x == "_1") "first()" else "second()", Def.unapply(tuple), tp))
       case nv @ NewDList(filename) => emitValDef(sym, "pipeline.readTextFile(%s)".format(quote(filename)))
       case vs @ DListSave(dlist, filename) => emitValDef(sym, "pipeline.writeTextFile(%s, %s)".format(quote(dlist), quote(filename)))
+      case vs @ DListMaterialize(dlist) => emitValDef(sym, "%s.materialize().asScala".format(quote(dlist)))
       case vm @ DListMap(dlist, function) => {
         // TODO
         emitValDef(sym, createParallelDo(dlist, vm, "emitter.emit(%s(input))".format(handleClosure(vm.closure))))
@@ -135,11 +137,11 @@ trait CrunchGenDList extends ScalaGenBase
       }
       case gbk @ DListGroupByKey(dlist, Some(part)) => {
         val keyType = part match {
-          case Def(l : Lambda2[_,_,_]) => l.mA1
+          case Def(l: Lambda2[_, _, _]) => l.mA1
           case _ => manifest[Any]
         }
-        val id = sym.id+""
-        val name = "Partitioner_"+id
+        val id = sym.id + ""
+        val name = "Partitioner_" + id
         types += name -> """class %s extends ClosurePartitioner[%s]{
         val f = %s
       }""".format(name, remap(keyType), writeClosure(part))
@@ -202,6 +204,8 @@ trait CrunchGenDList extends ScalaGenBase
 import java.io.DataInput
 import java.io.DataOutput
 import java.io.Serializable
+
+import scala.collection.JavaConverters._
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.conf.Configured
