@@ -47,6 +47,7 @@ trait CrunchGenDList extends ScalaGenBase
     ComputationNode,
     DListNode,
     DListMaterialize,
+    DListTakeSample,
     GetArgs,
     IteratorValue
   }
@@ -122,6 +123,10 @@ trait CrunchGenDList extends ScalaGenBase
       case nv @ NewDList(filename) => emitValDef(sym, "pipeline.readTextFile(%s)".format(quote(filename)))
       case vs @ DListSave(dlist, filename) => emitValDef(sym, "pipeline.writeTextFile(%s, %s)".format(quote(dlist), quote(filename)))
       case vs @ DListMaterialize(dlist) => emitValDef(sym, "%s.materialize().asScala".format(quote(dlist)))
+      case d @ DListTakeSample(dlist, fraction, seedOption) => {
+        val seedString = seedOption.map(x => ", "+quote(x)).getOrElse("")
+        emitValDef(sym, "%s.sample(%s %s)".format(quote(dlist), quote(fraction), seedString))
+      }
       case vm @ DListMap(dlist, function) => {
         // TODO
         emitValDef(sym, createParallelDo(dlist, vm, "emitter.emit(%s(input))".format(handleClosure(vm.closure))))

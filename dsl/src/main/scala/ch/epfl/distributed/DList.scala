@@ -34,6 +34,8 @@ trait DListOps extends Base with Variables {
     def save(path: Rep[String]) = dlist_save(dlist, path)
     def ++(dlist2: Rep[DList[A]]) = dlist_++(dlist, dlist2)
     def materialize() = dlist_materialize(dlist)
+    def takeSample(fraction: Rep[Double], seed: Rep[Int]) = dlist_takeSample(dlist, fraction, Some(seed))
+    def takeSample(fraction: Rep[Double]) = dlist_takeSample(dlist, fraction, None)
   }
 
   implicit def repDListToDListIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, Iterable[V])]]) = new dlistIterableTupleOpsCls(x)
@@ -63,7 +65,7 @@ trait DListOps extends Base with Variables {
   def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]]
   def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], partitioner: PartitionerUser[K]): Rep[DList[(K, Iterable[V])]]
   def dlist_materialize[A: Manifest](dlist: Rep[DList[A]]): Rep[Iterable[A]]
-  //def dlist_takeSample[A: Manifest](dlist: Rep[DList[A]]) : Rep[Iterable[A]]
+  def dlist_takeSample[A: Manifest](dlist: Rep[DList[A]], fraction: Rep[Double], seed: Option[Rep[Int]]) : Rep[DList[A]]
 }
 
 object FakeSourceContext {
@@ -215,6 +217,12 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def getInType = manifest[DList[A]]
   }
 
+  case class DListTakeSample[A: Manifest](dlist: Exp[DList[A]], fraction: Exp[Double], seed: Option[Exp[Int]]) extends Def[DList[A]]
+      with PreservingTypeComputation[DList[A]] {
+    val mA = manifest[A]
+    def getType = makeDListManifest[A]
+  }
+  
   case class GetArgs() extends Def[Array[String]]
 
   override def get_args() = GetArgs()
@@ -231,6 +239,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   override def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]] = DListJoin(left, right)
   override def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], partitioner: PartitionerUser[K]) = DListGroupByKey(dlist, if (partitioner == null) None else Some(doLambda2(partitioner)))
   override def dlist_materialize[A: Manifest](dlist: Rep[DList[A]]) = DListMaterialize(dlist)
+  override def dlist_takeSample[A: Manifest](dlist: Exp[DList[A]], fraction: Exp[Double], seed: Option[Exp[Int]]) = DListTakeSample(dlist, fraction, seed)
 
   def copyMetaInfo(from: Any, to: Any) = {
     def copyMetaInfoHere[A <: DListNode](from: DListNode, to: A) = { to.metaInfos ++= from.metaInfos; to }
@@ -274,9 +283,9 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       case d @ DListJoin(left, right) => DListJoin(f(left), f(right))(d.mK, d.mV1, d.mV2)
       case d @ DListReduce(dlist, func) => DListReduce(f(dlist), f(func))(d.mKey, d.mValue)
       case d @ DListFlatten(dlists) => DListFlatten(f(dlists))(d.mA)
-      case d @ DListGroupByKey(dlist, Some(part)) => DListGroupByKey(f(dlist), Some(f(part)))(d.mKey, d.mValue)
-      case d @ DListGroupByKey(dlist, None) => DListGroupByKey(f(dlist), None)(d.mKey, d.mValue)
+      case d @ DListGroupByKey(dlist, part) => DListGroupByKey(f(dlist), part.map(x => f(x)))(d.mKey, d.mValue)
       case d @ DListMaterialize(dlist) => DListMaterialize(f(dlist))(d.mA)
+      case d @ DListTakeSample(dlist, fraction, seedOption) => DListTakeSample(f(dlist), f(fraction), seedOption.map(x => f(x)))(d.mA)
       case d @ IteratorCollect(g, y) => IteratorCollect(f(g), if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y))
       case d @ ForeachElem(y) => ForeachElem(if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y))
       case d @ IteratorValue(in, i) => IteratorValue(f(in), f(i))(d.mA)
@@ -483,6 +492,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     DListNode,
     DListJoin,
     DListMaterialize,
+    DListTakeSample,
     GetArgs
   }
   import IR.{ SimpleStruct }
@@ -499,6 +509,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     case nv @ NewDList(filename) => emitValDef(sym, "New dlist created from %s with type %s".format(filename, nv.mA))
     case vs @ DListSave(dlist, filename) => stream.println("Saving dlist %s (of type %s) to %s".format(dlist, remap(vs.mA), filename))
     case d @ DListMaterialize(dlist) => stream.println("Materializing dlist %s (of type %s)".format(dlist, remap(d.mA)))
+    case d @ DListTakeSample(dlist, fraction, seedOption) => stream.println("Taking sample from dlist %s (of type %s), with fraction %s and seed %s".format(dlist, remap(d.mA), fraction, seedOption))
     case vm @ DListMap(dlist, func) => emitValDef(sym, "mapping dlist %s with function %s, type %s => %s".format(dlist, quote(func), vm.mA, vm.mB))
     case vf @ DListFilter(dlist, function) => emitValDef(sym, "filtering dlist %s with function %s".format(dlist, function))
     case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "flat mapping dlist %s with function %s".format(dlist, function))

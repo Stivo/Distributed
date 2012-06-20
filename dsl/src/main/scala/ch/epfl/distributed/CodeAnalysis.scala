@@ -210,6 +210,7 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
     DListJoin,
     DListReduce,
     ComputationNode,
+    DListTakeSample,
     DListNode,
     EndNode,
     GetArgs
@@ -334,6 +335,8 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
 
         case v @ DListFlatMap(in, func) => analyzeFunction(v)
 
+        case d : DListTakeSample[_] => d.successorFieldReads.toSet
+        
         case x => throw new RuntimeException("Need to implement field analysis for " + x)
         //Set[FieldRead]()
       }

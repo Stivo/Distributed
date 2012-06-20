@@ -56,8 +56,13 @@ trait DListsProg extends DListProgram with ComplexBase {
 
   def materialize(x: Rep[Unit]) = {
     val words1 = DList("in")
-    val it = words1.map(x => Complex(x.toDouble, x.toDouble + 5.0)).materialize()
+    val complexs = words1.map(x => Complex(x.toDouble, x.toDouble + 5.0))
+    val it = complexs.materialize()
     println(it.head)
+    val sampled = complexs.takeSample(0.0001).materialize
+    println(sampled.head)
+    val sampledSeed = complexs.takeSample(0.0001, 42).materialize
+    println(sampledSeed.head)
   }
 
   def simple(x: Rep[Unit]) = {
@@ -168,7 +173,7 @@ class TestBasic extends CodeGeneratorTestSuite {
     }
 
   }*/
- 
+
   def testSpark {
     tryCompile {
       println("-- begin")
@@ -180,12 +185,12 @@ class TestBasic extends CodeGeneratorTestSuite {
         override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = false
       }
       val pw = setUpPrintWriter
-//      codegen.reduceByKey = false
+      //      codegen.reduceByKey = false
       codegen.inlineClosures = true
       //codegen.typesInInlinedClosures = true
-//      codegen.loopFusion = false
-//      codegen.inlineInLoopFusion = false
-      codegen.emitSource(dsl.partitioner, "flatMapFusionTest", pw)
+      //      codegen.loopFusion = false
+      //      codegen.inlineInLoopFusion = false
+      codegen.emitSource(dsl.materialize, "flatMapFusionTest", pw)
 
       writeToProject(pw, "spark", "SparkGenerated")
       release(pw)
@@ -193,21 +198,21 @@ class TestBasic extends CodeGeneratorTestSuite {
     }
   }
 
-  //  def testScoobi {
-  //    tryCompile {
-  //      println("-- begin")
-  //      val pw = setUpPrintWriter
-  //
-  //      val dsl = new DListsProg with DListProgramExp with ComplexStructExp
-  //
-  //      val codegen = new ScoobiGen { val IR: dsl.type = dsl }
-  //      codegen.emitSource(dsl.flatMapFusionTest, "g", pw)
-  //      writeToProject(pw, "scoobi", "ScoobiGenerated")
-  //      //      println(getContent(pw))
-  //      release(pw)
-  //      println("-- end")
-  //    }
-  //  }
+    def testScoobi {
+      tryCompile {
+        println("-- begin")
+        val pw = setUpPrintWriter
+  
+        val dsl = new DListsProg with DListProgramExp with ComplexStructExp
+  
+        val codegen = new ScoobiGen { val IR: dsl.type = dsl }
+        codegen.emitSource(dsl.materialize, "g", pw)
+        writeToProject(pw, "scoobi", "ScoobiGenerated")
+        //      println(getContent(pw))
+        release(pw)
+        println("-- end")
+      }
+    }
 
 }
 
