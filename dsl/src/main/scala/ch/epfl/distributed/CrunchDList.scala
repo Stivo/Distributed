@@ -353,7 +353,7 @@ trait ScalaGenCrunchFat extends ScalaGenLoopsFat with CrunchGenDList {
   import IR._
 
   override def emitFatNode(sym: List[Sym[Any]], rhs: FatDef) = rhs match {
-    case SimpleFatLoop(Def(ShapeDep(sd)), x, rhs) =>
+    case SimpleFatLoop(Def(ShapeDep(sd, _)), x, rhs) =>
       val ii = x
       var outType: Manifest[_] = null
       for ((l, r) <- sym zip rhs) r match {

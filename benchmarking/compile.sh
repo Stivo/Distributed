@@ -1,4 +1,4 @@
-cd ../; sbt dsl/scalariform-format dsl/test:scalariform-format gens/assembly ; cd -
+cd ../; sbt11 dsl/scalariform-format dsl/test:scalariform-format gens/assembly ; cd -
 #cd ../; sbt crunch/assembly ; cd -
 cp ../scoobi/target/*.jar progs
 cp ../crunch/target/*.jar progs
