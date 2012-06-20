@@ -24,9 +24,16 @@ trait SparkDListOps extends DListOps {
   //  class dlistIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) {
   //    def reduceByKey(f: (Rep[V], Rep[V]) => Rep[V]) = dlist_reduceByKey[K, V](x, f)
   //  }
+  implicit def repDListToSparkTupleOpsCls[K <% Ordered[K]: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) = new dlistSparkTupleOpsCls(x)
+  implicit def varDListToSparkTupleOpsCls[K <% Ordered[K]: Manifest, V: Manifest](x: Var[DList[(K, V)]]) = new dlistSparkTupleOpsCls(readVar(x))
+  class dlistSparkTupleOpsCls[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]]) {
+    def sortByKey(ascending: Rep[Boolean]) = dlist_sortByKey(dlist, ascending)
+  }
 
   def dlist_cache[A: Manifest](dlist: Rep[DList[A]]): Rep[DList[A]]
   def dlist_takeSample[A: Manifest](dlist: Rep[DList[A]], withReplacement: Rep[Boolean], num: Rep[Int], seed: Rep[Int]): Rep[Iterable[A]]
+
+  def dlist_sortByKey[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], ascending: Rep[Boolean]): Rep[DList[(K, V)]]
 }
 
 trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
@@ -49,15 +56,25 @@ trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
     def getInType = manifest[DList[A]]
   }
 
+  case class DListSortByKey[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], ascending: Exp[Boolean]) extends Def[DList[(K, V)]]
+      with PreservingTypeComputation[DList[(K, V)]] {
+    val mK = manifest[K]
+    val mV = manifest[V]
+    def getType = manifest[DList[(K, V)]]
+  }
+
   override def dlist_cache[A: Manifest](in: Rep[DList[A]]) = DListCache[A](in)
 
   override def dlist_takeSample[A: Manifest](dlist: Exp[DList[A]], withReplacement: Exp[Boolean], num: Exp[Int], seed: Exp[Int]) = DListTakeSampleNum(dlist, withReplacement, num, seed)
+
+  override def dlist_sortByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], ascending: Exp[Boolean]) = DListSortByKey(dlist, ascending)
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
     val out = (e match {
       case v @ DListReduceByKey(dlist, func, part) => DListReduceByKey(f(dlist), f(func), part.map(x => f(x)))(v.mKey, v.mValue)
       case v @ DListCache(in) => DListCache(f(in))(v.mA)
       case v @ DListTakeSampleNum(in, r, n, s) => DListTakeSampleNum(f(in), f(r), f(n), f(s))(v.mA)
+      case v @ DListSortByKey(in, asc) => DListSortByKey(f(in), f(asc))(v.mK, v.mV)
       case _ => super.mirrorDef(e, f)
     })
     copyMetaInfo(e, out)
@@ -108,6 +125,7 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
     ComputationNode,
     DListNode,
     DListReduceByKey,
+    DListSortByKey,
     DListCache,
     DListMaterialize,
     DListTakeSampleNum,
@@ -168,6 +186,13 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
 
       case v @ DListCache(in) => node.successorFieldReads.toSet
 
+      case d @ DListSortByKey(in, _) =>
+        node.successorFieldReads.toSet ++
+          (if (!SimpleType.unapply(d.mK).isDefined)
+            visitAll("input", d.mK).filter(_.path.startsWith("input._1"))
+          else
+            List(FieldRead("input._1")))
+
       case _ => super.computeFieldReads(node)
     }
   }
@@ -187,6 +212,7 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     DListFlatMap,
     DListFlatten,
     DListGroupByKey,
+    DListSortByKey,
     DListJoin,
     DListCogroup,
     DListReduce,
@@ -222,6 +248,7 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
       case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(dlist), handleClosure(red.closure)))
       case red @ DListReduceByKey(dlist, f, Some(part)) => emitValDef(sym, "%s.reduceByKey(makePartitioner(%s, sc.defaultParallelism), %s)".format(quote(dlist), handleClosure(part), handleClosure(red.closure)))
       case red @ DListReduceByKey(dlist, f, None) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(dlist), handleClosure(red.closure)))
+      case red @ DListSortByKey(dlist, asc) => emitValDef(sym, "%s.sortByKey(%s)".format(quote(dlist), quote(asc)))
       case v @ DListCache(dlist) => emitValDef(sym, "%s.cache()".format(quote(dlist)))
       case v @ DListMaterialize(dlist) => emitValDef(sym, "%s.collect()".format(quote(dlist)))
       //def sample(withReplacement: Boolean, fraction: Double, seed: Int)

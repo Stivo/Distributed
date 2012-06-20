@@ -11,6 +11,37 @@ import java.io.StringWriter
 import scala.virtualization.lms.common.WorklistTransformer
 import java.io.FileWriter
 
+trait CrunchDListOps extends DListOps {
+  implicit def repDListToCrunchDListOps[A: Manifest](dlist: Rep[DList[A]]) = new dlistCrunchOpsCls(dlist)
+  implicit def varDListToCrunchDListOps[A: Manifest](dlist: Var[DList[A]]) = new dlistCrunchOpsCls(readVar(dlist))
+  class dlistCrunchOpsCls[A: Manifest](dlist: Rep[DList[A]]) {
+    def sort(ascending: Rep[Boolean]) = dlist_sort(dlist, ascending)
+  }
+
+  def dlist_sort[A: Manifest](dlist: Rep[DList[A]], ascending: Rep[Boolean]): Rep[DList[A]]
+}
+
+trait CrunchDListOpsExp extends DListOpsExp with CrunchDListOps {
+
+  case class DListSort[A: Manifest](dlist: Exp[DList[A]], ascending: Exp[Boolean]) extends Def[DList[A]]
+      with PreservingTypeComputation[DList[A]] {
+    val mA = manifest[A]
+    def getType = manifest[DList[A]]
+  }
+
+  def dlist_sort[A: Manifest](dlist: Exp[DList[A]], ascending: Exp[Boolean]) = DListSort(dlist, ascending)
+
+  override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
+    val out = (e match {
+      case v @ DListSort(in, asc) => DListSort(f(in), f(asc))(v.mA)
+      case _ => super.mirrorDef(e, f)
+    })
+    copyMetaInfo(e, out)
+    out.asInstanceOf[Def[A]]
+  }
+
+}
+
 trait CrunchGenDList extends ScalaGenBase
     with DListFieldAnalysis
     with DListTransformations with Matchers with FastWritableTypeFactory {
@@ -18,19 +49,10 @@ trait CrunchGenDList extends ScalaGenBase
  * TODO:
  * - More PTypes, cleaner tuple handling etc
  * Maybe:
- * - kryo instead of writable. Makes join easier and other stuff too.
  * - implement inline closures
  * 
  * Unsupported:
  * - Usage of vars: collection name changes
- * Idea:
- * Implement a PType for KryoFormat => BytesWritable
- * Same kryo scheme as in scoobi
- * one PType that converts from Kryo to BytesWritable
- * use that instead of generating Writables
- *  
- * => Advantage:
- * Kryo serialization works, Writable
  */
   val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -286,6 +308,22 @@ class %1$s extends Configured with Tool with Serializable {
 
 }
 
+trait CrunchEGenDList extends CrunchGenDList {
+
+  val IR: CrunchDListOpsExp with DListOpsExp
+  import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
+  import IR.{
+    DListSort
+  }
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
+    val out = rhs match {
+      case DListSort(dlist, asc) => emitValDef(sym, "%s.sort(%s)".format(quote(dlist), quote(asc)))
+      case _ => super.emitNode(sym, rhs)
+    }
+  }
+
+}
+
 trait KryoCrunchGenDList extends CrunchGenDList with CaseClassTypeFactory {
   val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -420,6 +458,13 @@ trait ScalaGenCrunchFat extends ScalaGenLoopsFat with CrunchGenDList {
   }
 }
 
+trait ScalaGenCrunchEFat extends ScalaGenCrunchFat {
+  val IR: CrunchDListOpsExp with LoopsFatExp
+  import IR._
+}
+
 trait CrunchGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with CrunchGenDList with ScalaGenCrunchFat
+
+trait CrunchEGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with CrunchEGenDList with ScalaGenCrunchEFat
 
 trait KryoCrunchGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with KryoCrunchGenDList with ScalaGenCrunchFat
