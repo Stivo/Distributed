@@ -1,6 +1,13 @@
 #set -x
-CLASSPATH=:progs/spark-core-assembly.jar:progs/spark-gen.jar
-
+CLASSPATH=:../spark/lib/spark-core-assembly-0.4-SNAPSHOT.jar:progs/spark_2.9.1-0.1-SNAPSHOT.jar
+PROG=spark.examples.PageCountApp
+PROG=spark.examples.TpchQueries
+PROG=spark.examples.WordCountApp
+#PROG=spark.examples.KMeansApp
+#PROG=spark.examples.SparkKMeans
+#PROG=generated.Benchmark
+#PROG=spark.examples.v0.BenchmarkGenerated
+#PROG_BAK=generated.Benchmark
 JAVA=/usr/lib/jvm/java-1.6.0-openjdk/bin/java
 HEAP=4g
 CORES=1
@@ -10,18 +17,15 @@ CORES=1
 
 #set -x
 
-for version in {0..5}
+for version in {0..6}
 do
 #./warmup.sh
-PROG=dcdsl.generated.v$version.WordCountApp
-PROG=dcdsl.generated.v$version.TpchQueries
+PROG=spark.examples.v$version.WordCountApp
+#PROG=spark.examples.v$version.TpchQueries
 OUTPUT=output_v$version
-INPUTS="/home/stivo/master/testdata/tpch/small/ $OUTPUT 1995-01-01 TRUCK SHIP"
-#INPUTS="/home/stivo/Downloads/wex/start.tsv.head $OUTPUT"
-#INPUTS="/home/stivo/master/testdata/wiki2009-articles-10k.tsv $OUTPUT"
-#cat /home/stivo/Downloads/wex/start.tsv.head > /dev/null
-#cat /home/stivo/master/testdata/tpch/small/linei*.tbl > /dev/null
-
+#INPUTS="/home/stivo/master/testdata/tpch/mb200/ $OUTPUT 1995-01-01 TRUCK SHIP"
+INPUTS="/home/stivo/Downloads/wex/start.tsv.head $OUTPUT"
+cat /home/stivo/Downloads/wex/start.tsv.head > /dev/null
 TIMEARGS="$version\t%e\t%S\t%U\t%M\t%P"
 #-XX:MaxInlineSize=1000
 /usr/bin/time -f $TIMEARGS -o /dev/stdout env JAVA_OPTS="-Xmx$HEAP" scala -cp $CLASSPATH $PROG local[$CORES] $INPUTS 2> ./spark_$PROG.txt 

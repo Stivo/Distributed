@@ -85,7 +85,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
 
   type Partitioner[K] = Exp[(K, Int) => Int]
 
-  case class ShapeDep[T](s: Rep[T]) extends Def[Int]
+  case class ShapeDep[T](s: Rep[T], fusible: Boolean) extends Def[Int]
   case class Dummy() extends Def[Unit]
   case class IteratorCollect[T](gen: Rep[Gen[T]], block: Block[Gen[T]]) extends Def[DList[T]]
   case class IteratorValue[A: Manifest, Coll[_]](l: Rep[Coll[A]], v: Rep[Int]) extends Def[A] {
@@ -147,7 +147,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   case class NewDList[A: Manifest](file: Exp[String]) extends Def[DList[String]]
-      with ComputationNodeTyped[Nothing, DList[A]] {
+    with ComputationNodeTyped[Nothing, DList[A]] {
     val mA = manifest[A]
     def getTypes = (manifest[Nothing], manifest[DList[A]])
   }
@@ -155,7 +155,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   def makeDListManifest[B: Manifest] = manifest[DList[B]]
 
   case class DListMap[A: Manifest, B: Manifest](in: Exp[DList[A]], closure: Exp[A => B])
-      extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, B] {
+    extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, B] {
     val mA = manifest[A]
     val mB = manifest[B]
     def getClosureTypes = (mA, mB)
@@ -163,14 +163,14 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   case class DListFilter[A: Manifest](in: Exp[DList[A]], closure: Exp[A => Boolean])
-      extends Def[DList[A]] with PreservingTypeComputation[DList[A]] with ClosureNode[A, Boolean] {
+    extends Def[DList[A]] with PreservingTypeComputation[DList[A]] with ClosureNode[A, Boolean] {
     val mA = manifest[A]
     def getClosureTypes = (mA, Manifest.Boolean)
     def getType = makeDListManifest[A]
   }
 
   case class DListFlatMap[A: Manifest, B: Manifest](in: Exp[DList[A]], closure: Exp[A => Iterable[B]])
-      extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, Iterable[B]] {
+    extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, Iterable[B]] {
     val mA = manifest[A]
     val mB = manifest[B]
     def getTypes = (manifest[DList[A]], manifest[DList[B]])
@@ -178,13 +178,13 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   case class DListFlatten[A: Manifest](dlists: List[Exp[DList[A]]]) extends Def[DList[A]]
-      with PreservingTypeComputation[DList[A]] {
+    with PreservingTypeComputation[DList[A]] {
     val mA = manifest[A]
     def getType = manifest[DList[A]]
   }
 
   case class DListGroupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], partitioner: Option[Partitioner[K]]) extends Def[DList[(K, Iterable[V])]]
-      with ComputationNodeTyped[DList[(K, V)], DList[(K, Iterable[V])]] {
+    with ComputationNodeTyped[DList[(K, V)], DList[(K, Iterable[V])]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     val mOutType = manifest[(K, Iterable[V])]
@@ -193,8 +193,8 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   case class DListReduce[K: Manifest, V: Manifest](in: Exp[DList[(K, Iterable[V])]], closure: Exp[(V, V) => V])
-      extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
-      with ComputationNodeTyped[DList[(K, Iterable[V])], DList[(K, V)]] {
+    extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
+    with ComputationNodeTyped[DList[(K, Iterable[V])], DList[(K, V)]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     def getClosureTypes = ((manifest[V], manifest[V]), manifest[V])
@@ -202,7 +202,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   case class DListJoin[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]])
-      extends Def[DList[(K, (V1, V2))]] with DListNode {
+    extends Def[DList[(K, (V1, V2))]] with DListNode {
     def mK = manifest[K]
     def mV1 = manifest[V1]
     def mV2 = manifest[V2]
@@ -309,7 +309,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       case d @ IteratorCollect(g, y) => IteratorCollect(f(g), if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y))
       case d @ ForeachElem(y) => ForeachElem(if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y))
       case d @ IteratorValue(in, i) => IteratorValue(f(in), f(i))(d.mA)
-      case d @ ShapeDep(in) => ShapeDep(f(in))
+      case d @ ShapeDep(in, fus) => ShapeDep(f(in), fus)
       case _ => super.mirrorDef(e, f)
     }
     copyMetaInfo(e, out)
@@ -528,7 +528,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case sd @ IteratorValue(r, i) => emitValDef(sym, "it.next // loop var " + quote(i))
-    case sd @ ShapeDep(dep) => stream.println("// " + quote(dep))
+    case sd @ ShapeDep(dep, _) => stream.println("// " + quote(dep))
     case sd @ Dummy() => stream.println("// dummy ")
     case nv @ NewDList(filename) => emitValDef(sym, "New dlist created from %s with type %s".format(filename, nv.mA))
     case vs @ DListSave(dlist, filename) => stream.println("Saving dlist %s (of type %s) to %s".format(dlist, remap(vs.mA), filename))
@@ -630,8 +630,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
       ("field reduction", narrowExistingMaps && insertNarrowingMaps),
       ("loop fusion", loopFusion),
       ("inline in loop fusion", inlineInLoopFusion),
-      ("regex patterns pre compiled", !IR.disablePatterns)
-    )
+      ("regex patterns pre compiled", !IR.disablePatterns))
   }
 
   def getOptimizations() = getParams().map(x => "// " + x._1 + ": " + x._2).mkString("\n")
@@ -763,7 +762,7 @@ trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElse
     case _ => super.unapplySimpleIndex(e)
   }
   override def unapplySimpleDomain(e: Def[Int]): Option[Exp[Any]] = e match {
-    case ShapeDep(a) => Some(a)
+    case ShapeDep(a, true) => Some(a)
     case _ => super.unapplySimpleDomain(e)
   }
 
@@ -796,6 +795,12 @@ trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElse
       IteratorCollect(g2, Block(plugInHelper(g, a, b)))
 
     case _ => super.applyPlugIntoContext(d, r)
+  }
+
+  override def shapeEquality(s1: Exp[Int], s2: Exp[Int]) = (s1, s2) match {
+    case (Def(ShapeDep(_, _)), _) => false
+    case (_, Def(ShapeDep(_, _))) => false
+    case _ => super.shapeEquality(s1, s2)
   }
 
 }

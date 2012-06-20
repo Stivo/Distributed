@@ -71,6 +71,8 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
       syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.defs.flatMap { _ match { case x: DListNode => Some(x) case _ => None } } }
     }
 
+    def nodeSuccessors(x: DListNode) = nodes.filter(getInputs(_).contains(x))
+
     lazy val ordered = GraphUtil.stronglyConnectedComponents(endnodes, getInputs).flatten
 
     lazy val orderedStatements = getSchedule(availableDefs)(block.res, true)

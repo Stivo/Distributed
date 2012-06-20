@@ -235,7 +235,12 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
       case SomeDef(_: (DListFilter[_])) | SomeDef(_: DListMap[_, _]) | SomeDef(_: DListFlatMap[_, _]) => true
       case _ => true
     }
-
+    
+    def fusible(r: Exp[Any], analyzer: Analyzer) = r match {
+      case SomeDef(x: DListNode) if analyzer.nodeSuccessors(x).size <= 1 => true
+      case _ => false
+    }
+    
     def registerTransformations(analyzer: Analyzer) {
       analyzer.nodes.foreach {
         case m @ DListFilter(r, lm @ Def(Lambda(f, in, bl))) if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp) =>
@@ -251,7 +256,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
               }
             }
             // create a loop with the body that inlines the filtering function
-            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
+            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r), fusible(r, analyzer))), i, IteratorCollect(g, y))
 
             // make an stm out of the loop
             toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
@@ -274,7 +279,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
 
             println("Generator type= " + stripGen(g.tp))
             // create a loop with body that inlines the function
-            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
+            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r), fusible(r, analyzer))), i, IteratorCollect(g, y))
 
             // make an stm out of the loop
             toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
@@ -291,7 +296,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
             val (g, y) = collectYields {
               reifyEffects {
                 val coll = doApply(wt(lm), toAtom2(IteratorValue(wt(r), i))(mtype(r.tp), FakeSourceContext()))
-                val shape2 = toAtom2(ShapeDep(coll))
+                val shape2 = toAtom2(ShapeDep(coll, true))
                 val j = fresh[Int]
 
                 // Somehow the mirroring order here is wrong
@@ -302,7 +307,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
 
             println("Generator type= " + stripGen(g.tp))
             // create a loop with body that inlines the function
-            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
+            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r), fusible(r, analyzer))), i, IteratorCollect(g, y))
 
             // make an stm out of the loop
             toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
