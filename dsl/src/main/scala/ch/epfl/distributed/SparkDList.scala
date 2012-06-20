@@ -188,6 +188,7 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
     DListFlatten,
     DListGroupByKey,
     DListJoin,
+    DListCogroup,
     DListReduce,
     DListMaterialize,
     ComputationNode,
@@ -215,8 +216,9 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
         var out = v1.map(quote(_)).mkString("(", ").union(", ")")
         emitValDef(sym, out)
       }
-      case gbk @ DListGroupByKey(dlist, Some(part)) => emitValDef(sym, "%s.groupByKey(makePartitioner(%s, sc.defaultParallelism))".format(quote(dlist), quote(part)))
+      case gbk @ DListGroupByKey(dlist, Some(part)) => emitValDef(sym, "%s.groupByKey(makePartitioner(%s, sc.defaultParallelism))".format(quote(dlist), handleClosure(part)))
       case v @ DListJoin(left, right) => emitValDef(sym, "%s.join(%s)".format(quote(left), quote(right)))
+      case v @ DListCogroup(left, right) => emitValDef(sym, "%s.cogroup(%s)".format(quote(left), quote(right)))
       case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(dlist), handleClosure(red.closure)))
       case red @ DListReduceByKey(dlist, f, Some(part)) => emitValDef(sym, "%s.reduceByKey(makePartitioner(%s, sc.defaultParallelism), %s)".format(quote(dlist), handleClosure(part), handleClosure(red.closure)))
       case red @ DListReduceByKey(dlist, f, None) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(dlist), handleClosure(red.closure)))

@@ -27,6 +27,7 @@ trait ScoobiGenDList extends ScalaGenBase
     DListFlatten,
     DListGroupByKey,
     DListJoin,
+    DListCogroup,
     DListReduce,
     ComputationNode,
     DListNode,
@@ -57,6 +58,7 @@ trait ScoobiGenDList extends ScalaGenBase
       }
       case gbk @ DListGroupByKey(dlist, _) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
       case v @ DListJoin(left, right) => emitValDef(sym, "%s.join(%s)".format(quote(left), quote(right)))
+      case v @ DListCogroup(left, right) => emitValDef(sym, "%s.coGroup(%s)".format(quote(left), quote(right)))
       case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.combine(%s)".format(quote(dlist), handleClosure(f)))
       case sd @ IteratorValue(r, i) => emitValDef(sym, "input // loop var " + quote(i))
       case GetArgs() => emitValDef(sym, "scoobiInputArgs")

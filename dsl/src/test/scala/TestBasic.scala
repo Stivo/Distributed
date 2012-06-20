@@ -46,12 +46,12 @@ trait DListsProg extends DListProgram with ComplexBase {
   }
 
   def partitioner(x: Rep[Unit]) = {
-    val words1 = DList("in")
+    val words1 = DList("in").map(x => (x, unit(1)))
     words1
-      .map(x => (x, unit(1)))
       .groupByKey { (x, y) => x.length % y }
       .reduce(_ + _)
       .save("out")
+    words1.partitionBy { (x, y) => x.length % y }.save("out")
   }
 
   def materialize(x: Rep[Unit]) = {
@@ -100,8 +100,9 @@ trait DListsProg extends DListProgram with ComplexBase {
     val words2Tupled = words2.map(x => (x, Complex(2.5, x.toDouble)))
     val joined = words1Tupled.join(words2Tupled)
     joined.map(x => x._1 + " " + x._2._1.re + " " + x._2._2.im)
-      //    joined
-      .save(getArgs(1))
+    //    joined
+    //      .save(getArgs(1))
+    words1Tupled.cogroup(words2Tupled).save("grouped")
     //    joined
     unit(())
   }

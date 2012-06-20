@@ -43,6 +43,7 @@ trait CrunchGenDList extends ScalaGenBase
     DListFlatten,
     DListGroupByKey,
     DListJoin,
+    DListCogroup,
     DListReduce,
     ComputationNode,
     DListNode,
@@ -62,6 +63,7 @@ trait CrunchGenDList extends ScalaGenBase
   override def remap[A](x: Manifest[A]) = {
     var out = super.remap(x)
     out = out.replaceAll("Int(?!e)", "java.lang.Integer")
+    out = out.replaceAll("scala.collection.Iterable", "java.lang.Iterable")
     out.replaceAll("scala.Tuple2", "CPair")
   }
 
@@ -124,7 +126,7 @@ trait CrunchGenDList extends ScalaGenBase
       case vs @ DListSave(dlist, filename) => emitValDef(sym, "pipeline.writeTextFile(%s, %s)".format(quote(dlist), quote(filename)))
       case vs @ DListMaterialize(dlist) => emitValDef(sym, "%s.materialize().asScala".format(quote(dlist)))
       case d @ DListTakeSample(dlist, fraction, seedOption) => {
-        val seedString = seedOption.map(x => ", "+quote(x)).getOrElse("")
+        val seedString = seedOption.map(x => ", " + quote(x)).getOrElse("")
         emitValDef(sym, "%s.sample(%s %s)".format(quote(dlist), quote(fraction), seedString))
       }
       case vm @ DListMap(dlist, function) => {
@@ -167,6 +169,7 @@ trait CrunchGenDList extends ScalaGenBase
           emitValDef(sym, "join(%s, %s)".format(quote(left), quote(right)))
         }
       }
+      case v @ DListCogroup(left, right) => emitValDef(sym, "%s.cogroup(%s)".format(quote(left), quote(right)))
       case red @ DListReduce(dlist, f) => emitValDef(sym,
         "%s.combineValues(new CombineWrapper(%s))".format(quote(dlist), handleClosure(f)))
       case sd @ IteratorValue(r, i) => emitValDef(sym, "input // loop var " + quote(i))
@@ -210,7 +213,7 @@ import java.io.DataInput
 import java.io.DataOutput
 import java.io.Serializable
 
-import scala.collection.JavaConverters._
+import scala.collection.JavaConversions._
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.conf.Configured

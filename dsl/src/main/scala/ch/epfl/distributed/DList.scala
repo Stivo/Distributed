@@ -48,8 +48,10 @@ trait DListOps extends Base with Variables {
   implicit def varDListToDListTupleOps[K: Manifest, V: Manifest](x: Var[DList[(K, V)]]) = new dlistTupleOpsCls(readVar(x))
   class dlistTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) {
     def groupByKey(partitioner: PartitionerUser[K] = null) = dlist_groupByKey[K, V](x, partitioner)
+    def partitionBy(partitioner: PartitionerUser[K]) = dlist_partitionBy[K, V](x, partitioner)
     def groupByKey = dlist_groupByKey[K, V](x, null)
     def join[V2: Manifest](right: Rep[DList[(K, V2)]]) = dlist_join(x, right)
+    def cogroup[V2: Manifest](right: Rep[DList[(K, V2)]]) = dlist_cogroup(x, right)
   }
 
   def get_args(): Rep[Array[String]]
@@ -63,9 +65,11 @@ trait DListOps extends Base with Variables {
   def dlist_++[A: Manifest](dlist1: Rep[DList[A]], dlist2: Rep[DList[A]]): Rep[DList[A]]
   def dlist_reduce[K: Manifest, V: Manifest](dlist: Rep[DList[(K, Iterable[V])]], f: (Rep[V], Rep[V]) => Rep[V]): Rep[DList[(K, V)]]
   def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]]
+  def dlist_cogroup[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (Iterable[V1], Iterable[V2]))]]
   def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], partitioner: PartitionerUser[K]): Rep[DList[(K, Iterable[V])]]
+  def dlist_partitionBy[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], partitioner: PartitionerUser[K]): Rep[DList[(K, V)]]
   def dlist_materialize[A: Manifest](dlist: Rep[DList[A]]): Rep[Iterable[A]]
-  def dlist_takeSample[A: Manifest](dlist: Rep[DList[A]], fraction: Rep[Double], seed: Option[Rep[Int]]) : Rep[DList[A]]
+  def dlist_takeSample[A: Manifest](dlist: Rep[DList[A]], fraction: Rep[Double], seed: Option[Rep[Int]]): Rep[DList[A]]
 }
 
 object FakeSourceContext {
@@ -205,6 +209,14 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def mIn1 = manifest[(K, V1)]
   }
 
+  case class DListCogroup[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]])
+      extends Def[DList[(K, (Iterable[V1], Iterable[V2]))]] with DListNode {
+    def mK = manifest[K]
+    def mV1 = manifest[V1]
+    def mV2 = manifest[V2]
+    def mIn1 = manifest[(K, V1)]
+  }
+
   case class DListSave[A: Manifest](dlist: Exp[DList[A]], path: Exp[String]) extends Def[Unit]
       with EndNode[DList[A]] {
     val mA = manifest[A]
@@ -222,7 +234,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     val mA = manifest[A]
     def getType = makeDListManifest[A]
   }
-  
+
   case class GetArgs() extends Def[Array[String]]
 
   override def get_args() = GetArgs()
@@ -237,7 +249,14 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   override def dlist_++[A: Manifest](dlist1: Rep[DList[A]], dlist2: Rep[DList[A]]) = DListFlatten(immutable.List(dlist1, dlist2))
   override def dlist_reduce[K: Manifest, V: Manifest](dlist: Exp[DList[(K, Iterable[V])]], f: (Exp[V], Exp[V]) => Exp[V]) = DListReduce(dlist, doLambda2(f))
   override def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]] = DListJoin(left, right)
-  override def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], partitioner: PartitionerUser[K]) = DListGroupByKey(dlist, if (partitioner == null) None else Some(doLambda2(partitioner)))
+  override def dlist_cogroup[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]) = DListCogroup(left, right)
+  override def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], partitioner: PartitionerUser[K]) =
+    DListGroupByKey(dlist, if (partitioner == null) None else Some(doLambda2(partitioner)))
+  override def dlist_partitionBy[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], partitioner: PartitionerUser[K]) =
+    DListFlatMap(DListGroupByKey(dlist, Some(doLambda2(partitioner))),
+      doLambda({ in: Exp[(K, Iterable[V])] =>
+        in._2.toArray.map(x => (in._1, x)).toSeq
+      }))
   override def dlist_materialize[A: Manifest](dlist: Rep[DList[A]]) = DListMaterialize(dlist)
   override def dlist_takeSample[A: Manifest](dlist: Exp[DList[A]], fraction: Exp[Double], seed: Option[Exp[Int]]) = DListTakeSample(dlist, fraction, seed)
 
@@ -281,6 +300,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       case d @ DListFlatMap(dlist, func) => DListFlatMap(f(dlist), f(func))(d.mA, d.mB)
       case d @ DListSave(dlist, path) => DListSave(f(dlist), f(path))(d.mA)
       case d @ DListJoin(left, right) => DListJoin(f(left), f(right))(d.mK, d.mV1, d.mV2)
+      case d @ DListCogroup(left, right) => DListCogroup(f(left), f(right))(d.mK, d.mV1, d.mV2)
       case d @ DListReduce(dlist, func) => DListReduce(f(dlist), f(func))(d.mKey, d.mValue)
       case d @ DListFlatten(dlists) => DListFlatten(f(dlists))(d.mA)
       case d @ DListGroupByKey(dlist, part) => DListGroupByKey(f(dlist), part.map(x => f(x)))(d.mKey, d.mValue)
@@ -491,6 +511,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     ComputationNode,
     DListNode,
     DListJoin,
+    DListCogroup,
     DListMaterialize,
     DListTakeSample,
     GetArgs
@@ -516,6 +537,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     case vm @ DListFlatten(v1) => emitValDef(sym, "flattening dlists %s".format(v1))
     case gbk @ DListGroupByKey(dlist, part) => emitValDef(sym, "grouping dlist by key, with partitioner " + part)
     case gbk @ DListJoin(left, right) => emitValDef(sym, "Joining %s with %s".format(left, right))
+    case d @ DListCogroup(left, right) => emitValDef(sym, "cogroup %s with %s".format(left, right))
     case red @ DListReduce(dlist, f) => emitValDef(sym, "reducing dlist")
     case GetArgs() => emitValDef(sym, "getting the arguments")
     case IR.Lambda(_, _, _) if inlineClosures =>
@@ -693,7 +715,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   def writeGraphToFile(block: Block[_], name: String, comments: Boolean = true) {
     val out = new FileOutputStream(name)
     val analyzer = newAnalyzer(block)
-    out.write(analyzer.exportToGraphRaw.getBytes)
+    out.write(analyzer.exportToGraph.getBytes)
     out.close
   }
 
