@@ -4,7 +4,7 @@ Stivo is a multy-stage programming approach for distributed data parallel proces
 It is embedded in Scala, has a declarative and high level programming model similar to the [Spark](http://spark-project.org/) framework. 
 However, due to the multi-stage programming approach, Stivo does the following optimizations:
   * Inserts projection before barriers to remove unused fields of Scala case classes.
-  * Move pure expressions (like Date, java.util.regex.Pattern) values out of the closures
+  * Move pure expressions (e.g. `Date`, `java.util.regex.Pattern`) out of the hot path
   * Fuse all flatMap, map and filter and apply optimizations across them
 
 From the same programming model, Stivo can generate code for [Spark](http://spark-project.org/), [Scoobi](https://github.com/NICTA/scoobi) and to [Crunch](https://github.com/cloudera/crunch). 
