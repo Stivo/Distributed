@@ -5,12 +5,13 @@ It is embedded in Scala, has a declarative and high level programming model simi
 However, due to the multi-stage programming approach, Stivo does the following optimizations:
   * Inserts projection before barriers to remove unused fields of Scala case classes.
   * Move pure expressions (e.g. `Date`, `java.util.regex.Pattern`) out of the hot path
-  * Fuse all flatMap, map and filter and apply optimizations across them
+  * Fuse all `flatMap`, `map` and `filter` and apply optimizations across them
 
 From the same programming model, Stivo can generate code for [Spark](http://spark-project.org/), [Scoobi](https://github.com/NICTA/scoobi) and to [Crunch](https://github.com/cloudera/crunch). 
 
-NOTE: Stivo is still in the experimental phase of development. Before making it usable we plan to introduce more relational optimizations and make it 
-interoperable with other DSLs.
+NOTE: Stivo is still in the experimental phase of development. Before making it production ready
+we plan to introduce more relational optimizations (moving filters, join reordering etc.) and make it 
+interoperable with other DSLs like Regular Expressions DSL.
 
 ####Folder layout:
 * dsl contains the implementation of the DSL
