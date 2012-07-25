@@ -136,12 +136,12 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
   import IR.{ ClosureNode, Closure2Node, freqHot, freqNormal, Lambda, Lambda2 }
   import IR.{ findDefinition, fresh, reifyEffects, reifyEffectsHere, toAtom }
 
-  override def newFieldAnalyzer(block: Block[_], typeHandlerForUse: TypeHandler = typeHandler) = new SparkFieldAnalyzer(block, typeHandlerForUse)
-
   class SparkNarrowerInsertionTransformation extends NarrowerInsertionTransformation {
     override def registerTransformations(analyzer: Analyzer) {
       super.registerTransformations(analyzer)
-      analyzer.narrowBefore.foreach {
+      // TODO should use narrowBefore instead of narrowBeforeCandidates.
+      // but maybe the whole candidates thing is suboptimal anyway
+      analyzer.narrowBeforeCandidates.foreach {
         case d @ DListReduceByKey(in, func, part) =>
           val stm = findDefinition(d).get
           class ReduceByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]]) {
@@ -162,13 +162,19 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
     }
   }
 
-  class SparkFieldAnalyzer(block: Block[_], typeHandler: TypeHandler) extends FieldAnalyzer(block, typeHandler) {
+  override def newFieldAnalyzer(block: Block[_], typeHandlerForUse: TypeHandler = typeHandler) = new SparkFieldAnalyzer(block, typeHandlerForUse)
 
+  override def newAnalyzer(block: Block[_]) = new SparkAnalyzer(block)
+
+  class SparkAnalyzer(block: Block[_]) extends Analyzer(block) {
     override def isNarrowBeforeCandidate(x: DListNode) = x match {
       case DListReduceByKey(_, _, _) => true
       case DListCache(_) => true
       case x => super.isNarrowBeforeCandidate(x)
     }
+  }
+
+  class SparkFieldAnalyzer(block: Block[_], typeHandler: TypeHandler) extends FieldAnalyzer(block, typeHandler) {
 
     override def computeFieldReads(node: DListNode): Set[FieldRead] = node match {
       case v @ DListReduceByKey(in, func, _) => {
@@ -274,8 +280,10 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
       val rbkt = new ReduceByKeyTransformation()
       y = rbkt.run(y)
     }
+    println("Narrowing existing maps")
     // narrow the existing maps
     y = doNarrowExistingMaps(y)
+    println("Inserting narrowers and narrowing")
     // inserting narrower maps and narrow them
     y = insertNarrowersAndNarrow(y, new SparkNarrowerInsertionTransformation())
 
@@ -455,7 +463,66 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
   }
 }
 
+trait ScalaGenSparkFatFlatMap extends ScalaGenLoopsFat {
+  val IR: DListOpsExp with LoopsFatExp
+  import IR._
+
+  override def emitFatNode(sym: List[Sym[Any]], rhs: FatDef) = rhs match {
+    case SimpleFatLoop(Def(ShapeDep(sd, _)), x, rhs) =>
+      val ii = x
+
+      for ((l, r) <- (sym zip rhs)) r match {
+        // temporary workaround for lost types
+        case IteratorCollect(g @ Def(Reflect(ys @ YieldSingle(_, _), _, _)), b @ Block(y)) =>
+          val outType = stripGen(g.tp)
+          stream.println("val " + quote(sym.head) + " = " + quote(sd) + """.flatMap(input => {
+              val out = scala.collection.mutable.Buffer[""" + outType + """]();
+              {""")
+        case ForeachElem(y) =>
+          stream.println("{ val it = " + quote(sd) + ".iterator") // hack for the wrong interface
+          stream.println("while(it.hasNext) { // flatMap")
+      }
+
+      val gens = for ((l, r) <- sym zip rhs if !r.isInstanceOf[ForeachElem[_]]) yield r match {
+        case IteratorCollect(g, Block(y)) =>
+          (g, (s: List[String]) => {
+            stream.println("out += " + s.head + "// yield")
+            stream.println("val " + quote(g) + " = ()")
+          })
+      }
+
+      withGens(gens) {
+        emitFatBlock(syms(rhs).map(Block(_)))
+      }
+      stream.println("}")
+
+      // with iterators there is no horizontal fusion so we do not have to worry about the ugly prefix and suffix
+      for ((l, r) <- (sym zip rhs)) r match {
+        case IteratorCollect(g, Block(y)) =>
+          stream.println("""out
+      })""")
+        case ForeachElem(y) =>
+          stream.println("}")
+      }
+
+    case _ => super.emitFatNode(sym, rhs)
+  }
+
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
+    val out = rhs match {
+      case sd @ IteratorValue(r, i) => emitValDef(sym, "input // loop var " + quote(i))
+      case _ => super.emitNode(sym, rhs)
+    }
+  }
+
+}
+
 trait SparkGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with SparkGenDList with ScalaGenSparkFat {
+  val IR: SparkDListOpsExp
+
+}
+
+trait SparkFlatMapGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with SparkGenDList with ScalaGenSparkFatFlatMap {
   val IR: SparkDListOpsExp
 
 }

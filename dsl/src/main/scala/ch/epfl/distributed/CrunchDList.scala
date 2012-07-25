@@ -185,8 +185,8 @@ trait CrunchGenDList extends ScalaGenBase
         }""".format(remap(v.mV1), remap(v.mV2))
           val tvname = "TaggedValue_%1$s_%2$s".format(remap(v.mV1), remap(v.mV2))
           types += tvname -> tv
-          //emitValDef(sym, "joinWritables(classOf[%s], %s, %s)".format(tvname, quote(left), quote(right)))
-          emitValDef(sym, "joinNotNull(%s, %s)".format(quote(left), quote(right)))
+          emitValDef(sym, "joinWritables(classOf[%s], %s, %s)".format(tvname, quote(left), quote(right)))
+          //emitValDef(sym, "joinNotNull(%s, %s)".format(quote(left), quote(right)))
         } else {
           emitValDef(sym, "join(%s, %s)".format(quote(left), quote(right)))
         }

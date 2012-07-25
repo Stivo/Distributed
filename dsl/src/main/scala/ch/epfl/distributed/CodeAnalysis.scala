@@ -158,7 +158,8 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
       //      println("All loops:")
       //      loops.foreach(println)
       val buf = Buffer[String]()
-      buf += "digraph g {"
+      buf += """digraph g {
+ordering = "in";"""
       for (node <- nodes) {
         var comment = ""
         if (addComments && !node.metaInfos.isEmpty) {

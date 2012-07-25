@@ -147,7 +147,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   case class NewDList[A: Manifest](file: Exp[String]) extends Def[DList[String]]
-    with ComputationNodeTyped[Nothing, DList[A]] {
+      with ComputationNodeTyped[Nothing, DList[A]] {
     val mA = manifest[A]
     def getTypes = (manifest[Nothing], manifest[DList[A]])
   }
@@ -155,7 +155,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   def makeDListManifest[B: Manifest] = manifest[DList[B]]
 
   case class DListMap[A: Manifest, B: Manifest](in: Exp[DList[A]], closure: Exp[A => B])
-    extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, B] {
+      extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, B] {
     val mA = manifest[A]
     val mB = manifest[B]
     def getClosureTypes = (mA, mB)
@@ -163,14 +163,14 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   case class DListFilter[A: Manifest](in: Exp[DList[A]], closure: Exp[A => Boolean])
-    extends Def[DList[A]] with PreservingTypeComputation[DList[A]] with ClosureNode[A, Boolean] {
+      extends Def[DList[A]] with PreservingTypeComputation[DList[A]] with ClosureNode[A, Boolean] {
     val mA = manifest[A]
     def getClosureTypes = (mA, Manifest.Boolean)
     def getType = makeDListManifest[A]
   }
 
   case class DListFlatMap[A: Manifest, B: Manifest](in: Exp[DList[A]], closure: Exp[A => Iterable[B]])
-    extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, Iterable[B]] {
+      extends Def[DList[B]] with ComputationNodeTyped[DList[A], DList[B]] with ClosureNode[A, Iterable[B]] {
     val mA = manifest[A]
     val mB = manifest[B]
     def getTypes = (manifest[DList[A]], manifest[DList[B]])
@@ -178,13 +178,13 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   case class DListFlatten[A: Manifest](dlists: List[Exp[DList[A]]]) extends Def[DList[A]]
-    with PreservingTypeComputation[DList[A]] {
+      with PreservingTypeComputation[DList[A]] {
     val mA = manifest[A]
     def getType = manifest[DList[A]]
   }
 
   case class DListGroupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], partitioner: Option[Partitioner[K]]) extends Def[DList[(K, Iterable[V])]]
-    with ComputationNodeTyped[DList[(K, V)], DList[(K, Iterable[V])]] {
+      with ComputationNodeTyped[DList[(K, V)], DList[(K, Iterable[V])]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     val mOutType = manifest[(K, Iterable[V])]
@@ -193,8 +193,8 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   case class DListReduce[K: Manifest, V: Manifest](in: Exp[DList[(K, Iterable[V])]], closure: Exp[(V, V) => V])
-    extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
-    with ComputationNodeTyped[DList[(K, Iterable[V])], DList[(K, V)]] {
+      extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
+      with ComputationNodeTyped[DList[(K, Iterable[V])], DList[(K, V)]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
     def getClosureTypes = ((manifest[V], manifest[V]), manifest[V])
@@ -202,7 +202,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
 
   case class DListJoin[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]])
-    extends Def[DList[(K, (V1, V2))]] with DListNode {
+      extends Def[DList[(K, (V1, V2))]] with DListNode {
     def mK = manifest[K]
     def mV1 = manifest[V1]
     def mV2 = manifest[V2]
@@ -368,9 +368,9 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
     def getField(field: String) = fields.find(_.name == field)
     def niceName = name
   }
-  
+
   def isStruct(m: Manifest[_]) = typeHandler.remappings.contains(m.asInstanceOf[Manifest[Any]])
-  
+
   class TypeHandler(block: Block[_]) extends BlockVisitor(block) {
     val objectCreations = statements.flatMap {
       case TP(_, s @ SimpleStruct(tag, elems)) => Some(s)

@@ -56,6 +56,45 @@ trait PartSupplierOpsExp extends PartSupplierOps with StructExp with EffectExp w
   def partsupplier_ps_comment(__x: Rep[PartSupplier]) = field[String](__x, "ps_comment")
 }
 
+trait LogEventOps extends Base with Variables with OverloadHack with ParserOps {
+
+  class LogEvent
+
+  object LogEvent {
+    def apply(date: Rep[Date], userId: Rep[Long], url: Rep[String], respCode: Rep[Int]) = logevent_obj_new(date, userId, url, respCode)
+    def parse(input: Rep[String], sep: Rep[String]): Rep[LogEvent] = fromArray(input.split(sep, 4))
+
+    def fromArray(input: Rep[Array[String]]): Rep[LogEvent] = {
+      LogEvent(input(0).toDate, input(1).toLong, input(2), input(3).toInt)
+    }
+  }
+
+  implicit def repLogEventToLogEventOps(x: Rep[LogEvent]) = new logeventOpsCls(x)
+  class logeventOpsCls(__x: Rep[LogEvent]) {
+    def date = logevent_date(__x)
+    def userId = logevent_userId(__x)
+    def url = logevent_url(__x)
+    def respCode = logevent_respCode(__x)
+  }
+
+  //object defs
+  def logevent_obj_new(date: Rep[Date], userId: Rep[Long], url: Rep[String], respCode: Rep[Int]): Rep[LogEvent]
+
+  //class defs
+  def logevent_date(__x: Rep[LogEvent]): Rep[Date]
+  def logevent_userId(__x: Rep[LogEvent]): Rep[Long]
+  def logevent_url(__x: Rep[LogEvent]): Rep[String]
+  def logevent_respCode(__x: Rep[LogEvent]): Rep[Int]
+}
+
+trait LogEventOpsExp extends LogEventOps with StructExp with EffectExp with BaseFatExp {
+  def logevent_obj_new(date: Exp[Date], userId: Exp[Long], url: Exp[String], respCode: Exp[Int]) = struct[LogEvent](ClassTag[LogEvent]("LogEvent"), ListMap("date" -> date, "userId" -> userId, "url" -> url, "respCode" -> respCode))
+  def logevent_date(__x: Rep[LogEvent]) = field[Date](__x, "date")
+  def logevent_userId(__x: Rep[LogEvent]) = field[Long](__x, "userId")
+  def logevent_url(__x: Rep[LogEvent]) = field[String](__x, "url")
+  def logevent_respCode(__x: Rep[LogEvent]) = field[Int](__x, "respCode")
+}
+
 trait LogEntryOps extends Base with Variables with OverloadHack with ParserOps {
 
   class LogEntry
@@ -304,6 +343,45 @@ trait CustomerOpsExp extends CustomerOps with StructExp with EffectExp with Base
   def customer_c_acctbal(__x: Rep[Customer]) = field[Double](__x, "c_acctbal")
   def customer_c_mktsegment(__x: Rep[Customer]) = field[String](__x, "c_mktsegment")
   def customer_c_comment(__x: Rep[Customer]) = field[String](__x, "c_comment")
+}
+
+trait PersonOps extends Base with Variables with OverloadHack with ParserOps {
+
+  class Person
+
+  object Person {
+    def apply(name: Rep[String], age: Rep[Int], zipcode: Rep[Int], email: Rep[String]) = person_obj_new(name, age, zipcode, email)
+    def parse(input: Rep[String], sep: Rep[String]): Rep[Person] = fromArray(input.split(sep, 4))
+
+    def fromArray(input: Rep[Array[String]]): Rep[Person] = {
+      Person(input(0), input(1).toInt, input(2).toInt, input(3))
+    }
+  }
+
+  implicit def repPersonToPersonOps(x: Rep[Person]) = new personOpsCls(x)
+  class personOpsCls(__x: Rep[Person]) {
+    def name = person_name(__x)
+    def age = person_age(__x)
+    def zipcode = person_zipcode(__x)
+    def email = person_email(__x)
+  }
+
+  //object defs
+  def person_obj_new(name: Rep[String], age: Rep[Int], zipcode: Rep[Int], email: Rep[String]): Rep[Person]
+
+  //class defs
+  def person_name(__x: Rep[Person]): Rep[String]
+  def person_age(__x: Rep[Person]): Rep[Int]
+  def person_zipcode(__x: Rep[Person]): Rep[Int]
+  def person_email(__x: Rep[Person]): Rep[String]
+}
+
+trait PersonOpsExp extends PersonOps with StructExp with EffectExp with BaseFatExp {
+  def person_obj_new(name: Exp[String], age: Exp[Int], zipcode: Exp[Int], email: Exp[String]) = struct[Person](ClassTag[Person]("Person"), ListMap("name" -> name, "age" -> age, "zipcode" -> zipcode, "email" -> email))
+  def person_name(__x: Rep[Person]) = field[String](__x, "name")
+  def person_age(__x: Rep[Person]) = field[Int](__x, "age")
+  def person_zipcode(__x: Rep[Person]) = field[Int](__x, "zipcode")
+  def person_email(__x: Rep[Person]) = field[String](__x, "email")
 }
 
 trait OrderOps extends Base with Variables with OverloadHack with ParserOps {
@@ -602,35 +680,35 @@ trait UserOps extends Base with Variables with OverloadHack with ParserOps {
   class User
 
   object User {
-    def apply(userId: Rep[Int], name: Rep[String], age: Rep[Int]) = user_obj_new(userId, name, age)
+    def apply(id: Rep[Long], name: Rep[String], email: Rep[String]) = user_obj_new(id, name, email)
     def parse(input: Rep[String], sep: Rep[String]): Rep[User] = fromArray(input.split(sep, 3))
 
     def fromArray(input: Rep[Array[String]]): Rep[User] = {
-      User(input(0).toInt, input(1), input(2).toInt)
+      User(input(0).toLong, input(1), input(2))
     }
   }
 
   implicit def repUserToUserOps(x: Rep[User]) = new userOpsCls(x)
   class userOpsCls(__x: Rep[User]) {
-    def userId = user_userId(__x)
+    def id = user_id(__x)
     def name = user_name(__x)
-    def age = user_age(__x)
+    def email = user_email(__x)
   }
 
   //object defs
-  def user_obj_new(userId: Rep[Int], name: Rep[String], age: Rep[Int]): Rep[User]
+  def user_obj_new(id: Rep[Long], name: Rep[String], email: Rep[String]): Rep[User]
 
   //class defs
-  def user_userId(__x: Rep[User]): Rep[Int]
+  def user_id(__x: Rep[User]): Rep[Long]
   def user_name(__x: Rep[User]): Rep[String]
-  def user_age(__x: Rep[User]): Rep[Int]
+  def user_email(__x: Rep[User]): Rep[String]
 }
 
 trait UserOpsExp extends UserOps with StructExp with EffectExp with BaseFatExp {
-  def user_obj_new(userId: Exp[Int], name: Exp[String], age: Exp[Int]) = struct[User](ClassTag[User]("User"), ListMap("userId" -> userId, "name" -> name, "age" -> age))
-  def user_userId(__x: Rep[User]) = field[Int](__x, "userId")
+  def user_obj_new(id: Exp[Long], name: Exp[String], email: Exp[String]) = struct[User](ClassTag[User]("User"), ListMap("id" -> id, "name" -> name, "email" -> email))
+  def user_id(__x: Rep[User]) = field[Long](__x, "id")
   def user_name(__x: Rep[User]) = field[String](__x, "name")
-  def user_age(__x: Rep[User]) = field[Int](__x, "age")
+  def user_email(__x: Rep[User]) = field[String](__x, "email")
 }
 
 trait AddressOps extends Base with Variables with OverloadHack with ParserOps {
@@ -672,5 +750,5 @@ trait AddressOpsExp extends AddressOps with StructExp with EffectExp with BaseFa
   def address_city(__x: Rep[Address]) = field[String](__x, "city")
 }
 
-trait ApplicationOps extends PartSupplierOps with LogEntryOps with PageCountEntryOps with PartOps with N1Ops with RegionOps with CustomerOps with OrderOps with WikiArticleOps with SupplierOps with NationOps with LineItemOps with N2Ops with UserOps with AddressOps
-trait ApplicationOpsExp extends PartSupplierOpsExp with LogEntryOpsExp with PageCountEntryOpsExp with PartOpsExp with N1OpsExp with RegionOpsExp with CustomerOpsExp with OrderOpsExp with WikiArticleOpsExp with SupplierOpsExp with NationOpsExp with LineItemOpsExp with N2OpsExp with UserOpsExp with AddressOpsExp
+trait ApplicationOps extends PartSupplierOps with LogEventOps with LogEntryOps with PageCountEntryOps with PartOps with N1Ops with RegionOps with CustomerOps with PersonOps with OrderOps with WikiArticleOps with SupplierOps with NationOps with LineItemOps with N2Ops with UserOps with AddressOps
+trait ApplicationOpsExp extends PartSupplierOpsExp with LogEventOpsExp with LogEntryOpsExp with PageCountEntryOpsExp with PartOpsExp with N1OpsExp with RegionOpsExp with CustomerOpsExp with PersonOpsExp with OrderOpsExp with WikiArticleOpsExp with SupplierOpsExp with NationOpsExp with LineItemOpsExp with N2OpsExp with UserOpsExp with AddressOpsExp

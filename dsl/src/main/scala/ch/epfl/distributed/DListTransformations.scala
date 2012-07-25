@@ -94,7 +94,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
       }
     }
     def registerTransformations(analyzer: Analyzer) {
-      analyzer.narrowBefore.foreach {
+      analyzer.narrowBeforeCandidates.foreach {
         case gbk @ DListGroupByKey(x, part) =>
           val stm = findDefinition(gbk).get
           class GroupByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], part: Option[Partitioner[K]]) {
@@ -235,12 +235,12 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
       case SomeDef(_: (DListFilter[_])) | SomeDef(_: DListMap[_, _]) | SomeDef(_: DListFlatMap[_, _]) => true
       case _ => true
     }
-    
+
     def fusible(r: Exp[Any], analyzer: Analyzer) = r match {
       case SomeDef(x: DListNode) if analyzer.nodeSuccessors(x).size <= 1 => true
       case _ => false
     }
-    
+
     def registerTransformations(analyzer: Analyzer) {
       analyzer.nodes.foreach {
         case m @ DListFilter(r, lm @ Def(Lambda(f, in, bl))) if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp) =>

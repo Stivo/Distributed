@@ -51,7 +51,7 @@ trait DListsProg extends DListProgram with ComplexBase {
       .groupByKey { (x, y) => x.length % y }
       .reduce(_ + _)
       .save("out")
-    words1.partitionBy { (x, y) => x.length % y }.save("out")
+    words1.partitionBy { (x, y) => x.length % y }.save("out2")
   }
 
   def materialize(x: Rep[Unit]) = {
@@ -130,8 +130,8 @@ trait DListsProg extends DListProgram with ComplexBase {
     unit(())
   }
   */
-
 }
+
 trait DListsProgSortCrunch extends DListProgram with ComplexBase with CrunchDListOps {
   def testSort(x: Rep[Unit]) = {
     val x = DList("in")
@@ -149,25 +149,6 @@ trait DListsProgSortSpark extends DListProgram with ComplexBase with SparkDListO
 }
 
 class TestBasic extends CodeGeneratorTestSuite {
-
-  def testCrunchSort {
-    tryCompile {
-      println("-- begin")
-
-      val dsl = new DListsProgSortCrunch with DListProgramExp with ComplexStructExp with ApplicationOpsExp with CrunchDListOpsExp
-
-      val codegen = new CrunchEGen {
-        val IR: dsl.type = dsl
-        override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = true
-      }
-      val pw = setUpPrintWriter
-      codegen.emitSource(dsl.testSort, "TestSort", pw)
-
-      writeToProject(pw, "crunch", "TestSort")
-      release(pw)
-      println("-- end")
-    }
-  }
 
   def testCrunch {
     tryCompile {
@@ -214,16 +195,53 @@ class TestBasic extends CodeGeneratorTestSuite {
     tryCompile {
       println("-- begin")
 
-      val dsl = new DListsProg with DListProgramExp with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp
-
+      import scala.virtualization.lms.common.{ StructFatExpOptCommon }
+      val dsl = new DListsProg with DListProgramExp with ComplexStructExp with ApplicationOpsExp with SparkDListOpsExp with StructFatExpOptCommon
       val codegen = new SparkGen {
         val IR: dsl.type = dsl
         override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = false
       }
+      codegen.loopFusion = false
       val pw = setUpPrintWriter
-      codegen.emitSource(dsl.testJoin, "flatMapFusionTest", pw)
+      codegen.emitSource(dsl.testSoA, "flatMapFusionTest", pw)
 
       writeToProject(pw, "spark", "SparkGenerated")
+      release(pw)
+      println("-- end")
+    }
+  }
+
+  def testScoobi {
+    tryCompile {
+      println("-- begin")
+      val pw = setUpPrintWriter
+
+      val dsl = new DListsProg with DListProgramExp with ComplexStructExp
+
+      val codegen = new ScoobiGen { val IR: dsl.type = dsl }
+      codegen.emitSource(dsl.testJoin, "g", pw)
+      writeToProject(pw, "scoobi", "ScoobiGenerated")
+      //      println(getContent(pw))
+      release(pw)
+      println("-- end")
+    }
+  }
+
+  /*
+  def testCrunchSort {
+    tryCompile {
+      println("-- begin")
+
+      val dsl = new DListsProgSortCrunch with DListProgramExp with ComplexStructExp with ApplicationOpsExp with CrunchDListOpsExp
+
+      val codegen = new CrunchEGen {
+        val IR: dsl.type = dsl
+        override def shouldApplyFusion(currentScope: List[IR.Stm])(result: List[IR.Exp[Any]]): Boolean = true
+      }
+      val pw = setUpPrintWriter
+      codegen.emitSource(dsl.testSort, "TestSort", pw)
+
+      writeToProject(pw, "crunch", "TestSort")
       release(pw)
       println("-- end")
     }
@@ -246,22 +264,7 @@ class TestBasic extends CodeGeneratorTestSuite {
       println("-- end")
     }
   }
-
-  def testScoobi {
-    tryCompile {
-      println("-- begin")
-      val pw = setUpPrintWriter
-
-      val dsl = new DListsProg with DListProgramExp with ComplexStructExp
-
-      val codegen = new ScoobiGen { val IR: dsl.type = dsl }
-      codegen.emitSource(dsl.testJoin, "g", pw)
-      writeToProject(pw, "scoobi", "ScoobiGenerated")
-      //      println(getContent(pw))
-      release(pw)
-      println("-- end")
-    }
-  }
+*/
 
 }
 

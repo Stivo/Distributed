@@ -76,6 +76,11 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
     case _ => super.mirrorDef(e, f)
   }).asInstanceOf[Def[A]]
 
+  override def mirror[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Exp[A] = (e match {
+    case StringValueOf(a) => string_valueof(f(a))
+    case _ => super.mirror(e, f)
+  }).asInstanceOf[Exp[A]]
+
 }
 package datastruct {
   class RegexFrontend
