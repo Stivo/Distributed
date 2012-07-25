@@ -1,14 +1,17 @@
-###This is the (yet unnamed) distributed DSL project.
+### Stivo: An Embedded DSL for Distributed Data Parallel Processing
 
-####What is this?
-This is a small DSL I am building as my master thesis at [EPFL](http://www.epfl.ch). 
-It features a collection like interface,
-and compiles currently to [Spark](http://spark-project.org/), [Scoobi](https://github.com/NICTA/scoobi) and experimentally to [Crunch](https://github.com/cloudera/crunch). 
+Stivo is a multy-stage programming approach for distributed data parallel processing.
+It is embedded in Scala, has a declarative and high level programming model similar to the [Spark](http://spark-project.org/) framework. 
+However, due to the multi-stage programming approach, Stivo does the following optimizations:
+  * Inserts projection before barriers to remove unused fields of Scala case classes.
+  * Move pure expressions (e.g. `Date`, `java.util.regex.Pattern`) out of the hot path
+  * Fuse all `flatMap`, `map` and `filter` and apply optimizations across them
 
-Unlike most other pure library approaches, we can do more optimizations:
-* Narrow the types used in the program to contain only fields used in later stages
-* Move constant values out of the closures
-* Fuse all flatMap, map and filter and apply optimizations across them
+From the same programming model, Stivo can generate code for [Spark](http://spark-project.org/), [Scoobi](https://github.com/NICTA/scoobi) and to [Crunch](https://github.com/cloudera/crunch). 
+
+NOTE: Stivo is still in the experimental phase of development. Before making it production ready
+we plan to introduce more relational optimizations (moving filters, join reordering etc.) and make it 
+interoperable with other DSLs like Regular Expressions DSL.
 
 ####Folder layout:
 * dsl contains the implementation of the DSL
