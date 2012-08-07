@@ -1,5 +1,5 @@
 package ch.epfl.distributed.datastruct
-import java.io.{ DataInput, DataOutput }
+import java.io.{DataInput, DataOutput}
 import org.apache.hadoop.io.Writable
 object Date {
   def apply(year: Int, month: Int, day: Int): Date = new SimpleDate(year, month, day)
