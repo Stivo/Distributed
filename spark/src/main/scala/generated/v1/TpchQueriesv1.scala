@@ -9,6 +9,7 @@ import scala.math.random
 import spark._
 import SparkContext._
 import com.esotericsoftware.kryo.Kryo
+import ch.epfl.distributed.utils.Helpers.makePartitioner
 
 object TpchQueries {
   // field reduction: false
@@ -22,196 +23,195 @@ object TpchQueries {
     System.setProperty("spark.serializer", "spark.KryoSerializer")
     System.setProperty("spark.kryo.registrator", "dcdsl.generated.v1.Registrator_TpchQueries")
     System.setProperty("spark.kryoserializer.buffer.mb", "20")
+    System.setProperty("spark.cache.class", "spark.DiskSpillingCache")
 
     val sc = new SparkContext(sparkInputArgs(0), "TpchQueries")
 
     val x1 = sparkInputArgs.drop(1); // First argument is for spark context;
     val x3 = x1(1);
+    val x105 = x1(4);
+    val x106 = x105.toInt;
     val x2 = x1(0);
-    val x45 = x2 + """/orders.tbl""";
-    val x46 = sc.textFile(x45);
-    val x11 = new ch.epfl.distributed.datastruct.RegexFrontend("""\|""", false, true);
+    val x44 = x2 + """/orders/""";
+    val x45 = sc.textFile(x44);
+    val x10 = new ch.epfl.distributed.datastruct.RegexFrontend("""\|""", true, true);
     @inline
-    def x150(x47: (java.lang.String)) = {
-      val x48 = x11.split(x47, 9);
-      val x49 = x48(0);
-      val x50 = x49.toInt;
-      val x51 = x48(1);
-      val x52 = x51.toInt;
-      val x53 = x48(2);
-      val x54 = x53.charAt(0);
-      val x55 = x48(3);
-      val x56 = x55.toDouble;
-      val x57 = x48(4);
-      val x58 = ch.epfl.distributed.datastruct.Date(x57);
-      val x59 = x48(5);
-      val x60 = x48(6);
-      val x61 = x48(7);
-      val x62 = x61.toInt;
-      val x63 = x48(8);
-      val x64 = new Order_0_1_2_3_4_5_6_7_8(x50, x52, x54, x56, x58, x59, x60, x62, x63);
-      x64: Order
+    def x152(x46: (java.lang.String)) = {
+      val x47 = x10.split(x46, 9);
+      val x48 = x47(0);
+      val x49 = x48.toLong;
+      val x50 = x47(1);
+      val x51 = x50.toLong;
+      val x52 = x47(2);
+      val x53 = x52.charAt(0);
+      val x54 = x47(3);
+      val x55 = x54.toDouble;
+      val x56 = x47(4);
+      val x57 = ch.epfl.distributed.datastruct.Date(x56);
+      val x58 = x47(5);
+      val x59 = x47(6);
+      val x60 = x47(7);
+      val x61 = x60.toInt;
+      val x62 = x47(8);
+      val x63 = new Order_0_1_2_3_4_5_6_7_8(x49, x51, x53, x55, x57, x58, x59, x61, x62);
+      x63: Order
     }
-    val x151 = x46.map(x150);
+    val x153 = x45.map(x152);
     @inline
-    def x152(x97: (Order)) = {
-      val x98 = x97.o_orderkey;
-      val x99 = (x98, x97);
-      x99: scala.Tuple2[Int, Order]
+    def x154(x95: (Order)) = {
+      val x96 = x95.o_orderkey;
+      val x97 = (x96, x95);
+      x97: scala.Tuple2[Long, Order]
     }
-    val x153 = x151.map(x152);
-    val x8 = x2 + """/lineitem*""";
-    val x9 = sc.textFile(x8);
+    val x155 = x153.map(x154);
+    val x7 = x2 + """/lineitem/""";
+    val x8 = sc.textFile(x7);
     @inline
-    def x154(x10: (java.lang.String)) = {
-      val x12 = x11.split(x10, 16);
-      val x13 = x12(0);
-      val x14 = x13.toInt;
-      val x15 = x12(1);
-      val x16 = x15.toInt;
-      val x17 = x12(2);
-      val x18 = x17.toInt;
-      val x19 = x12(3);
-      val x20 = x19.toInt;
-      val x21 = x12(4);
-      val x22 = x21.toDouble;
-      val x23 = x12(5);
-      val x24 = x23.toDouble;
-      val x25 = x12(6);
-      val x26 = x25.toDouble;
-      val x27 = x12(7);
-      val x28 = x27.toDouble;
-      val x29 = x12(8);
-      val x30 = x29.charAt(0);
-      val x31 = x12(9);
-      val x32 = x31.charAt(0);
-      val x33 = x12(10);
-      val x34 = ch.epfl.distributed.datastruct.Date(x33);
-      val x35 = x12(11);
-      val x36 = ch.epfl.distributed.datastruct.Date(x35);
-      val x37 = x12(12);
-      val x38 = ch.epfl.distributed.datastruct.Date(x37);
-      val x39 = x12(13);
-      val x40 = x12(14);
-      val x41 = x12(15);
-      val x42 = new LineItem_0_1_2_3_4_5_6_7_8_9_10_11_12_13_14_15(x14, x16, x18, x20, x22, x24, x26, x28, x30, x32, x34, x36, x38, x39, x40, x41);
-      x42: LineItem
+    def x156(x9: (java.lang.String)) = {
+      val x11 = x10.split(x9, 16);
+      val x12 = x11(0);
+      val x13 = x12.toLong;
+      val x14 = x11(1);
+      val x15 = x14.toLong;
+      val x16 = x11(2);
+      val x17 = x16.toLong;
+      val x18 = x11(3);
+      val x19 = x18.toLong;
+      val x20 = x11(4);
+      val x21 = x20.toDouble;
+      val x22 = x11(5);
+      val x23 = x22.toDouble;
+      val x24 = x11(6);
+      val x25 = x24.toDouble;
+      val x26 = x11(7);
+      val x27 = x26.toDouble;
+      val x28 = x11(8);
+      val x29 = x28.charAt(0);
+      val x30 = x11(9);
+      val x31 = x30.charAt(0);
+      val x32 = x11(10);
+      val x33 = ch.epfl.distributed.datastruct.Date(x32);
+      val x34 = x11(11);
+      val x35 = ch.epfl.distributed.datastruct.Date(x34);
+      val x36 = x11(12);
+      val x37 = ch.epfl.distributed.datastruct.Date(x36);
+      val x38 = x11(13);
+      val x39 = x11(14);
+      val x40 = x11(15);
+      val x41 = new LineItem_0_1_2_3_4_5_6_7_8_9_10_11_12_13_14_15(x13, x15, x17, x19, x21, x23, x25, x27, x29, x31, x33, x35, x37, x38, x39, x40);
+      x41: LineItem
     }
-    val x155 = x9.map(x154);
+    val x157 = x8.map(x156);
     val x6 = x1(3);
-    val x7 = x1(4);
+    val x68 = new ch.epfl.distributed.datastruct.RegexFrontend(x6, true, true);
     @inline
-    def x156(x67: (LineItem)) = {
-      val x68 = x67.l_shipmode;
-      val x69 = x68 == x6;
-      val x71 = if (x69) {
-        true
-      } else {
-        val x70 = x68 == x7;
-        x70
-      }
-      x71: Boolean
+    def x158(x66: (LineItem)) = {
+      val x67 = x66.l_shipmode;
+      val x69 = x68.matches(x67);
+      x69: Boolean
     }
-    val x157 = x155.filter(x156);
+    val x159 = x157.filter(x158);
     val x4 = x1(2);
     val x5 = ch.epfl.distributed.datastruct.Date(x4);
     @inline
-    def x158(x74: (LineItem)) = {
-      val x75 = x74.l_receiptdate;
-      val x76 = x5 <= x75;
-      x76: Boolean
-    }
-    val x159 = x157.filter(x158);
-    @inline
-    def x160(x79: (LineItem)) = {
-      val x80 = x79.l_shipdate;
-      val x81 = x79.l_commitdate;
-      val x82 = x80 < x81;
-      x82: Boolean
+    def x160(x72: (LineItem)) = {
+      val x73 = x72.l_receiptdate;
+      val x74 = x5 <= x73;
+      x74: Boolean
     }
     val x161 = x159.filter(x160);
     @inline
-    def x162(x85: (LineItem)) = {
-      val x86 = x85.l_commitdate;
-      val x87 = x85.l_receiptdate;
-      val x88 = x86 < x87;
-      x88: Boolean
+    def x162(x77: (LineItem)) = {
+      val x78 = x77.l_shipdate;
+      val x79 = x77.l_commitdate;
+      val x80 = x78 < x79;
+      x80: Boolean
     }
     val x163 = x161.filter(x162);
-    val x93 = x5 + new ch.epfl.distributed.datastruct.Interval(1, 0, 0);
     @inline
-    def x164(x91: (LineItem)) = {
-      val x92 = x91.l_receiptdate;
-      val x94 = x92 < x93;
-      x94: Boolean
+    def x164(x83: (LineItem)) = {
+      val x84 = x83.l_commitdate;
+      val x85 = x83.l_receiptdate;
+      val x86 = x84 < x85;
+      x86: Boolean
     }
     val x165 = x163.filter(x164);
+    val x91 = x5 + new ch.epfl.distributed.datastruct.Interval(1, 0, 0);
     @inline
-    def x166(x102: (LineItem)) = {
-      val x103 = x102.l_orderkey;
-      val x104 = (x103, x102);
-      x104: scala.Tuple2[Int, LineItem]
+    def x166(x89: (LineItem)) = {
+      val x90 = x89.l_receiptdate;
+      val x92 = x90 < x91;
+      x92: Boolean
     }
-    val x167 = x165.map(x166);
-    val x168 = x167.join(x153);
+    val x167 = x165.filter(x166);
     @inline
-    def x169(x108: (scala.Tuple2[Int, scala.Tuple2[LineItem, Order]])) = {
+    def x168(x100: (LineItem)) = {
+      val x101 = x100.l_orderkey;
+      val x102 = (x101, x100);
+      x102: scala.Tuple2[Long, LineItem]
+    }
+    val x169 = x167.map(x168);
+    val x170 = x169.join(x155, x106);
+    val x114 = new ch.epfl.distributed.datastruct.RegexFrontend("""1-URGENT""", true, true);
+    val x116 = new ch.epfl.distributed.datastruct.RegexFrontend("""2-HIGH""", true, true);
+    @inline
+    def x171(x108: (scala.Tuple2[Long, scala.Tuple2[LineItem, Order]])) = {
       val x110 = x108._2;
       val x112 = x110._2;
       val x113 = x112.o_orderpriority;
-      val x114 = x113.startsWith("""1""");
-      val x116 = if (x114) {
+      val x115 = x114.matches(x113);
+      val x118 = if (x115) {
         true
       } else {
-        val x115 = x113.startsWith("""2""");
-        x115
+        val x117 = x116.matches(x113);
+        x117
       }
-      val x117 = if (x116) {
+      val x119 = if (x118) {
         1
       } else {
         0
       }
-      val x118 = 1 - x117;
-      val x119 = (x117, x118);
+      val x120 = 1 - x119;
+      val x121 = (x119, x120);
       val x111 = x110._1;
-      val x120 = x111.l_shipmode;
-      val x121 = (x120, x119);
-      x121: scala.Tuple2[java.lang.String, scala.Tuple2[Int, Int]]
+      val x122 = x111.l_shipmode;
+      val x123 = (x122, x121);
+      x123: scala.Tuple2[java.lang.String, scala.Tuple2[Int, Int]]
     }
-    val x170 = x168.map(x169);
+    val x172 = x170.map(x171);
     @inline
-    def x172(x125: scala.Tuple2[Int, Int], x126: scala.Tuple2[Int, Int]) = {
-      val x127 = x125._1;
-      val x129 = x126._1;
-      val x131 = x127 + x129;
-      val x128 = x125._2;
-      val x130 = x126._2;
-      val x132 = x128 + x130;
-      val x133 = (x131, x132);
-      x133: scala.Tuple2[Int, Int]
+    def x174(x127: scala.Tuple2[Int, Int], x128: scala.Tuple2[Int, Int]) = {
+      val x129 = x127._1;
+      val x131 = x128._1;
+      val x133 = x129 + x131;
+      val x130 = x127._2;
+      val x132 = x128._2;
+      val x134 = x130 + x132;
+      val x135 = (x133, x134);
+      x135: scala.Tuple2[Int, Int]
     }
-    val x173 = x170.reduceByKey(x172);
+    val x175 = x172.reduceByKey(x174 _, 1);
     @inline
-    def x174(x136: (scala.Tuple2[java.lang.String, scala.Tuple2[Int, Int]])) = {
-      val x138 = x136._2;
-      val x142 = x138._2;
-      val x137 = x136._1;
-      val x139 = """shipmode """ + x137;
-      val x140 = x139 + """: high """;
-      val x141 = x138._1;
-      val x143 = x140 + x141;
-      val x144 = x143 + """, low """;
-      val x145 = x144 + x142;
-      x145: java.lang.String
+    def x176(x138: (scala.Tuple2[java.lang.String, scala.Tuple2[Int, Int]])) = {
+      val x140 = x138._2;
+      val x144 = x140._2;
+      val x139 = x138._1;
+      val x141 = """shipmode """ + x139;
+      val x142 = x141 + """: high """;
+      val x143 = x140._1;
+      val x145 = x142 + x143;
+      val x146 = x145 + """, low """;
+      val x147 = x146 + x144;
+      x147: java.lang.String
     }
-    val x175 = x173.map(x174);
-    val x176 = x175.saveAsTextFile(x3);
+    val x177 = x175.map(x176);
+    val x178 = x177.saveAsTextFile(x3);
 
     System.exit(0)
   }
 }
 // Types that are used in this program
-case class LineItem_0_1_2_3_4_5_6_7_8_9_10_11_12_13_14_15(override val l_orderkey: Int, override val l_partkey: Int, override val l_suppkey: Int, override val l_linenumber: Int, override val l_quantity: Double, override val l_extendedprice: Double, override val l_discount: Double, override val l_tax: Double, override val l_returnflag: Char, override val l_linestatus: Char, override val l_shipdate: ch.epfl.distributed.datastruct.Date, override val l_commitdate: ch.epfl.distributed.datastruct.Date, override val l_receiptdate: ch.epfl.distributed.datastruct.Date, override val l_shipinstruct: java.lang.String, override val l_shipmode: java.lang.String, override val l_comment: java.lang.String) extends LineItem {
+case class LineItem_0_1_2_3_4_5_6_7_8_9_10_11_12_13_14_15(override val l_orderkey: Long, override val l_partkey: Long, override val l_suppkey: Long, override val l_linenumber: Long, override val l_quantity: Double, override val l_extendedprice: Double, override val l_discount: Double, override val l_tax: Double, override val l_returnflag: Char, override val l_linestatus: Char, override val l_shipdate: ch.epfl.distributed.datastruct.Date, override val l_commitdate: ch.epfl.distributed.datastruct.Date, override val l_receiptdate: ch.epfl.distributed.datastruct.Date, override val l_shipinstruct: java.lang.String, override val l_shipmode: java.lang.String, override val l_comment: java.lang.String) extends LineItem {
   override def toString() = {
     val sb = new StringBuilder()
     sb.append("LineItem(")
@@ -235,7 +235,7 @@ case class LineItem_0_1_2_3_4_5_6_7_8_9_10_11_12_13_14_15(override val l_orderke
     sb.toString()
   }
 }
-case class Order_0_1_2_3_4_5_6_7_8(override val o_orderkey: Int, override val o_custkey: Int, override val o_orderstatus: Char, override val o_totalprice: Double, override val o_orderdate: ch.epfl.distributed.datastruct.Date, override val o_orderpriority: java.lang.String, override val o_clerk: java.lang.String, override val o_shippriority: Int, override val o_comment: java.lang.String) extends Order {
+case class Order_0_1_2_3_4_5_6_7_8(override val o_orderkey: Long, override val o_custkey: Long, override val o_orderstatus: Char, override val o_totalprice: Double, override val o_orderdate: ch.epfl.distributed.datastruct.Date, override val o_orderpriority: java.lang.String, override val o_clerk: java.lang.String, override val o_shippriority: Int, override val o_comment: java.lang.String) extends Order {
   override def toString() = {
     val sb = new StringBuilder()
     sb.append("Order(")
@@ -253,10 +253,10 @@ case class Order_0_1_2_3_4_5_6_7_8(override val o_orderkey: Int, override val o_
   }
 }
 trait LineItem extends Serializable {
-  def l_orderkey: Int = throw new RuntimeException("Should not try to access l_orderkey here, internal error")
-  def l_partkey: Int = throw new RuntimeException("Should not try to access l_partkey here, internal error")
-  def l_suppkey: Int = throw new RuntimeException("Should not try to access l_suppkey here, internal error")
-  def l_linenumber: Int = throw new RuntimeException("Should not try to access l_linenumber here, internal error")
+  def l_orderkey: Long = throw new RuntimeException("Should not try to access l_orderkey here, internal error")
+  def l_partkey: Long = throw new RuntimeException("Should not try to access l_partkey here, internal error")
+  def l_suppkey: Long = throw new RuntimeException("Should not try to access l_suppkey here, internal error")
+  def l_linenumber: Long = throw new RuntimeException("Should not try to access l_linenumber here, internal error")
   def l_quantity: Double = throw new RuntimeException("Should not try to access l_quantity here, internal error")
   def l_extendedprice: Double = throw new RuntimeException("Should not try to access l_extendedprice here, internal error")
   def l_discount: Double = throw new RuntimeException("Should not try to access l_discount here, internal error")
@@ -271,8 +271,8 @@ trait LineItem extends Serializable {
   def l_comment: java.lang.String = throw new RuntimeException("Should not try to access l_comment here, internal error")
 }
 trait Order extends Serializable {
-  def o_orderkey: Int = throw new RuntimeException("Should not try to access o_orderkey here, internal error")
-  def o_custkey: Int = throw new RuntimeException("Should not try to access o_custkey here, internal error")
+  def o_orderkey: Long = throw new RuntimeException("Should not try to access o_orderkey here, internal error")
+  def o_custkey: Long = throw new RuntimeException("Should not try to access o_custkey here, internal error")
   def o_orderstatus: Char = throw new RuntimeException("Should not try to access o_orderstatus here, internal error")
   def o_totalprice: Double = throw new RuntimeException("Should not try to access o_totalprice here, internal error")
   def o_orderdate: ch.epfl.distributed.datastruct.Date = throw new RuntimeException("Should not try to access o_orderdate here, internal error")

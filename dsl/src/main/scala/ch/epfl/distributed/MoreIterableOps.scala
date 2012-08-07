@@ -22,11 +22,11 @@ trait MoreIterableOps extends ArrayOps with IterableOps {
   class MoreIterableOpsCls[T: Manifest](a: Rep[Iterable[T]]) {
     def toArray = iterable_toArray(a)
     def last = iterable_last(a)
-    def first = iterable_first(a)
+    def head = iterable_head(a)
   }
 
   def iterable_last[T: Manifest](a: Rep[Iterable[T]]): Rep[T]
-  def iterable_first[T: Manifest](a: Rep[Iterable[T]]): Rep[T]
+  def iterable_head[T: Manifest](a: Rep[Iterable[T]]): Rep[T]
   def iterable_toArray[T: Manifest](a: Rep[Iterable[T]]): Rep[Array[T]]
 
 }
@@ -37,7 +37,7 @@ trait MoreIterableOpsExp extends MoreIterableOps with ArrayOpsExp with IterableO
   case class IterableToArrayOp[T: Manifest](it: Exp[Iterable[T]]) extends Def[Array[T]]
 
   override def iterable_last[T: Manifest](a: Exp[Iterable[T]]) = SingleResultIterableOp(a, "last")
-  override def iterable_first[T: Manifest](a: Exp[Iterable[T]]) = SingleResultIterableOp(a, "first")
+  override def iterable_head[T: Manifest](a: Exp[Iterable[T]]) = SingleResultIterableOp(a, "head")
   override def iterable_toArray[T: Manifest](a: Rep[Iterable[T]]) = IterableToArrayOp(a)
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {

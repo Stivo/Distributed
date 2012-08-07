@@ -1,3 +1,4 @@
+SET default_parallel 40;
 
 -- ########### script starts ############
 register ./piggybank.jar;

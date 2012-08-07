@@ -19,6 +19,8 @@ trait DList[+A]
 trait DListOps extends Base with Variables {
   def getArgs = get_args()
 
+  type PartitionerUser[K] = (Rep[K], Rep[Int]) => Rep[Int]
+
   object DList {
     def apply(file: Rep[String]) = dlist_new[String](file)
   }
@@ -31,6 +33,9 @@ trait DListOps extends Base with Variables {
     def filter(f: Rep[A] => Rep[Boolean]) = dlist_filter(dlist, f)
     def save(path: Rep[String]) = dlist_save(dlist, path)
     def ++(dlist2: Rep[DList[A]]) = dlist_++(dlist, dlist2)
+    def materialize() = dlist_materialize(dlist)
+    def takeSample(fraction: Rep[Double], seed: Rep[Int]) = dlist_takeSample(dlist, fraction, Some(seed))
+    def takeSample(fraction: Rep[Double]) = dlist_takeSample(dlist, fraction, None)
   }
 
   implicit def repDListToDListIterableTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, Iterable[V])]]) = new dlistIterableTupleOpsCls(x)
@@ -42,8 +47,11 @@ trait DListOps extends Base with Variables {
   implicit def repDListToDListTupleOps[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) = new dlistTupleOpsCls(x)
   implicit def varDListToDListTupleOps[K: Manifest, V: Manifest](x: Var[DList[(K, V)]]) = new dlistTupleOpsCls(readVar(x))
   class dlistTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) {
-    def groupByKey = dlist_groupByKey[K, V](x)
-    def join[V2: Manifest](right: Rep[DList[(K, V2)]]) = dlist_join(x, right)
+    def groupByKey(splits: Rep[Int] = unit(-2), partitioner: PartitionerUser[K] = null) = dlist_groupByKey[K, V](x, splits, partitioner)
+    def partitionBy(partitioner: PartitionerUser[K]) = dlist_partitionBy[K, V](x, partitioner)
+    def groupByKey = dlist_groupByKey[K, V](x, unit(-2), null)
+    def join[V2: Manifest](right: Rep[DList[(K, V2)]], splits: Rep[Int] = unit(-2)) = dlist_join(x, right, splits)
+    def cogroup[V2: Manifest](right: Rep[DList[(K, V2)]]) = dlist_cogroup(x, right)
   }
 
   def get_args(): Rep[Array[String]]
@@ -56,9 +64,12 @@ trait DListOps extends Base with Variables {
   def dlist_save[A: Manifest](dlist: Rep[DList[A]], path: Rep[String]): Rep[Unit]
   def dlist_++[A: Manifest](dlist1: Rep[DList[A]], dlist2: Rep[DList[A]]): Rep[DList[A]]
   def dlist_reduce[K: Manifest, V: Manifest](dlist: Rep[DList[(K, Iterable[V])]], f: (Rep[V], Rep[V]) => Rep[V]): Rep[DList[(K, V)]]
-  def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]]
-  def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]]): Rep[DList[(K, Iterable[V])]]
-
+  def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]], splits: Rep[Int]): Rep[DList[(K, (V1, V2))]]
+  def dlist_cogroup[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (Iterable[V1], Iterable[V2]))]]
+  def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], splits: Rep[Int], partitioner: PartitionerUser[K]): Rep[DList[(K, Iterable[V])]]
+  def dlist_partitionBy[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], partitioner: PartitionerUser[K]): Rep[DList[(K, V)]]
+  def dlist_materialize[A: Manifest](dlist: Rep[DList[A]]): Rep[Iterable[A]]
+  def dlist_takeSample[A: Manifest](dlist: Rep[DList[A]], fraction: Rep[Double], seed: Option[Rep[Int]]): Rep[DList[A]]
 }
 
 object FakeSourceContext {
@@ -72,7 +83,9 @@ case class FieldRead(val path: String) {
 trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   def toAtom2[T: Manifest](d: Def[T])(implicit ctx: SourceContext): Exp[T] = super.toAtom(d)
 
-  case class ShapeDep[T](s: Rep[T]) extends Def[Int]
+  type Partitioner[K] = Exp[(K, Int) => Int]
+
+  case class ShapeDep[T](s: Rep[T], fusible: Boolean) extends Def[Int]
   case class Dummy() extends Def[Unit]
   case class IteratorCollect[T](gen: Rep[Gen[T]], block: Block[Gen[T]]) extends Def[DList[T]]
   case class IteratorValue[A: Manifest, Coll[_]](l: Rep[Coll[A]], v: Rep[Int]) extends Def[A] {
@@ -111,12 +124,17 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     val in: Exp[DList[_]]
     def closure: Exp[(A, B) => C]
     def getClosureTypes: ((Manifest[A], Manifest[B]), Manifest[C])
-
   }
 
   trait ComputationNode extends DListNode {
     def getTypes: (Manifest[_], Manifest[_])
     def getElementTypes: (Manifest[_], Manifest[_]) = (getTypes._1.typeArguments(0), getTypes._2.typeArguments(0))
+  }
+
+  trait EndNode[A] extends ComputationNodeTyped[A, Nothing] {
+    override def getTypes = (getInType, manifest[Nothing])
+    def getInType: Manifest[A]
+    override def getElementTypes: (Manifest[_], Manifest[_]) = (getTypes._1.typeArguments(0), manifest[Nothing])
   }
 
   trait ComputationNodeTyped[A, B] extends ComputationNode {
@@ -165,7 +183,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def getType = manifest[DList[A]]
   }
 
-  case class DListGroupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]]) extends Def[DList[(K, Iterable[V])]]
+  case class DListGroupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], splits: Exp[Int], partitioner: Option[Partitioner[K]]) extends Def[DList[(K, Iterable[V])]]
       with ComputationNodeTyped[DList[(K, V)], DList[(K, Iterable[V])]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
@@ -183,7 +201,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def getTypes = (manifest[DList[(K, Iterable[V])]], manifest[DList[(K, V)]])
   }
 
-  case class DListJoin[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]])
+  case class DListJoin[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]], splits: Exp[Int])
       extends Def[DList[(K, (V1, V2))]] with DListNode {
     def mK = manifest[K]
     def mV1 = manifest[V1]
@@ -191,10 +209,30 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def mIn1 = manifest[(K, V1)]
   }
 
+  case class DListCogroup[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]])
+      extends Def[DList[(K, (Iterable[V1], Iterable[V2]))]] with DListNode {
+    def mK = manifest[K]
+    def mV1 = manifest[V1]
+    def mV2 = manifest[V2]
+    def mIn1 = manifest[(K, V1)]
+  }
+
   case class DListSave[A: Manifest](dlist: Exp[DList[A]], path: Exp[String]) extends Def[Unit]
-      with ComputationNodeTyped[DList[A], Nothing] {
+      with EndNode[DList[A]] {
     val mA = manifest[A]
-    def getTypes = (manifest[DList[A]], manifest[Nothing])
+    def getInType = manifest[DList[A]]
+  }
+
+  case class DListMaterialize[A: Manifest](dlist: Exp[DList[A]]) extends Def[Iterable[A]]
+      with EndNode[DList[A]] {
+    val mA = manifest[A]
+    def getInType = manifest[DList[A]]
+  }
+
+  case class DListTakeSample[A: Manifest](dlist: Exp[DList[A]], fraction: Exp[Double], seed: Option[Exp[Int]]) extends Def[DList[A]]
+      with PreservingTypeComputation[DList[A]] {
+    val mA = manifest[A]
+    def getType = makeDListManifest[A]
   }
 
   case class GetArgs() extends Def[Array[String]]
@@ -210,8 +248,17 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
   override def dlist_++[A: Manifest](dlist1: Rep[DList[A]], dlist2: Rep[DList[A]]) = DListFlatten(immutable.List(dlist1, dlist2))
   override def dlist_reduce[K: Manifest, V: Manifest](dlist: Exp[DList[(K, Iterable[V])]], f: (Exp[V], Exp[V]) => Exp[V]) = DListReduce(dlist, doLambda2(f))
-  override def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]] = DListJoin(left, right)
-  override def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]]) = DListGroupByKey(dlist)
+  override def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]], splits: Exp[Int]): Rep[DList[(K, (V1, V2))]] = DListJoin(left, right, splits)
+  override def dlist_cogroup[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]) = DListCogroup(left, right)
+  override def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], splits: Exp[Int], partitioner: PartitionerUser[K]) =
+    DListGroupByKey(dlist, splits, if (partitioner == null) None else Some(doLambda2(partitioner)))
+  override def dlist_partitionBy[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], partitioner: PartitionerUser[K]) =
+    DListFlatMap(DListGroupByKey(dlist, unit(-2), Some(doLambda2(partitioner))),
+      doLambda({ in: Exp[(K, Iterable[V])] =>
+        in._2.toArray.map(x => (in._1, x)).toSeq
+      }))
+  override def dlist_materialize[A: Manifest](dlist: Rep[DList[A]]) = DListMaterialize(dlist)
+  override def dlist_takeSample[A: Manifest](dlist: Exp[DList[A]], fraction: Exp[Double], seed: Option[Exp[Int]]) = DListTakeSample(dlist, fraction, seed)
 
   def copyMetaInfo(from: Any, to: Any) = {
     def copyMetaInfoHere[A <: DListNode](from: DListNode, to: A) = { to.metaInfos ++= from.metaInfos; to }
@@ -252,14 +299,17 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       case d @ DListFilter(dlist, func) => DListFilter(f(dlist), f(func))(d.mA)
       case d @ DListFlatMap(dlist, func) => DListFlatMap(f(dlist), f(func))(d.mA, d.mB)
       case d @ DListSave(dlist, path) => DListSave(f(dlist), f(path))(d.mA)
-      case d @ DListJoin(left, right) => DListJoin(f(left), f(right))(d.mK, d.mV1, d.mV2)
+      case d @ DListJoin(left, right, splits) => DListJoin(f(left), f(right), f(splits))(d.mK, d.mV1, d.mV2)
+      case d @ DListCogroup(left, right) => DListCogroup(f(left), f(right))(d.mK, d.mV1, d.mV2)
       case d @ DListReduce(dlist, func) => DListReduce(f(dlist), f(func))(d.mKey, d.mValue)
       case d @ DListFlatten(dlists) => DListFlatten(f(dlists))(d.mA)
-      case d @ DListGroupByKey(dlist) => DListGroupByKey(f(dlist))(d.mKey, d.mValue)
+      case d @ DListGroupByKey(dlist, splits, part) => DListGroupByKey(f(dlist), f(splits), part.map(x => f(x)))(d.mKey, d.mValue)
+      case d @ DListMaterialize(dlist) => DListMaterialize(f(dlist))(d.mA)
+      case d @ DListTakeSample(dlist, fraction, seedOption) => DListTakeSample(f(dlist), f(fraction), seedOption.map(x => f(x)))(d.mA)
       case d @ IteratorCollect(g, y) => IteratorCollect(f(g), if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y))
       case d @ ForeachElem(y) => ForeachElem(if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y))
       case d @ IteratorValue(in, i) => IteratorValue(f(in), f(i))(d.mA)
-      case d @ ShapeDep(in) => ShapeDep(f(in))
+      case d @ ShapeDep(in, fus) => ShapeDep(f(in), fus)
       case _ => super.mirrorDef(e, f)
     }
     copyMetaInfo(e, out)
@@ -318,6 +368,9 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
     def getField(field: String) = fields.find(_.name == field)
     def niceName = name
   }
+
+  def isStruct(m: Manifest[_]) = typeHandler.remappings.contains(m.asInstanceOf[Manifest[Any]])
+
   class TypeHandler(block: Block[_]) extends BlockVisitor(block) {
     val objectCreations = statements.flatMap {
       case TP(_, s @ SimpleStruct(tag, elems)) => Some(s)
@@ -441,6 +494,8 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
     out
   }
 
+  /** The default parallelism to use, aka number of reducers */
+  var parallelism = 40
 }
 
 trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransformations with DListFieldAnalysis {
@@ -461,6 +516,9 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     ComputationNode,
     DListNode,
     DListJoin,
+    DListCogroup,
+    DListMaterialize,
+    DListTakeSample,
     GetArgs
   }
   import IR.{ SimpleStruct }
@@ -472,16 +530,19 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = rhs match {
     case sd @ IteratorValue(r, i) => emitValDef(sym, "it.next // loop var " + quote(i))
-    case sd @ ShapeDep(dep) => stream.println("// " + quote(dep))
+    case sd @ ShapeDep(dep, _) => stream.println("// " + quote(dep))
     case sd @ Dummy() => stream.println("// dummy ")
     case nv @ NewDList(filename) => emitValDef(sym, "New dlist created from %s with type %s".format(filename, nv.mA))
     case vs @ DListSave(dlist, filename) => stream.println("Saving dlist %s (of type %s) to %s".format(dlist, remap(vs.mA), filename))
+    case d @ DListMaterialize(dlist) => stream.println("Materializing dlist %s (of type %s)".format(dlist, remap(d.mA)))
+    case d @ DListTakeSample(dlist, fraction, seedOption) => stream.println("Taking sample from dlist %s (of type %s), with fraction %s and seed %s".format(dlist, remap(d.mA), fraction, seedOption))
     case vm @ DListMap(dlist, func) => emitValDef(sym, "mapping dlist %s with function %s, type %s => %s".format(dlist, quote(func), vm.mA, vm.mB))
     case vf @ DListFilter(dlist, function) => emitValDef(sym, "filtering dlist %s with function %s".format(dlist, function))
     case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "flat mapping dlist %s with function %s".format(dlist, function))
     case vm @ DListFlatten(v1) => emitValDef(sym, "flattening dlists %s".format(v1))
-    case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "grouping dlist by key")
-    case gbk @ DListJoin(left, right) => emitValDef(sym, "Joining %s with %s".format(left, right))
+    case gbk @ DListGroupByKey(dlist, splits, part) => emitValDef(sym, "grouping dlist by key (" + quote(splits) + " splits), with partitioner " + part)
+    case gbk @ DListJoin(left, right, _) => emitValDef(sym, "Joining %s with %s".format(left, right))
+    case d @ DListCogroup(left, right) => emitValDef(sym, "cogroup %s with %s".format(left, right))
     case red @ DListReduce(dlist, f) => emitValDef(sym, "reducing dlist")
     case GetArgs() => emitValDef(sym, "getting the arguments")
     case IR.Lambda(_, _, _) if inlineClosures =>
@@ -550,7 +611,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
 
   var inlineClosures = false
 
-  def typesInInlinedClosures = false
+  def typesInInlinedClosures = true
 
   def handleClosure(closure: Exp[_]) = {
     if (inlineClosures) {
@@ -571,8 +632,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
       ("field reduction", narrowExistingMaps && insertNarrowingMaps),
       ("loop fusion", loopFusion),
       ("inline in loop fusion", inlineInLoopFusion),
-      ("regex patterns pre compiled", !IR.disablePatterns)
-    )
+      ("regex patterns pre compiled", !IR.disablePatterns))
   }
 
   def getOptimizations() = getParams().map(x => "// " + x._1 + ": " + x._2).mkString("\n")
@@ -659,7 +719,7 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
   def writeGraphToFile(block: Block[_], name: String, comments: Boolean = true) {
     val out = new FileOutputStream(name)
     val analyzer = newAnalyzer(block)
-    out.write(analyzer.exportToGraphRaw.getBytes)
+    out.write(analyzer.exportToGraph.getBytes)
     out.close
   }
 
@@ -704,7 +764,7 @@ trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElse
     case _ => super.unapplySimpleIndex(e)
   }
   override def unapplySimpleDomain(e: Def[Int]): Option[Exp[Any]] = e match {
-    case ShapeDep(a) => Some(a)
+    case ShapeDep(a, true) => Some(a)
     case _ => super.unapplySimpleDomain(e)
   }
 
@@ -737,6 +797,12 @@ trait ScalaFatLoopsFusionOpt extends DListBaseCodeGenPkg with ScalaGenIfThenElse
       IteratorCollect(g2, Block(plugInHelper(g, a, b)))
 
     case _ => super.applyPlugIntoContext(d, r)
+  }
+
+  override def shapeEquality(s1: Exp[Int], s2: Exp[Int]) = (s1, s2) match {
+    case (Def(ShapeDep(_, _)), _) => false
+    case (_, Def(ShapeDep(_, _))) => false
+    case _ => super.shapeEquality(s1, s2)
   }
 
 }

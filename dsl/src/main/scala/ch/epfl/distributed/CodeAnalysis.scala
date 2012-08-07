@@ -20,9 +20,11 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
     DListFlatten,
     DListGroupByKey,
     DListJoin,
+    DListCogroup,
     DListReduce,
     ComputationNode,
     DListNode,
+    EndNode,
     GetArgs
   }
   import IR.{ SubstTransformer, Field }
@@ -62,22 +64,25 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
       case SomeDef(l @ IR.Lambda2(f, x1, x2, y)) => Some(l)
       case _ => None
     }
-    lazy val saves = nodes.filter { case v: DListSave[_] => true; case _ => false }.map(_.asInstanceOf[DListSave[_]])
+    lazy val endnodes = nodes.filter { case v: EndNode[_] => true; case _ => false }.map(_.asInstanceOf[EndNode[_]])
 
     def getInputs(x: DListNode) = {
       val syms = IR.syms(x)
       syms.flatMap { x: Sym[_] => IR.findDefinition(x) }.flatMap { _.defs.flatMap { _ match { case x: DListNode => Some(x) case _ => None } } }
     }
 
-    lazy val ordered = GraphUtil.stronglyConnectedComponents(saves, getInputs).flatten
+    def nodeSuccessors(x: DListNode) = nodes.filter(getInputs(_).contains(x))
+
+    lazy val ordered = GraphUtil.stronglyConnectedComponents(endnodes, getInputs).flatten
 
     lazy val orderedStatements = getSchedule(availableDefs)(block.res, true)
 
     lazy val narrowBeforeCandidates: Iterable[DListNode] = ordered.filter(isNarrowBeforeCandidate)
 
     def isNarrowBeforeCandidate(x: DListNode) = x match {
-      case DListGroupByKey(x) => true
-      case DListJoin(x, y) => true
+      case DListGroupByKey(x, _, _) => true
+      case DListJoin(x, y, _) => true
+      // TODO case DListCogroup(x, y) => true
       case x => false
     }
 
@@ -94,7 +99,7 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
       }
       .filter {
         case x: ComputationNode => !isSimpleType(x.getElementTypes._1)
-        case DListJoin(l, r) => true
+        case DListJoin(l, r, _) => true
         case _ => throw new RuntimeException("Add narrow before candidate here or in subclass")
       }
 
@@ -153,7 +158,8 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
       //      println("All loops:")
       //      loops.foreach(println)
       val buf = Buffer[String]()
-      buf += "digraph g {"
+      buf += """digraph g {
+ordering = "in";"""
       for (node <- nodes) {
         var comment = ""
         if (addComments && !node.metaInfos.isEmpty) {
@@ -207,9 +213,12 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
     DListFlatten,
     DListGroupByKey,
     DListJoin,
+    DListCogroup,
     DListReduce,
     ComputationNode,
+    DListTakeSample,
     DListNode,
+    EndNode,
     GetArgs
   }
 
@@ -284,7 +293,7 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
 
         case v @ DListMap(in, func) => analyzeFunction(v)
 
-        case v @ DListJoin(Def(left: DListNode), Def(right: DListNode)) =>
+        case v @ DListJoin(Def(left: DListNode), Def(right: DListNode), _) =>
           def fieldRead(x: List[String]) = FieldRead("input." + x.mkString("."))
           val reads = v.successorFieldReads.map(_.getPath.drop(1)).map {
             case "_2" :: "_1" :: x => List(left) -> fieldRead("_2" :: x)
@@ -293,6 +302,30 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
             case x => Nil -> null
           }
           reads.foreach { case (targets, read) => targets.foreach { _.successorFieldReads += read } }
+          visitAll("input", v.mIn1).filter(_.path.startsWith("input._1"))
+
+        case v @ DListCogroup(Def(left: DListNode), Def(right: DListNode)) =>
+          // TODO, this is not implemented
+          /*
+          def fieldRead(x: List[String]) = FieldRead("input." + x.mkString("."))
+          val reads = v.successorFieldReads.map(_.getPath.drop(1)).map {
+            case "_2" :: "_1" :: x => List(left) -> fieldRead("_2" :: x)
+            case "_2" :: "_2" :: x => List(right) -> fieldRead("_2" :: x)
+            case "_1" :: x => List(left, right) -> fieldRead("_1" :: x)
+            case x => Nil -> null
+          }
+          
+          reads.foreach { case (targets, read) => targets.foreach { _.successorFieldReads += read } }
+          */
+          def makeReads(visit: Manifest[_], add: String) = visitAll("input", visit).map { fr =>
+            val buf = fr.getPath.toBuffer
+            buf.insert(1, add)
+            FieldRead(buf.mkString("."))
+          }
+          def leftVisits = makeReads(v.mV1, "_2")
+          def rightVisits = makeReads(v.mV2, "_2")
+          left.successorFieldReads ++= leftVisits
+          right.successorFieldReads ++= rightVisits
           visitAll("input", v.mIn1).filter(_.path.startsWith("input._1"))
 
         case v @ DListReduce(in, func) =>
@@ -308,7 +341,7 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
           }.map(_.mkString("."))
           (part1 ++ part2).map(FieldRead)
 
-        case v @ DListGroupByKey(in) =>
+        case v @ DListGroupByKey(in, _, _) =>
           // rewrite access to input._2.iterable.X to input._2.X
           // add access to _1
           ((v.successorFieldReads.map(_.getPath).map {
@@ -320,16 +353,19 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
           // just pass on the successor field reads
           v.successorFieldReads.toSet
 
-        case v @ DListSave(_, _) => {
-          if (SimpleType.unapply(v.mA).isDefined) {
-            Set()
+        case v: EndNode[_] => {
+          val elemType = v.getElementTypes._1
+          if (!isStruct(elemType)) {
+            Set(FieldRead("input"))
           } else {
             // traverse all subtypes, mark all fields as read
-            visitAll("input", v.mA)
+            visitAll("input", elemType)
           }
         }
 
         case v @ DListFlatMap(in, func) => analyzeFunction(v)
+
+        case d: DListTakeSample[_] => d.successorFieldReads.toSet
 
         case x => throw new RuntimeException("Need to implement field analysis for " + x)
         //Set[FieldRead]()

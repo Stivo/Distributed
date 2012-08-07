@@ -11,6 +11,37 @@ import java.io.StringWriter
 import scala.virtualization.lms.common.WorklistTransformer
 import java.io.FileWriter
 
+trait CrunchDListOps extends DListOps {
+  implicit def repDListToCrunchDListOps[A: Manifest](dlist: Rep[DList[A]]) = new dlistCrunchOpsCls(dlist)
+  implicit def varDListToCrunchDListOps[A: Manifest](dlist: Var[DList[A]]) = new dlistCrunchOpsCls(readVar(dlist))
+  class dlistCrunchOpsCls[A: Manifest](dlist: Rep[DList[A]]) {
+    def sort(ascending: Rep[Boolean]) = dlist_sort(dlist, ascending)
+  }
+
+  def dlist_sort[A: Manifest](dlist: Rep[DList[A]], ascending: Rep[Boolean]): Rep[DList[A]]
+}
+
+trait CrunchDListOpsExp extends DListOpsExp with CrunchDListOps {
+
+  case class DListSort[A: Manifest](dlist: Exp[DList[A]], ascending: Exp[Boolean]) extends Def[DList[A]]
+      with PreservingTypeComputation[DList[A]] {
+    val mA = manifest[A]
+    def getType = manifest[DList[A]]
+  }
+
+  def dlist_sort[A: Manifest](dlist: Exp[DList[A]], ascending: Exp[Boolean]) = DListSort(dlist, ascending)
+
+  override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
+    val out = (e match {
+      case v @ DListSort(in, asc) => DListSort(f(in), f(asc))(v.mA)
+      case _ => super.mirrorDef(e, f)
+    })
+    copyMetaInfo(e, out)
+    out.asInstanceOf[Def[A]]
+  }
+
+}
+
 trait CrunchGenDList extends ScalaGenBase
     with DListFieldAnalysis
     with DListTransformations with Matchers with FastWritableTypeFactory {
@@ -18,19 +49,10 @@ trait CrunchGenDList extends ScalaGenBase
  * TODO:
  * - More PTypes, cleaner tuple handling etc
  * Maybe:
- * - kryo instead of writable. Makes join easier and other stuff too.
  * - implement inline closures
  * 
  * Unsupported:
  * - Usage of vars: collection name changes
- * Idea:
- * Implement a PType for KryoFormat => BytesWritable
- * Same kryo scheme as in scoobi
- * one PType that converts from Kryo to BytesWritable
- * use that instead of generating Writables
- *  
- * => Advantage:
- * Kryo serialization works, Writable
  */
   val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -43,9 +65,12 @@ trait CrunchGenDList extends ScalaGenBase
     DListFlatten,
     DListGroupByKey,
     DListJoin,
+    DListCogroup,
     DListReduce,
     ComputationNode,
     DListNode,
+    DListMaterialize,
+    DListTakeSample,
     GetArgs,
     IteratorValue
   }
@@ -60,6 +85,9 @@ trait CrunchGenDList extends ScalaGenBase
   override def remap[A](x: Manifest[A]) = {
     var out = super.remap(x)
     out = out.replaceAll("Int(?!e)", "java.lang.Integer")
+    out = out.replaceAll("(?<!\\.)Long", "java.lang.Long")
+    //out = out.replaceAll("Long(?!e)", "java.lang.Long")
+    out = out.replaceAll("scala.collection.Iterable", "java.lang.Iterable")
     out.replaceAll("scala.Tuple2", "CPair")
   }
 
@@ -76,6 +104,7 @@ trait CrunchGenDList extends ScalaGenBase
     cleaned match {
       case "java.lang.String" => return "Writables.strings()"
       case "java.lang.Integer" => return "Writables.ints()"
+      case "java.lang.Long" => return "Writables.longs()"
       case _ =>
     }
     if (typeHandler.typeInfos2.contains(cleaned)) {
@@ -107,6 +136,8 @@ trait CrunchGenDList extends ScalaGenBase
   def castPrimitive(s: Exp[_]) = {
     if (remap(s.tp) == "java.lang.Integer")
       quote(s) + ".asInstanceOf[java.lang.Integer]"
+    else if (remap(s.tp) == "java.lang.Long")
+      quote(s) + ".asInstanceOf[java.lang.Long]"
     else
       quote(s)
   }
@@ -120,6 +151,11 @@ trait CrunchGenDList extends ScalaGenBase
       case IR.Field(tuple, x, tp) if (x == "_1" || x == "_2") => emitValDef(sym, "%s.%s // TODO This is a hack, the symbol for %s should have a tuple type instead of %s".format(quote(tuple), if (x == "_1") "first()" else "second()", Def.unapply(tuple), tp))
       case nv @ NewDList(filename) => emitValDef(sym, "pipeline.readTextFile(%s)".format(quote(filename)))
       case vs @ DListSave(dlist, filename) => emitValDef(sym, "pipeline.writeTextFile(%s, %s)".format(quote(dlist), quote(filename)))
+      case vs @ DListMaterialize(dlist) => emitValDef(sym, "%s.materialize().asScala".format(quote(dlist)))
+      case d @ DListTakeSample(dlist, fraction, seedOption) => {
+        val seedString = seedOption.map(x => ", " + quote(x)).getOrElse("")
+        emitValDef(sym, "%s.sample(%s %s)".format(quote(dlist), quote(fraction), seedString))
+      }
       case vm @ DListMap(dlist, function) => {
         // TODO
         emitValDef(sym, createParallelDo(dlist, vm, "emitter.emit(%s(input))".format(handleClosure(vm.closure))))
@@ -133,8 +169,27 @@ trait CrunchGenDList extends ScalaGenBase
         var out = v1.map(quote(_)).mkString("(", ").union(", ")")
         emitValDef(sym, out)
       }
-      case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
-      case v @ DListJoin(left, right) => {
+      case gbk @ DListGroupByKey(dlist, splits, Some(part)) => {
+        val keyType = part match {
+          case Def(l: Lambda2[_, _, _]) => l.mA1
+          case _ => manifest[Any]
+        }
+        val id = sym.id + ""
+        val name = "Partitioner_" + id
+        types += name -> """class %s extends ClosurePartitioner[%s]{
+        val f = %s
+      }""".format(name, remap(keyType), writeClosure(part))
+        emitValDef(sym, "%s.groupByKey(makeGroupingOptions[%s])".format(quote(dlist), name))
+      }
+      case gbk @ DListGroupByKey(dlist, Const(-2), _) => emitValDef(sym, "%s.groupByKey()".format(quote(dlist)))
+      case gbk @ DListGroupByKey(dlist, Const(-1), _) => emitValDef(sym, "%s.groupByKey(%s)".format(quote(dlist), parallelism))
+      case gbk @ DListGroupByKey(dlist, splits, _) => emitValDef(sym, "%s.groupByKey(%s)".format(quote(dlist), quote(splits)))
+      case v @ DListJoin(left, right, splits) => {
+        val splitsHere = splits match {
+          case Const(-2) => "" + parallelism
+          case Const(-1) => "" + parallelism
+          case x => quote(x)
+        }
         // create tagged value subclass
         if (typeHandler.remappings.contains(v.mV1) && typeHandler.remappings.contains(v.mV2)) {
           val tv = """class TaggedValue_%1$s_%2$s(left: Boolean, v1: %1$s, v2: %2$s) extends TaggedValue[%1$s, %2$s](left, v1, v2) {
@@ -142,12 +197,14 @@ trait CrunchGenDList extends ScalaGenBase
         }""".format(remap(v.mV1), remap(v.mV2))
           val tvname = "TaggedValue_%1$s_%2$s".format(remap(v.mV1), remap(v.mV2))
           types += tvname -> tv
-          //emitValDef(sym, "joinWritables(classOf[%s], %s, %s)".format(tvname, quote(left), quote(right)))
-          emitValDef(sym, "joinNotNull(%s, %s)".format(quote(left), quote(right)))
+
+          emitValDef(sym, "joinWritables(classOf[%s], %s, %s, %s)".format(tvname, quote(left), quote(right), splitsHere))
+          //emitValDef(sym, "joinNotNull(%s, %s)".format(quote(left), quote(right)))
         } else {
           emitValDef(sym, "join(%s, %s)".format(quote(left), quote(right)))
         }
       }
+      case v @ DListCogroup(left, right) => emitValDef(sym, "%s.cogroup(%s)".format(quote(left), quote(right)))
       case red @ DListReduce(dlist, f) => emitValDef(sym,
         "%s.combineValues(new CombineWrapper(%s))".format(quote(dlist), handleClosure(f)))
       case sd @ IteratorValue(r, i) => emitValDef(sym, "input // loop var " + quote(i))
@@ -191,6 +248,8 @@ import java.io.DataInput
 import java.io.DataOutput
 import java.io.Serializable
 
+import scala.collection.JavaConversions._
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.conf.Configured
 import org.apache.hadoop.io.Writable
@@ -207,7 +266,8 @@ import com.cloudera.crunch.{ Pair => CPair }
 
 import ch.epfl.distributed.utils.JoinHelper._
 import ch.epfl.distributed.utils._
-        
+import ch.epfl.distributed.utils.PartitionerUtil._
+
 import com.cloudera.crunch._
 
 object %1$s {
@@ -261,6 +321,22 @@ class %1$s extends Configured with Tool with Serializable {
 
 }
 
+trait CrunchEGenDList extends CrunchGenDList {
+
+  val IR: CrunchDListOpsExp with DListOpsExp
+  import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
+  import IR.{
+    DListSort
+  }
+  override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
+    val out = rhs match {
+      case DListSort(dlist, asc) => emitValDef(sym, "%s.sort(%s)".format(quote(dlist), quote(asc)))
+      case _ => super.emitNode(sym, rhs)
+    }
+  }
+
+}
+
 trait KryoCrunchGenDList extends CrunchGenDList with CaseClassTypeFactory {
   val IR: DListOpsExp
   import IR.{ Sym, Def, Exp, Reify, Reflect, Const, Block }
@@ -278,7 +354,7 @@ trait KryoCrunchGenDList extends CrunchGenDList with CaseClassTypeFactory {
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
     val out = rhs match {
-      case v @ DListJoin(left, right) => {
+      case v @ DListJoin(left, right, _) => {
         emitValDef(sym, "joinNotNull(%s, %s)".format(quote(left), quote(right)))
       }
       case _ => super.emitNode(sym, rhs)
@@ -357,7 +433,7 @@ trait ScalaGenCrunchFat extends ScalaGenLoopsFat with CrunchGenDList {
   import IR._
 
   override def emitFatNode(sym: List[Sym[Any]], rhs: FatDef) = rhs match {
-    case SimpleFatLoop(Def(ShapeDep(sd)), x, rhs) =>
+    case SimpleFatLoop(Def(ShapeDep(sd, _)), x, rhs) =>
       val ii = x
       var outType: Manifest[_] = null
       for ((l, r) <- sym zip rhs) r match {
@@ -395,6 +471,13 @@ trait ScalaGenCrunchFat extends ScalaGenLoopsFat with CrunchGenDList {
   }
 }
 
+trait ScalaGenCrunchEFat extends ScalaGenCrunchFat {
+  val IR: CrunchDListOpsExp with LoopsFatExp
+  import IR._
+}
+
 trait CrunchGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with CrunchGenDList with ScalaGenCrunchFat
+
+trait CrunchEGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with CrunchEGenDList with ScalaGenCrunchEFat
 
 trait KryoCrunchGen extends ScalaFatLoopsFusionOpt with DListBaseCodeGenPkg with KryoCrunchGenDList with ScalaGenCrunchFat

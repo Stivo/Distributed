@@ -26,7 +26,7 @@ trait VectorBase extends Base with OverloadHack {
     def /(o: Rep[Double])(implicit o2: Overloaded2) = vec_pointWiseOp(v, o, "/")
     def squaredDist(o: Rep[Vector]) = vec_squaredDist(v, o)
     def print() = vec_print(v)
-  }l
+  }
 
   def vec_simpleOp(v: Rep[Vector], o: Rep[Vector], op: String): Rep[Vector]
   def vec_pointWiseOp(v: Rep[Vector], o: Rep[Double], op: String): Rep[Vector]
@@ -160,7 +160,7 @@ trait KMeansApp extends DListProgram with ApplicationOps with SparkDListOps with
           (p1._1 + p2._1, p1._2 + p2._2)
       }
 
-      val newPoints = pointStats.map { pair => (pair._1, pair._2._1 / pair._2._2) }.collect().toArray
+      val newPoints = pointStats.map { pair => (pair._1, pair._2._1 / pair._2._2) }.materialize().toArray
 
       tempDist = 0.0
       for (pair <- newPoints) {
@@ -188,7 +188,6 @@ trait KMeansApp extends DListProgram with ApplicationOps with SparkDListOps with
 class KMeansAppGenerator extends CodeGeneratorTestSuite {
 
   val appname = "KMeansApp"
-  val unoptimizedAppname = appname + "_Orig"
 
   def testSpark {
     tryCompile {

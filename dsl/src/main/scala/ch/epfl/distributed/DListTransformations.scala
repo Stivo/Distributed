@@ -6,6 +6,7 @@ import scala.collection.mutable
 import scala.virtualization.lms.common.WorklistTransformer
 import scala.virtualization.lms.common.ForwardTransformer
 import scala.virtualization.lms.internal.Utils
+import scala.reflect.SourceContext
 
 trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with Matchers with DListAnalysis with Utils {
 
@@ -93,26 +94,27 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
       }
     }
     def registerTransformations(analyzer: Analyzer) {
-      analyzer.narrowBefore.foreach {
-        case gbk @ DListGroupByKey(x) =>
+      analyzer.narrowBeforeCandidates.foreach {
+        case gbk @ DListGroupByKey(x, splits, part) =>
           val stm = findDefinition(gbk).get
-          class GroupByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]]) {
+          class GroupByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], splits: Exp[Int], part: Option[Partitioner[K]]) {
             val mapNew = makeNarrower(in)
-            val gbkNew = dlist_groupByKey(mapNew)
+            val gbkNew = toAtom2(new DListGroupByKey(mapNew, wt(splits), part.map(x => wt(x)))(manifest[K], manifest[V]))(mtype(stm.syms.head.tp), FakeSourceContext())
+            //val gbkNew = dlist_groupByKey(mapNew, part.getOrElse(null))
             wt.register(stm.syms.head)(gbkNew)
           }
-          new GroupByKeyTransformer(gbk.dlist)(gbk.mKey, gbk.mValue)
+          new GroupByKeyTransformer(gbk.dlist, splits, part)(gbk.mKey, gbk.mValue)
 
-        case j @ DListJoin(l, r) =>
+        case j @ DListJoin(l, r, splits) =>
           val stm = findDefinition(j).get
-          class DListJoinTransformer[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]]) {
+          class DListJoinTransformer[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]], splits: Exp[Int]) {
             val mapNewLeft = makeNarrower(left)
             val mapNewRight = makeNarrower(right)
 
-            val joinNew = dlist_join(mapNewLeft, mapNewRight)
+            val joinNew = dlist_join(mapNewLeft, mapNewRight, splits)
             wt.register(stm.syms.head)(joinNew)
           }
-          new DListJoinTransformer(l, r)(j.mK, j.mV1, j.mV2)
+          new DListJoinTransformer(l, r, splits)(j.mK, j.mV1, j.mV2)
         case _ =>
       }
     }
@@ -234,6 +236,11 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
       case _ => true
     }
 
+    def fusible(r: Exp[Any], analyzer: Analyzer) = r match {
+      case SomeDef(x: DListNode) if analyzer.nodeSuccessors(x).size <= 1 => true
+      case _ => false
+    }
+
     def registerTransformations(analyzer: Analyzer) {
       analyzer.nodes.foreach {
         case m @ DListFilter(r, lm @ Def(Lambda(f, in, bl))) if monadicOp(r) || getConsumers(analyzer, findDefinition(m).get.syms.head).forall(monadicOp) =>
@@ -249,7 +256,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
               }
             }
             // create a loop with the body that inlines the filtering function
-            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
+            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r), fusible(r, analyzer))), i, IteratorCollect(g, y))
 
             // make an stm out of the loop
             toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
@@ -272,7 +279,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
 
             println("Generator type= " + stripGen(g.tp))
             // create a loop with body that inlines the function
-            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
+            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r), fusible(r, analyzer))), i, IteratorCollect(g, y))
 
             // make an stm out of the loop
             toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())
@@ -289,7 +296,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
             val (g, y) = collectYields {
               reifyEffects {
                 val coll = doApply(wt(lm), toAtom2(IteratorValue(wt(r), i))(mtype(r.tp), FakeSourceContext()))
-                val shape2 = toAtom2(ShapeDep(coll))
+                val shape2 = toAtom2(ShapeDep(coll, true))
                 val j = fresh[Int]
 
                 // Somehow the mirroring order here is wrong
@@ -300,7 +307,7 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
 
             println("Generator type= " + stripGen(g.tp))
             // create a loop with body that inlines the function
-            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r))), i, IteratorCollect(g, y))
+            val loop = SimpleLoop(toAtom2(ShapeDep(wt(r), fusible(r, analyzer))), i, IteratorCollect(g, y))
 
             // make an stm out of the loop
             toAtom2(loop)(mtype(stm.syms.head.tp), FakeSourceContext())

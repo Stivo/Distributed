@@ -279,7 +279,7 @@ yourselves
       .filter(x => x.length > 1)
       .filter(x => !x.matches("""(thumb|left|right|\d+px){2,}"""))
       .map(x => (x, unit(1)))
-      .groupByKey
+      .groupByKey(getArgs(2).toInt)
       .reduce(_ + _)
       .save(getArgs(1))
     unit(())
@@ -317,7 +317,7 @@ class WordCountAppGenerator extends CodeGeneratorTestSuite {
 //      codegenScoobi.useWritables = true;
       val codegenCrunch = new CrunchGen { val IR: dsl.type = dsl }
 //      val list = List(codegenSpark, codegenScoobi, codegenCrunch)
-      val list = List(codegenCrunch, codegenSpark)
+      val list = List(codegenSpark,codegenCrunch)
       def writeVersion(version: String) {
 //        if (version != "v0") return
         val func = dsl.wikiArticleWordcount2009 _

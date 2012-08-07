@@ -9,6 +9,8 @@ import java.io.DataInput
 import java.io.DataOutput
 import java.io.Serializable
 
+import scala.collection.JavaConversions._
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.conf.Configured
 import org.apache.hadoop.io.Writable
@@ -25,6 +27,7 @@ import com.cloudera.crunch.{ Pair => CPair }
 
 import ch.epfl.distributed.utils.JoinHelper._
 import ch.epfl.distributed.utils._
+import ch.epfl.distributed.utils.PartitionerUtil._
 
 import com.cloudera.crunch._
 
@@ -141,15 +144,17 @@ class WordCountApp extends Configured with Tool with Serializable {
         emitter.emit(x46(input))
       }
     }, Writables.tableOf(Writables.strings(), Writables.ints()));
-    val x48 = x47.groupByKey;
+    val x48 = x1(2);
+    val x49 = x48.toInt;
+    val x50 = x47.groupByKey(x49);
     @inline
-    def x52(x49: java.lang.Integer, x50: java.lang.Integer) = {
-      val x51 = x49 + x50;
-      x51: java.lang.Integer
+    def x54(x51: java.lang.Integer, x52: java.lang.Integer) = {
+      val x53 = x51 + x52;
+      x53: java.lang.Integer
     }
-    val x53 = x48.combineValues(new CombineWrapper(x52));
-    val x54 = x1(1);
-    val x55 = pipeline.writeTextFile(x53, x54);
+    val x55 = x50.combineValues(new CombineWrapper(x54));
+    val x56 = x1(1);
+    val x57 = pipeline.writeTextFile(x55, x56);
 
     pipeline.done();
     return 0;

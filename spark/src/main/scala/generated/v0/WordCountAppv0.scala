@@ -9,6 +9,7 @@ import scala.math.random
 import spark._
 import SparkContext._
 import com.esotericsoftware.kryo.Kryo
+import ch.epfl.distributed.utils.Helpers.makePartitioner
 
 object WordCountApp {
   // field reduction: false
@@ -22,15 +23,18 @@ object WordCountApp {
     System.setProperty("spark.serializer", "spark.KryoSerializer")
     System.setProperty("spark.kryo.registrator", "dcdsl.generated.v0.Registrator_WordCountApp")
     System.setProperty("spark.kryoserializer.buffer.mb", "20")
+    System.setProperty("spark.cache.class", "spark.DiskSpillingCache")
 
     val sc = new SparkContext(sparkInputArgs(0), "WordCountApp")
 
     val x1 = sparkInputArgs.drop(1); // First argument is for spark context;
-    val x54 = x1(1);
+    val x56 = x1(1);
+    val x48 = x1(2);
+    val x49 = x48.toInt;
     val x2 = x1(0);
     val x3 = sc.textFile(x2);
     @inline
-    def x57(x4: (java.lang.String)) = {
+    def x59(x4: (java.lang.String)) = {
       val x5 = x4.split("""	""", 5);
       val x6 = x5(0);
       val x7 = x6.toLong;
@@ -42,60 +46,60 @@ object WordCountApp {
       val x13 = new WikiArticle_0_1_2_3_4(x7, x8, x10, x11, x12);
       x13: WikiArticle
     }
-    val x58 = x3.map(x57);
+    val x60 = x3.map(x59);
     @inline
-    def x59(x16: (WikiArticle)) = {
+    def x61(x16: (WikiArticle)) = {
       val x17 = x16.plaintext;
       val x18 = """\n""" + x17;
       x18: java.lang.String
     }
-    val x60 = x58.map(x59);
+    val x62 = x60.map(x61);
     @inline
-    def x61(x21: (java.lang.String)) = {
+    def x63(x21: (java.lang.String)) = {
       val x22 = x21.replaceAll("""\[\[.*?\]\]""", """ """);
       x22: java.lang.String
     }
-    val x62 = x60.map(x61);
+    val x64 = x62.map(x63);
     @inline
-    def x63(x25: (java.lang.String)) = {
+    def x65(x25: (java.lang.String)) = {
       val x26 = x25.replaceAll("""(\\[ntT]|\.)\s*(thumb|left|right)*""", """ """);
       x26: java.lang.String
     }
-    val x64 = x62.map(x63);
+    val x66 = x64.map(x65);
     @inline
-    def x65(x29: (java.lang.String)) = {
+    def x67(x29: (java.lang.String)) = {
       val x30 = x29.split("""[^a-zA-Z0-9']+""", 0);
       val x31 = x30.toSeq;
       x31: scala.collection.Seq[java.lang.String]
     }
-    val x66 = x64.flatMap(x65);
+    val x68 = x66.flatMap(x67);
     @inline
-    def x67(x34: (java.lang.String)) = {
+    def x69(x34: (java.lang.String)) = {
       val x35 = x34.length;
       val x36 = x35 > 1;
       x36: Boolean
     }
-    val x68 = x66.filter(x67);
+    val x70 = x68.filter(x69);
     @inline
-    def x69(x39: (java.lang.String)) = {
+    def x71(x39: (java.lang.String)) = {
       val x40 = x39.matches("""(thumb|left|right|\d+px){2,}""");
       val x41 = !x40;
       x41: Boolean
     }
-    val x70 = x68.filter(x69);
+    val x72 = x70.filter(x71);
     @inline
-    def x71(x44: (java.lang.String)) = {
+    def x73(x44: (java.lang.String)) = {
       val x45 = (x44, 1);
       x45: scala.Tuple2[java.lang.String, Int]
     }
-    val x72 = x70.map(x71);
+    val x74 = x72.map(x73);
     @inline
-    def x74(x49: Int, x50: Int) = {
-      val x51 = x49 + x50;
-      x51: Int
+    def x76(x51: Int, x52: Int) = {
+      val x53 = x51 + x52;
+      x53: Int
     }
-    val x75 = x72.reduceByKey(x74);
-    val x76 = x75.saveAsTextFile(x54);
+    val x77 = x74.reduceByKey(x76 _, x49);
+    val x78 = x77.saveAsTextFile(x56);
 
     System.exit(0)
   }

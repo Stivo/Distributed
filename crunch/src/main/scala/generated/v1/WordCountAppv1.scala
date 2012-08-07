@@ -9,6 +9,8 @@ import java.io.DataInput
 import java.io.DataOutput
 import java.io.Serializable
 
+import scala.collection.JavaConversions._
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.conf.Configured
 import org.apache.hadoop.io.Writable
@@ -25,6 +27,7 @@ import com.cloudera.crunch.{ Pair => CPair }
 
 import ch.epfl.distributed.utils.JoinHelper._
 import ch.epfl.distributed.utils._
+import ch.epfl.distributed.utils.PartitionerUtil._
 
 import com.cloudera.crunch._
 
@@ -44,59 +47,61 @@ class WordCountApp extends Configured with Tool with Serializable {
     val pipeline = new MRPipeline(classOf[WordCountApp], getConf());
 
     val x1 = args.drop(1);
-    val x54 = x1(1);
+    val x56 = x1(1);
+    val x48 = x1(2);
+    val x49 = x48.toInt;
     val x2 = x1(0);
     val x3 = pipeline.readTextFile(x2);
     // x3
-    val x1694 = x3.parallelDo(new DoFn[java.lang.String, CPair[java.lang.String, java.lang.Integer]] {
+    val x1696 = x3.parallelDo(new DoFn[java.lang.String, CPair[java.lang.String, java.lang.Integer]] {
       def process(input: java.lang.String, emitter: Emitter[CPair[java.lang.String, java.lang.Integer]]): Unit = {
 
-        val x221 = input // loop var x219;
-        val x314 = x221.split("""	""", 5);
-        val x315 = x314(4);
-        val x1409 = """\n""" + x315;
-        val x1593 = x1409.replaceAll("""\[\[.*?\]\]""", """ """);
-        val x1594 = x1593.replaceAll("""(\\[ntT]|\.)\s*(thumb|left|right)*""", """ """);
-        val x1669 = x1594.split("""[^a-zA-Z0-9']+""", 0);
-        val x1670 = x1669.toSeq;
-        // x1670
+        val x223 = input // loop var x221;
+        val x316 = x223.split("""	""", 5);
+        val x317 = x316(4);
+        val x1411 = """\n""" + x317;
+        val x1595 = x1411.replaceAll("""\[\[.*?\]\]""", """ """);
+        val x1596 = x1595.replaceAll("""(\\[ntT]|\.)\s*(thumb|left|right)*""", """ """);
+        val x1671 = x1596.split("""[^a-zA-Z0-9']+""", 0);
+        val x1672 = x1671.toSeq;
+        // x1672
         {
-          val it = x1670.iterator
+          val it = x1672.iterator
           while (it.hasNext) { // flatMap
             val input = it.next()
-            val x1672 = input // loop var x260;
-            val x1673 = x1672.length;
-            val x1674 = x1673 > 1;
-            val x1686 = if (x1674) {
-              val x1675 = x1672.matches("""(thumb|left|right|\d+px){2,}""");
-              val x1676 = !x1675;
-              val x1682 = if (x1676) {
-                val x1677 = CPair.of(x1672, 1.asInstanceOf[java.lang.Integer]);
-                emitter.emit(x1677) // yield
-                val x1678 = ()
-                x1678
-              } else {
-                val x1680 = () // skip;
+            val x1674 = input // loop var x262;
+            val x1675 = x1674.length;
+            val x1676 = x1675 > 1;
+            val x1688 = if (x1676) {
+              val x1677 = x1674.matches("""(thumb|left|right|\d+px){2,}""");
+              val x1678 = !x1677;
+              val x1684 = if (x1678) {
+                val x1679 = CPair.of(x1674, 1.asInstanceOf[java.lang.Integer]);
+                emitter.emit(x1679) // yield
+                val x1680 = ()
                 x1680
+              } else {
+                val x1682 = () // skip;
+                x1682
               }
-              x1682
-            } else {
-              val x1684 = () // skip;
               x1684
+            } else {
+              val x1686 = () // skip;
+              x1686
             }
           }
         }
       }
 
     }, Writables.tableOf(Writables.strings(), Writables.ints()))
-    val x1695 = x1694.groupByKey;
+    val x1697 = x1696.groupByKey(x49);
     @inline
-    def x1394(x49: java.lang.Integer, x50: java.lang.Integer) = {
-      val x51 = x49 + x50;
-      x51: java.lang.Integer
+    def x1396(x51: java.lang.Integer, x52: java.lang.Integer) = {
+      val x53 = x51 + x52;
+      x53: java.lang.Integer
     }
-    val x1696 = x1695.combineValues(new CombineWrapper(x1394));
-    val x1697 = pipeline.writeTextFile(x1696, x54);
+    val x1698 = x1697.combineValues(new CombineWrapper(x1396));
+    val x1699 = pipeline.writeTextFile(x1698, x56);
 
     pipeline.done();
     return 0;

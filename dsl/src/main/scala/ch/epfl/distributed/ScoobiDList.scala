@@ -27,9 +27,11 @@ trait ScoobiGenDList extends ScalaGenBase
     DListFlatten,
     DListGroupByKey,
     DListJoin,
+    DListCogroup,
     DListReduce,
     ComputationNode,
     DListNode,
+    DListMaterialize,
     GetArgs,
     IteratorValue
   }
@@ -46,6 +48,7 @@ trait ScoobiGenDList extends ScalaGenBase
     val out = rhs match {
       case nv @ NewDList(filename) => emitValDef(sym, "TextInput.fromTextFile(%s)".format(quote(filename)))
       case vs @ DListSave(dlist, filename) => emitValDef(sym, "persist(TextOutput.toTextFile(%s,%s))".format(quote(dlist), quote(filename)))
+      case vs @ DListMaterialize(dlist) => emitValDef(sym, "persist(%s.materialize)".format(quote(dlist)))
       case vm @ DListMap(dlist, function) => emitValDef(sym, "%s.map(%s)".format(quote(dlist), handleClosure(vm.closure)))
       case vm @ DListFilter(dlist, function) => emitValDef(sym, "%s.filter(%s)".format(quote(dlist), handleClosure(vm.closure)))
       case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "%s.flatMap(%s)".format(quote(dlist), handleClosure(vm.closure)))
@@ -53,8 +56,9 @@ trait ScoobiGenDList extends ScalaGenBase
         var out = v1.map(quote(_)).mkString("(", " ++ ", ")")
         emitValDef(sym, out)
       }
-      case gbk @ DListGroupByKey(dlist) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
-      case v @ DListJoin(left, right) => emitValDef(sym, "%s.join(%s)".format(quote(left), quote(right)))
+      case gbk @ DListGroupByKey(dlist, _, _) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
+      case v @ DListJoin(left, right, _) => emitValDef(sym, "%s.join(%s)".format(quote(left), quote(right)))
+      case v @ DListCogroup(left, right) => emitValDef(sym, "%s.coGroup(%s)".format(quote(left), quote(right)))
       case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.combine(%s)".format(quote(dlist), handleClosure(f)))
       case sd @ IteratorValue(r, i) => emitValDef(sym, "input // loop var " + quote(i))
       case GetArgs() => emitValDef(sym, "scoobiInputArgs")
@@ -274,7 +278,7 @@ trait ScalaGenScoobiFat extends ScalaGenLoopsFat {
   import IR._
 
   override def emitFatNode(sym: List[Sym[Any]], rhs: FatDef) = rhs match {
-    case SimpleFatLoop(Def(ShapeDep(sd)), x, rhs) =>
+    case SimpleFatLoop(Def(ShapeDep(sd, _)), x, rhs) =>
       val ii = x
       var outType = "Nothing"
       for ((l, r) <- sym zip rhs) r match {

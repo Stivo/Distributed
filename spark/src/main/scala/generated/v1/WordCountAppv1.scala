@@ -9,6 +9,7 @@ import scala.math.random
 import spark._
 import SparkContext._
 import com.esotericsoftware.kryo.Kryo
+import ch.epfl.distributed.utils.Helpers.makePartitioner
 
 object WordCountApp {
   // field reduction: true
@@ -22,76 +23,81 @@ object WordCountApp {
     System.setProperty("spark.serializer", "spark.KryoSerializer")
     System.setProperty("spark.kryo.registrator", "dcdsl.generated.v1.Registrator_WordCountApp")
     System.setProperty("spark.kryoserializer.buffer.mb", "20")
+    System.setProperty("spark.cache.class", "spark.DiskSpillingCache")
 
     val sc = new SparkContext(sparkInputArgs(0), "WordCountApp")
 
     val x1 = sparkInputArgs.drop(1); // First argument is for spark context;
-    val x54 = x1(1);
+    val x56 = x1(1);
+    val x48 = x1(2);
+    val x49 = x48.toInt;
     @inline
-    def x1371(x49: Int, x50: Int) = {
-      val x51 = x49 + x50;
-      x51: Int
+    def x1392(x51: Int, x52: Int) = {
+      val x53 = x51 + x52;
+      x53: Int
     }
     val x2 = x1(0);
     val x3 = sc.textFile(x2);
     // x3
-    val x1662 = x3.mapPartitions(it => {
+    val x1683 = x3.mapPartitions(it => {
       new Iterator[scala.Tuple2[java.lang.String, Int]] {
-        private[this] val buff = new Array[scala.Tuple2[java.lang.String, Int]](1 << 22)
-        private[this] val stopAt = (1 << 22) - (1 << 12);
+        private[this] val buff = new ch.epfl.distributed.datastruct.FastArrayList[scala.Tuple2[java.lang.String, Int]](1 << 10)
         private[this] final var start = 0
         private[this] final var end = 0
 
         @inline
         private[this] final def load = {
           var i = 0
-          while (it.hasNext && i < stopAt) {
+          buff.clear()
+          while (i == 0 && it.hasNext) {
 
-            val x215 = it.next // loop var x213;
-            val x307 = x215.split("""	""", 5);
-            val x308 = x307(4);
-            val x1386 = """\n""" + x308;
-            val x1565 = x1386.replaceAll("""\[\[.*?\]\]""", """ """);
-            val x1566 = x1565.replaceAll("""(\\[ntT]|\.)\s*(thumb|left|right)*""", """ """);
-            val x1638 = x1566.split("""[^a-zA-Z0-9']+""", 0);
-            val x1639 = x1638.toSeq;
-            // x1639
+            val x236 = it.next // loop var x234;
+            val x328 = x236.split("""	""", 5);
+            val x329 = x328(4);
+            val x1407 = """\n""" + x329;
+            val x1586 = x1407.replaceAll("""\[\[.*?\]\]""", """ """);
+            val x1587 = x1586.replaceAll("""(\\[ntT]|\.)\s*(thumb|left|right)*""", """ """);
+            val x1659 = x1587.split("""[^a-zA-Z0-9']+""", 0);
+            val x1660 = x1659.toSeq;
+            // x1660
             {
-              val it = x1639.iterator
+              val it = x1660.iterator
               while (it.hasNext) { // flatMap
-                val x1641 = it.next // loop var x254;
-                val x1642 = x1641.length;
-                val x1643 = x1642 > 1;
-                val x1655 = if (x1643) {
-                  val x1644 = x1641.matches("""(thumb|left|right|\d+px){2,}""");
-                  val x1645 = !x1644;
-                  val x1651 = if (x1645) {
-                    val x1646 = (x1641, 1);
-                    buff(i) = x1646 // yield
+                val x1662 = it.next // loop var x275;
+                val x1663 = x1662.length;
+                val x1664 = x1663 > 1;
+                val x1676 = if (x1664) {
+                  val x1665 = x1662.matches("""(thumb|left|right|\d+px){2,}""");
+                  val x1666 = !x1665;
+                  val x1672 = if (x1666) {
+                    val x1667 = (x1662, 1);
+                    buff(i) = x1667 // yield
                     i = i + 1
-                    val x1647 = ()
-                    x1647
+                    val x1668 = ()
+                    x1668
                   } else {
-                    val x1649 = () // skip;
-                    x1649
+                    val x1670 = () // skip;
+                    x1670
                   }
-                  x1651
+                  x1672
                 } else {
-                  val x1653 = () // skip;
-                  x1653
+                  val x1674 = () // skip;
+                  x1674
                 }
               }
             }
           }
 
           start = 0
-          end = if (i < buff.length) i else i - 1
+          end = buff.length
         }
 
         override def hasNext(): Boolean = {
           if (start == end) load
 
-          start != end
+          val hasAnElement = start != end
+          if (!hasAnElement) buff.destroy()
+          hasAnElement
         }
 
         override def next = {
@@ -103,8 +109,8 @@ object WordCountApp {
         }
       }
     })
-    val x1663 = x1662.reduceByKey(x1371);
-    val x1664 = x1663.saveAsTextFile(x54);
+    val x1684 = x1683.reduceByKey(x1392 _, x49);
+    val x1685 = x1684.saveAsTextFile(x56);
 
     System.exit(0)
   }

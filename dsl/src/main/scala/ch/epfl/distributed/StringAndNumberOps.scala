@@ -57,6 +57,15 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
 
   override def report_time(x: Exp[String]) = reflectEffect(ReportTime(x: Exp[String]))
 
+  // toInt etc do not trim the input, they just reject it
+  val hardParser = Array.apply("Int", "Short", "Byte")
+
+  override def string_valueof(d: Exp[Any]) = d match {
+    case Def(stn @ StringToNumber(s)) if (hardParser.contains(stn.typeName)) => s
+    case Def(StringToNumber(s)) => string_trim(s)
+    case _ => super.string_valueof(d)
+  }
+
   def string_toChar(s: Rep[String])(implicit ctx: SourceContext) = StringToChar(s)
   def string_substring(s: Exp[String], start: Exp[Int])(implicit ctx: SourceContext) = StringSubstring(s, start)
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = (e match {
@@ -66,6 +75,11 @@ trait StringAndNumberOpsExp extends StringAndNumberOps with PrimitiveOpsExp with
     case ReportTime(x) => ReportTime(f(x))
     case _ => super.mirrorDef(e, f)
   }).asInstanceOf[Def[A]]
+
+  override def mirror[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Exp[A] = (e match {
+    case StringValueOf(a) => string_valueof(f(a))
+    case _ => super.mirror(e, f)
+  }).asInstanceOf[Exp[A]]
 
 }
 package datastruct {

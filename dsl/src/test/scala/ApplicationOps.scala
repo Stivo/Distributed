@@ -56,6 +56,45 @@ trait PartSupplierOpsExp extends PartSupplierOps with StructExp with EffectExp w
   def partsupplier_ps_comment(__x: Rep[PartSupplier]) = field[String](__x, "ps_comment")
 }
 
+trait LogEventOps extends Base with Variables with OverloadHack with ParserOps {
+
+  class LogEvent
+
+  object LogEvent {
+    def apply(date: Rep[Date], userId: Rep[Long], url: Rep[String], respCode: Rep[Int]) = logevent_obj_new(date, userId, url, respCode)
+    def parse(input: Rep[String], sep: Rep[String]): Rep[LogEvent] = fromArray(input.split(sep, 4))
+
+    def fromArray(input: Rep[Array[String]]): Rep[LogEvent] = {
+      LogEvent(input(0).toDate, input(1).toLong, input(2), input(3).toInt)
+    }
+  }
+
+  implicit def repLogEventToLogEventOps(x: Rep[LogEvent]) = new logeventOpsCls(x)
+  class logeventOpsCls(__x: Rep[LogEvent]) {
+    def date = logevent_date(__x)
+    def userId = logevent_userId(__x)
+    def url = logevent_url(__x)
+    def respCode = logevent_respCode(__x)
+  }
+
+  //object defs
+  def logevent_obj_new(date: Rep[Date], userId: Rep[Long], url: Rep[String], respCode: Rep[Int]): Rep[LogEvent]
+
+  //class defs
+  def logevent_date(__x: Rep[LogEvent]): Rep[Date]
+  def logevent_userId(__x: Rep[LogEvent]): Rep[Long]
+  def logevent_url(__x: Rep[LogEvent]): Rep[String]
+  def logevent_respCode(__x: Rep[LogEvent]): Rep[Int]
+}
+
+trait LogEventOpsExp extends LogEventOps with StructExp with EffectExp with BaseFatExp {
+  def logevent_obj_new(date: Exp[Date], userId: Exp[Long], url: Exp[String], respCode: Exp[Int]) = struct[LogEvent](ClassTag[LogEvent]("LogEvent"), ListMap("date" -> date, "userId" -> userId, "url" -> url, "respCode" -> respCode))
+  def logevent_date(__x: Rep[LogEvent]) = field[Date](__x, "date")
+  def logevent_userId(__x: Rep[LogEvent]) = field[Long](__x, "userId")
+  def logevent_url(__x: Rep[LogEvent]) = field[String](__x, "url")
+  def logevent_respCode(__x: Rep[LogEvent]) = field[Int](__x, "respCode")
+}
+
 trait LogEntryOps extends Base with Variables with OverloadHack with ParserOps {
 
   class LogEntry
@@ -306,16 +345,55 @@ trait CustomerOpsExp extends CustomerOps with StructExp with EffectExp with Base
   def customer_c_comment(__x: Rep[Customer]) = field[String](__x, "c_comment")
 }
 
+trait PersonOps extends Base with Variables with OverloadHack with ParserOps {
+
+  class Person
+
+  object Person {
+    def apply(name: Rep[String], age: Rep[Int], zipcode: Rep[Int], email: Rep[String]) = person_obj_new(name, age, zipcode, email)
+    def parse(input: Rep[String], sep: Rep[String]): Rep[Person] = fromArray(input.split(sep, 4))
+
+    def fromArray(input: Rep[Array[String]]): Rep[Person] = {
+      Person(input(0), input(1).toInt, input(2).toInt, input(3))
+    }
+  }
+
+  implicit def repPersonToPersonOps(x: Rep[Person]) = new personOpsCls(x)
+  class personOpsCls(__x: Rep[Person]) {
+    def name = person_name(__x)
+    def age = person_age(__x)
+    def zipcode = person_zipcode(__x)
+    def email = person_email(__x)
+  }
+
+  //object defs
+  def person_obj_new(name: Rep[String], age: Rep[Int], zipcode: Rep[Int], email: Rep[String]): Rep[Person]
+
+  //class defs
+  def person_name(__x: Rep[Person]): Rep[String]
+  def person_age(__x: Rep[Person]): Rep[Int]
+  def person_zipcode(__x: Rep[Person]): Rep[Int]
+  def person_email(__x: Rep[Person]): Rep[String]
+}
+
+trait PersonOpsExp extends PersonOps with StructExp with EffectExp with BaseFatExp {
+  def person_obj_new(name: Exp[String], age: Exp[Int], zipcode: Exp[Int], email: Exp[String]) = struct[Person](ClassTag[Person]("Person"), ListMap("name" -> name, "age" -> age, "zipcode" -> zipcode, "email" -> email))
+  def person_name(__x: Rep[Person]) = field[String](__x, "name")
+  def person_age(__x: Rep[Person]) = field[Int](__x, "age")
+  def person_zipcode(__x: Rep[Person]) = field[Int](__x, "zipcode")
+  def person_email(__x: Rep[Person]) = field[String](__x, "email")
+}
+
 trait OrderOps extends Base with Variables with OverloadHack with ParserOps {
 
   class Order
 
   object Order {
-    def apply(o_orderkey: Rep[Int], o_custkey: Rep[Int], o_orderstatus: Rep[Char], o_totalprice: Rep[Double], o_orderdate: Rep[Date], o_orderpriority: Rep[String], o_clerk: Rep[String], o_shippriority: Rep[Int], o_comment: Rep[String]) = order_obj_new(o_orderkey, o_custkey, o_orderstatus, o_totalprice, o_orderdate, o_orderpriority, o_clerk, o_shippriority, o_comment)
+    def apply(o_orderkey: Rep[Long], o_custkey: Rep[Long], o_orderstatus: Rep[Char], o_totalprice: Rep[Double], o_orderdate: Rep[Date], o_orderpriority: Rep[String], o_clerk: Rep[String], o_shippriority: Rep[Int], o_comment: Rep[String]) = order_obj_new(o_orderkey, o_custkey, o_orderstatus, o_totalprice, o_orderdate, o_orderpriority, o_clerk, o_shippriority, o_comment)
     def parse(input: Rep[String], sep: Rep[String]): Rep[Order] = fromArray(input.split(sep, 9))
 
     def fromArray(input: Rep[Array[String]]): Rep[Order] = {
-      Order(input(0).toInt, input(1).toInt, input(2).toChar, input(3).toDouble, input(4).toDate, input(5), input(6), input(7).toInt, input(8))
+      Order(input(0).toLong, input(1).toLong, input(2).toChar, input(3).toDouble, input(4).toDate, input(5), input(6), input(7).toInt, input(8))
     }
   }
 
@@ -333,11 +411,11 @@ trait OrderOps extends Base with Variables with OverloadHack with ParserOps {
   }
 
   //object defs
-  def order_obj_new(o_orderkey: Rep[Int], o_custkey: Rep[Int], o_orderstatus: Rep[Char], o_totalprice: Rep[Double], o_orderdate: Rep[Date], o_orderpriority: Rep[String], o_clerk: Rep[String], o_shippriority: Rep[Int], o_comment: Rep[String]): Rep[Order]
+  def order_obj_new(o_orderkey: Rep[Long], o_custkey: Rep[Long], o_orderstatus: Rep[Char], o_totalprice: Rep[Double], o_orderdate: Rep[Date], o_orderpriority: Rep[String], o_clerk: Rep[String], o_shippriority: Rep[Int], o_comment: Rep[String]): Rep[Order]
 
   //class defs
-  def order_o_orderkey(__x: Rep[Order]): Rep[Int]
-  def order_o_custkey(__x: Rep[Order]): Rep[Int]
+  def order_o_orderkey(__x: Rep[Order]): Rep[Long]
+  def order_o_custkey(__x: Rep[Order]): Rep[Long]
   def order_o_orderstatus(__x: Rep[Order]): Rep[Char]
   def order_o_totalprice(__x: Rep[Order]): Rep[Double]
   def order_o_orderdate(__x: Rep[Order]): Rep[Date]
@@ -348,9 +426,9 @@ trait OrderOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait OrderOpsExp extends OrderOps with StructExp with EffectExp with BaseFatExp {
-  def order_obj_new(o_orderkey: Exp[Int], o_custkey: Exp[Int], o_orderstatus: Exp[Char], o_totalprice: Exp[Double], o_orderdate: Exp[Date], o_orderpriority: Exp[String], o_clerk: Exp[String], o_shippriority: Exp[Int], o_comment: Exp[String]) = struct[Order](ClassTag[Order]("Order"), ListMap("o_orderkey" -> o_orderkey, "o_custkey" -> o_custkey, "o_orderstatus" -> o_orderstatus, "o_totalprice" -> o_totalprice, "o_orderdate" -> o_orderdate, "o_orderpriority" -> o_orderpriority, "o_clerk" -> o_clerk, "o_shippriority" -> o_shippriority, "o_comment" -> o_comment))
-  def order_o_orderkey(__x: Rep[Order]) = field[Int](__x, "o_orderkey")
-  def order_o_custkey(__x: Rep[Order]) = field[Int](__x, "o_custkey")
+  def order_obj_new(o_orderkey: Exp[Long], o_custkey: Exp[Long], o_orderstatus: Exp[Char], o_totalprice: Exp[Double], o_orderdate: Exp[Date], o_orderpriority: Exp[String], o_clerk: Exp[String], o_shippriority: Exp[Int], o_comment: Exp[String]) = struct[Order](ClassTag[Order]("Order"), ListMap("o_orderkey" -> o_orderkey, "o_custkey" -> o_custkey, "o_orderstatus" -> o_orderstatus, "o_totalprice" -> o_totalprice, "o_orderdate" -> o_orderdate, "o_orderpriority" -> o_orderpriority, "o_clerk" -> o_clerk, "o_shippriority" -> o_shippriority, "o_comment" -> o_comment))
+  def order_o_orderkey(__x: Rep[Order]) = field[Long](__x, "o_orderkey")
+  def order_o_custkey(__x: Rep[Order]) = field[Long](__x, "o_custkey")
   def order_o_orderstatus(__x: Rep[Order]) = field[Char](__x, "o_orderstatus")
   def order_o_totalprice(__x: Rep[Order]) = field[Double](__x, "o_totalprice")
   def order_o_orderdate(__x: Rep[Order]) = field[Date](__x, "o_orderdate")
@@ -494,11 +572,11 @@ trait LineItemOps extends Base with Variables with OverloadHack with ParserOps {
   class LineItem
 
   object LineItem {
-    def apply(l_orderkey: Rep[Int], l_partkey: Rep[Int], l_suppkey: Rep[Int], l_linenumber: Rep[Int], l_quantity: Rep[Double], l_extendedprice: Rep[Double], l_discount: Rep[Double], l_tax: Rep[Double], l_returnflag: Rep[Char], l_linestatus: Rep[Char], l_shipdate: Rep[Date], l_commitdate: Rep[Date], l_receiptdate: Rep[Date], l_shipinstruct: Rep[String], l_shipmode: Rep[String], l_comment: Rep[String]) = lineitem_obj_new(l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)
+    def apply(l_orderkey: Rep[Long], l_partkey: Rep[Long], l_suppkey: Rep[Long], l_linenumber: Rep[Long], l_quantity: Rep[Double], l_extendedprice: Rep[Double], l_discount: Rep[Double], l_tax: Rep[Double], l_returnflag: Rep[Char], l_linestatus: Rep[Char], l_shipdate: Rep[Date], l_commitdate: Rep[Date], l_receiptdate: Rep[Date], l_shipinstruct: Rep[String], l_shipmode: Rep[String], l_comment: Rep[String]) = lineitem_obj_new(l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)
     def parse(input: Rep[String], sep: Rep[String]): Rep[LineItem] = fromArray(input.split(sep, 16))
 
     def fromArray(input: Rep[Array[String]]): Rep[LineItem] = {
-      LineItem(input(0).toInt, input(1).toInt, input(2).toInt, input(3).toInt, input(4).toDouble, input(5).toDouble, input(6).toDouble, input(7).toDouble, input(8).toChar, input(9).toChar, input(10).toDate, input(11).toDate, input(12).toDate, input(13), input(14), input(15))
+      LineItem(input(0).toLong, input(1).toLong, input(2).toLong, input(3).toLong, input(4).toDouble, input(5).toDouble, input(6).toDouble, input(7).toDouble, input(8).toChar, input(9).toChar, input(10).toDate, input(11).toDate, input(12).toDate, input(13), input(14), input(15))
     }
   }
 
@@ -523,13 +601,13 @@ trait LineItemOps extends Base with Variables with OverloadHack with ParserOps {
   }
 
   //object defs
-  def lineitem_obj_new(l_orderkey: Rep[Int], l_partkey: Rep[Int], l_suppkey: Rep[Int], l_linenumber: Rep[Int], l_quantity: Rep[Double], l_extendedprice: Rep[Double], l_discount: Rep[Double], l_tax: Rep[Double], l_returnflag: Rep[Char], l_linestatus: Rep[Char], l_shipdate: Rep[Date], l_commitdate: Rep[Date], l_receiptdate: Rep[Date], l_shipinstruct: Rep[String], l_shipmode: Rep[String], l_comment: Rep[String]): Rep[LineItem]
+  def lineitem_obj_new(l_orderkey: Rep[Long], l_partkey: Rep[Long], l_suppkey: Rep[Long], l_linenumber: Rep[Long], l_quantity: Rep[Double], l_extendedprice: Rep[Double], l_discount: Rep[Double], l_tax: Rep[Double], l_returnflag: Rep[Char], l_linestatus: Rep[Char], l_shipdate: Rep[Date], l_commitdate: Rep[Date], l_receiptdate: Rep[Date], l_shipinstruct: Rep[String], l_shipmode: Rep[String], l_comment: Rep[String]): Rep[LineItem]
 
   //class defs
-  def lineitem_l_orderkey(__x: Rep[LineItem]): Rep[Int]
-  def lineitem_l_partkey(__x: Rep[LineItem]): Rep[Int]
-  def lineitem_l_suppkey(__x: Rep[LineItem]): Rep[Int]
-  def lineitem_l_linenumber(__x: Rep[LineItem]): Rep[Int]
+  def lineitem_l_orderkey(__x: Rep[LineItem]): Rep[Long]
+  def lineitem_l_partkey(__x: Rep[LineItem]): Rep[Long]
+  def lineitem_l_suppkey(__x: Rep[LineItem]): Rep[Long]
+  def lineitem_l_linenumber(__x: Rep[LineItem]): Rep[Long]
   def lineitem_l_quantity(__x: Rep[LineItem]): Rep[Double]
   def lineitem_l_extendedprice(__x: Rep[LineItem]): Rep[Double]
   def lineitem_l_discount(__x: Rep[LineItem]): Rep[Double]
@@ -545,11 +623,11 @@ trait LineItemOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait LineItemOpsExp extends LineItemOps with StructExp with EffectExp with BaseFatExp {
-  def lineitem_obj_new(l_orderkey: Exp[Int], l_partkey: Exp[Int], l_suppkey: Exp[Int], l_linenumber: Exp[Int], l_quantity: Exp[Double], l_extendedprice: Exp[Double], l_discount: Exp[Double], l_tax: Exp[Double], l_returnflag: Exp[Char], l_linestatus: Exp[Char], l_shipdate: Exp[Date], l_commitdate: Exp[Date], l_receiptdate: Exp[Date], l_shipinstruct: Exp[String], l_shipmode: Exp[String], l_comment: Exp[String]) = struct[LineItem](ClassTag[LineItem]("LineItem"), ListMap("l_orderkey" -> l_orderkey, "l_partkey" -> l_partkey, "l_suppkey" -> l_suppkey, "l_linenumber" -> l_linenumber, "l_quantity" -> l_quantity, "l_extendedprice" -> l_extendedprice, "l_discount" -> l_discount, "l_tax" -> l_tax, "l_returnflag" -> l_returnflag, "l_linestatus" -> l_linestatus, "l_shipdate" -> l_shipdate, "l_commitdate" -> l_commitdate, "l_receiptdate" -> l_receiptdate, "l_shipinstruct" -> l_shipinstruct, "l_shipmode" -> l_shipmode, "l_comment" -> l_comment))
-  def lineitem_l_orderkey(__x: Rep[LineItem]) = field[Int](__x, "l_orderkey")
-  def lineitem_l_partkey(__x: Rep[LineItem]) = field[Int](__x, "l_partkey")
-  def lineitem_l_suppkey(__x: Rep[LineItem]) = field[Int](__x, "l_suppkey")
-  def lineitem_l_linenumber(__x: Rep[LineItem]) = field[Int](__x, "l_linenumber")
+  def lineitem_obj_new(l_orderkey: Exp[Long], l_partkey: Exp[Long], l_suppkey: Exp[Long], l_linenumber: Exp[Long], l_quantity: Exp[Double], l_extendedprice: Exp[Double], l_discount: Exp[Double], l_tax: Exp[Double], l_returnflag: Exp[Char], l_linestatus: Exp[Char], l_shipdate: Exp[Date], l_commitdate: Exp[Date], l_receiptdate: Exp[Date], l_shipinstruct: Exp[String], l_shipmode: Exp[String], l_comment: Exp[String]) = struct[LineItem](ClassTag[LineItem]("LineItem"), ListMap("l_orderkey" -> l_orderkey, "l_partkey" -> l_partkey, "l_suppkey" -> l_suppkey, "l_linenumber" -> l_linenumber, "l_quantity" -> l_quantity, "l_extendedprice" -> l_extendedprice, "l_discount" -> l_discount, "l_tax" -> l_tax, "l_returnflag" -> l_returnflag, "l_linestatus" -> l_linestatus, "l_shipdate" -> l_shipdate, "l_commitdate" -> l_commitdate, "l_receiptdate" -> l_receiptdate, "l_shipinstruct" -> l_shipinstruct, "l_shipmode" -> l_shipmode, "l_comment" -> l_comment))
+  def lineitem_l_orderkey(__x: Rep[LineItem]) = field[Long](__x, "l_orderkey")
+  def lineitem_l_partkey(__x: Rep[LineItem]) = field[Long](__x, "l_partkey")
+  def lineitem_l_suppkey(__x: Rep[LineItem]) = field[Long](__x, "l_suppkey")
+  def lineitem_l_linenumber(__x: Rep[LineItem]) = field[Long](__x, "l_linenumber")
   def lineitem_l_quantity(__x: Rep[LineItem]) = field[Double](__x, "l_quantity")
   def lineitem_l_extendedprice(__x: Rep[LineItem]) = field[Double](__x, "l_extendedprice")
   def lineitem_l_discount(__x: Rep[LineItem]) = field[Double](__x, "l_discount")
@@ -602,35 +680,35 @@ trait UserOps extends Base with Variables with OverloadHack with ParserOps {
   class User
 
   object User {
-    def apply(userId: Rep[Int], name: Rep[String], age: Rep[Int]) = user_obj_new(userId, name, age)
+    def apply(id: Rep[Long], name: Rep[String], email: Rep[String]) = user_obj_new(id, name, email)
     def parse(input: Rep[String], sep: Rep[String]): Rep[User] = fromArray(input.split(sep, 3))
 
     def fromArray(input: Rep[Array[String]]): Rep[User] = {
-      User(input(0).toInt, input(1), input(2).toInt)
+      User(input(0).toLong, input(1), input(2))
     }
   }
 
   implicit def repUserToUserOps(x: Rep[User]) = new userOpsCls(x)
   class userOpsCls(__x: Rep[User]) {
-    def userId = user_userId(__x)
+    def id = user_id(__x)
     def name = user_name(__x)
-    def age = user_age(__x)
+    def email = user_email(__x)
   }
 
   //object defs
-  def user_obj_new(userId: Rep[Int], name: Rep[String], age: Rep[Int]): Rep[User]
+  def user_obj_new(id: Rep[Long], name: Rep[String], email: Rep[String]): Rep[User]
 
   //class defs
-  def user_userId(__x: Rep[User]): Rep[Int]
+  def user_id(__x: Rep[User]): Rep[Long]
   def user_name(__x: Rep[User]): Rep[String]
-  def user_age(__x: Rep[User]): Rep[Int]
+  def user_email(__x: Rep[User]): Rep[String]
 }
 
 trait UserOpsExp extends UserOps with StructExp with EffectExp with BaseFatExp {
-  def user_obj_new(userId: Exp[Int], name: Exp[String], age: Exp[Int]) = struct[User](ClassTag[User]("User"), ListMap("userId" -> userId, "name" -> name, "age" -> age))
-  def user_userId(__x: Rep[User]) = field[Int](__x, "userId")
+  def user_obj_new(id: Exp[Long], name: Exp[String], email: Exp[String]) = struct[User](ClassTag[User]("User"), ListMap("id" -> id, "name" -> name, "email" -> email))
+  def user_id(__x: Rep[User]) = field[Long](__x, "id")
   def user_name(__x: Rep[User]) = field[String](__x, "name")
-  def user_age(__x: Rep[User]) = field[Int](__x, "age")
+  def user_email(__x: Rep[User]) = field[String](__x, "email")
 }
 
 trait AddressOps extends Base with Variables with OverloadHack with ParserOps {
@@ -672,5 +750,5 @@ trait AddressOpsExp extends AddressOps with StructExp with EffectExp with BaseFa
   def address_city(__x: Rep[Address]) = field[String](__x, "city")
 }
 
-trait ApplicationOps extends PartSupplierOps with LogEntryOps with PageCountEntryOps with PartOps with N1Ops with RegionOps with CustomerOps with OrderOps with WikiArticleOps with SupplierOps with NationOps with LineItemOps with N2Ops with UserOps with AddressOps
-trait ApplicationOpsExp extends PartSupplierOpsExp with LogEntryOpsExp with PageCountEntryOpsExp with PartOpsExp with N1OpsExp with RegionOpsExp with CustomerOpsExp with OrderOpsExp with WikiArticleOpsExp with SupplierOpsExp with NationOpsExp with LineItemOpsExp with N2OpsExp with UserOpsExp with AddressOpsExp
+trait ApplicationOps extends PartSupplierOps with LogEventOps with LogEntryOps with PageCountEntryOps with PartOps with N1Ops with RegionOps with CustomerOps with PersonOps with OrderOps with WikiArticleOps with SupplierOps with NationOps with LineItemOps with N2Ops with UserOps with AddressOps
+trait ApplicationOpsExp extends PartSupplierOpsExp with LogEventOpsExp with LogEntryOpsExp with PageCountEntryOpsExp with PartOpsExp with N1OpsExp with RegionOpsExp with CustomerOpsExp with PersonOpsExp with OrderOpsExp with WikiArticleOpsExp with SupplierOpsExp with NationOpsExp with LineItemOpsExp with N2OpsExp with UserOpsExp with AddressOpsExp
