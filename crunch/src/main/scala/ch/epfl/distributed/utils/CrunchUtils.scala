@@ -144,7 +144,7 @@ object JoinHelper {
       Writables.tableOf(left.getKeyType, Writables.pairs(left.getValueType, right.getValueType)))
   }
 
-  def joinWritables[TV <: TaggedValue[U, V], K, U <: Writable, V <: Writable](c: Class[TV], left: PTable[K, U], right: PTable[K, V]): PTable[K, CPair[U, V]] = {
+  def joinWritables[TV <: TaggedValue[U, V], K, U <: Writable, V <: Writable](c: Class[TV], left: PTable[K, U], right: PTable[K, V], reducers: Int = -1): PTable[K, CPair[U, V]] = {
     val ptf = left.getTypeFamily();
     val ptt = ptf.tableOf(left.getKeyType(), Writables.records(c));
 
@@ -173,7 +173,11 @@ object JoinHelper {
     }, ptt)
 
     val joined = j1.union(j2)
-    val joinedGrouped = joined.groupByKey
+    val joinedGrouped =
+      if (reducers <= 0)
+        joined.groupByKey
+      else
+        joined.groupByKey(reducers)
     joinedGrouped.parallelDo(
       new DoFn[CPair[K, java.lang.Iterable[TV]], CPair[K, CPair[U, V]]] {
         var left: mutable.Buffer[U] = null

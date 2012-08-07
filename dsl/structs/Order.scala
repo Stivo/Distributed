@@ -3,8 +3,8 @@ package ppl.delite.benchmarking.sorting.tpch
 import ppl.delite.benchmarking.sorting.tpch.util.Date
 
 class Order (
-  val o_orderkey: Int,
-  val o_custkey: Int,
+  val o_orderkey: Long,
+  val o_custkey: Long,
   val o_orderstatus: Char,
   val o_totalprice: Double,
   val o_orderdate: Date,

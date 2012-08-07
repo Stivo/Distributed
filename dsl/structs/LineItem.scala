@@ -2,11 +2,15 @@ package ppl.delite.benchmarking.sorting.tpch
 
 import ppl.delite.benchmarking.sorting.tpch.util.Date
 
+
+
+
+
 class LineItem (
-  val l_orderkey: Int,
-  val l_partkey: Int,
-  val l_suppkey: Int,
-  val l_linenumber: Int,
+  val l_orderkey: Long,
+  val l_partkey: Long,
+  val l_suppkey: Long,
+  val l_linenumber: Long,
   val l_quantity: Double,
   val l_extendedprice: Double,
   val l_discount: Double,

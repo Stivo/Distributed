@@ -80,8 +80,8 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
     lazy val narrowBeforeCandidates: Iterable[DListNode] = ordered.filter(isNarrowBeforeCandidate)
 
     def isNarrowBeforeCandidate(x: DListNode) = x match {
-      case DListGroupByKey(x, _) => true
-      case DListJoin(x, y) => true
+      case DListGroupByKey(x, _, _) => true
+      case DListJoin(x, y, _) => true
       // TODO case DListCogroup(x, y) => true
       case x => false
     }
@@ -99,7 +99,7 @@ trait DListAnalysis extends AbstractScalaGenDList with Matchers {
       }
       .filter {
         case x: ComputationNode => !isSimpleType(x.getElementTypes._1)
-        case DListJoin(l, r) => true
+        case DListJoin(l, r, _) => true
         case _ => throw new RuntimeException("Add narrow before candidate here or in subclass")
       }
 
@@ -293,7 +293,7 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
 
         case v @ DListMap(in, func) => analyzeFunction(v)
 
-        case v @ DListJoin(Def(left: DListNode), Def(right: DListNode)) =>
+        case v @ DListJoin(Def(left: DListNode), Def(right: DListNode), _) =>
           def fieldRead(x: List[String]) = FieldRead("input." + x.mkString("."))
           val reads = v.successorFieldReads.map(_.getPath.drop(1)).map {
             case "_2" :: "_1" :: x => List(left) -> fieldRead("_2" :: x)
@@ -341,7 +341,7 @@ trait DListFieldAnalysis extends DListAnalysis with DListTransformations {
           }.map(_.mkString("."))
           (part1 ++ part2).map(FieldRead)
 
-        case v @ DListGroupByKey(in, _) =>
+        case v @ DListGroupByKey(in, _, _) =>
           // rewrite access to input._2.iterable.X to input._2.X
           // add access to _1
           ((v.successorFieldReads.map(_.getPath).map {

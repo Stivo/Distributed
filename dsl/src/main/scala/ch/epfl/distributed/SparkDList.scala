@@ -37,7 +37,7 @@ trait SparkDListOps extends DListOps {
 }
 
 trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
-  case class DListReduceByKey[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], closure: Exp[(V, V) => V], partitioner: Option[Partitioner[K]])
+  case class DListReduceByKey[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], closure: Exp[(V, V) => V], splits: Exp[Int], partitioner: Option[Partitioner[K]])
       extends Def[DList[(K, V)]] with Closure2Node[V, V, V]
       with PreservingTypeComputation[DList[(K, V)]] {
     val mKey = manifest[K]
@@ -71,7 +71,7 @@ trait SparkDListOpsExp extends DListOpsExp with SparkDListOps {
 
   override def mirrorDef[A: Manifest](e: Def[A], f: Transformer)(implicit pos: SourceContext): Def[A] = {
     val out = (e match {
-      case v @ DListReduceByKey(dlist, func, part) => DListReduceByKey(f(dlist), f(func), part.map(x => f(x)))(v.mKey, v.mValue)
+      case v @ DListReduceByKey(dlist, func, splits, part) => DListReduceByKey(f(dlist), f(func), f(splits), part.map(x => f(x)))(v.mKey, v.mValue)
       case v @ DListCache(in) => DListCache(f(in))(v.mA)
       case v @ DListTakeSampleNum(in, r, n, s) => DListTakeSampleNum(f(in), f(r), f(n), f(s))(v.mA)
       case v @ DListSortByKey(in, asc) => DListSortByKey(f(in), f(asc))(v.mK, v.mV)
@@ -99,10 +99,10 @@ trait SparkTransformations extends DListTransformations {
 
       System.out.println("Found reduces " + reduces)
       reduces.foreach {
-        case d @ DListReduce(Def(DListGroupByKey(r, part)), f) =>
+        case d @ DListReduce(Def(DListGroupByKey(r, splits, part)), f) =>
           val stm = analyzer.findDef(d)
           wt.register(stm.syms.head) {
-            toAtom2(new DListReduceByKey(wt(r), wt(f), part.map(wt.apply))(d.mKey, d.mValue))(mtype(stm.syms.head.tp), implicitly[SourceContext])
+            toAtom2(new DListReduceByKey(wt(r), wt(f), wt(splits), part.map(wt.apply))(d.mKey, d.mValue))(mtype(stm.syms.head.tp), implicitly[SourceContext])
           }
       }
     }
@@ -142,11 +142,11 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
       // TODO should use narrowBefore instead of narrowBeforeCandidates.
       // but maybe the whole candidates thing is suboptimal anyway
       analyzer.narrowBeforeCandidates.foreach {
-        case d @ DListReduceByKey(in, func, part) =>
+        case d @ DListReduceByKey(in, func, splits, part) =>
           val stm = findDefinition(d).get
           class ReduceByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]]) {
             val mapNew = makeNarrower(in)
-            val redNew = DListReduceByKey(mapNew, wt(func), part.map(wt.apply))
+            val redNew = DListReduceByKey(mapNew, wt(func), wt(splits), part.map(wt.apply))
             wt.register(stm.syms.head)(IR.toAtom2(redNew)(IR.mtype(d.getTypes._2), implicitly[SourceContext]))
           }
           new ReduceByKeyTransformer(d.in)(d.mKey, d.mValue)
@@ -168,7 +168,7 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
 
   class SparkAnalyzer(block: Block[_]) extends Analyzer(block) {
     override def isNarrowBeforeCandidate(x: DListNode) = x match {
-      case DListReduceByKey(_, _, _) => true
+      case DListReduceByKey(_, _, _, _) => true
       case DListCache(_) => true
       case x => super.isNarrowBeforeCandidate(x)
     }
@@ -177,7 +177,7 @@ trait SparkDListFieldAnalysis extends DListFieldAnalysis {
   class SparkFieldAnalyzer(block: Block[_], typeHandler: TypeHandler) extends FieldAnalyzer(block, typeHandler) {
 
     override def computeFieldReads(node: DListNode): Set[FieldRead] = node match {
-      case v @ DListReduceByKey(in, func, _) => {
+      case v @ DListReduceByKey(in, func, _, _) => {
         // analyze function
         // convert the analyzed accesses to accesses of input._2
         val part1 = (analyzeFunction(v) ++ Set(FieldRead("input")))
@@ -248,12 +248,19 @@ trait SparkGenDList extends ScalaGenBase with ScalaGenDList with DListTransforma
         var out = v1.map(quote(_)).mkString("(", ").union(", ")")
         emitValDef(sym, out)
       }
-      case gbk @ DListGroupByKey(dlist, Some(part)) => emitValDef(sym, "%s.groupByKey(makePartitioner(%s, sc.defaultParallelism))".format(quote(dlist), handleClosure(part)))
-      case v @ DListJoin(left, right) => emitValDef(sym, "%s.join(%s)".format(quote(left), quote(right)))
+      case gbk @ DListGroupByKey(dlist, _, Some(part)) => emitValDef(sym, "%s.groupByKey(makePartitioner(%s, sc.defaultParallelism))".format(quote(dlist), handleClosure(part)))
+      case v @ DListJoin(left, right, Const(-2)) => emitValDef(sym, "%s.join(%s)".format(quote(left), quote(right)))
+      case v @ DListJoin(left, right, Const(-1)) => emitValDef(sym, "%s.join(%s, %s)".format(quote(left), quote(right), parallelism))
+      case v @ DListJoin(left, right, splits) => emitValDef(sym, "%s.join(%s, %s)".format(quote(left), quote(right), quote(splits)))
       case v @ DListCogroup(left, right) => emitValDef(sym, "%s.cogroup(%s)".format(quote(left), quote(right)))
       case red @ DListReduce(dlist, f) => emitValDef(sym, "%s.map(x => (x._1,x._2.reduce(%s)))".format(quote(dlist), handleClosure(red.closure)))
-      case red @ DListReduceByKey(dlist, f, Some(part)) => emitValDef(sym, "%s.reduceByKey(makePartitioner(%s, sc.defaultParallelism), %s)".format(quote(dlist), handleClosure(part), handleClosure(red.closure)))
-      case red @ DListReduceByKey(dlist, f, None) => emitValDef(sym, "%s.reduceByKey(%s)".format(quote(dlist), handleClosure(red.closure)))
+      case red @ DListReduceByKey(dlist, f, _, Some(part)) => emitValDef(sym, "%s.reduceByKey(makePartitioner(%s, sc.defaultParallelism), %s)".format(quote(dlist), handleClosure(part), handleClosure(red.closure)))
+      case red @ DListReduceByKey(dlist, f, splits, None) => emitValDef(sym, "%s.reduceByKey(%s%s)".format(quote(dlist), handleClosure(red.closure),
+        splits match {
+          case Const(-2) => ""
+          case Const(-1) => " _, " + parallelism
+          case _ => " _, " + quote(splits)
+        }))
       case red @ DListSortByKey(dlist, asc) => emitValDef(sym, "%s.sortByKey(%s)".format(quote(dlist), quote(asc)))
       case v @ DListCache(dlist) => emitValDef(sym, "%s.cache()".format(quote(dlist)))
       case v @ DListMaterialize(dlist) => emitValDef(sym, "%s.collect()".format(quote(dlist)))
@@ -330,14 +337,16 @@ import ch.epfl.distributed.utils.Helpers.makePartitioner
 object %s {
     %s
     def main(sparkInputArgs: Array[String]) {
-        System.setProperty("spark.default.parallelism", "40")
+        System.setProperty("spark.default.parallelism", "%s")
         System.setProperty("spark.local.dir", "/mnt/tmp")
         System.setProperty("spark.serializer", "spark.KryoSerializer")
         System.setProperty("spark.kryo.registrator", "dcdsl.generated%s.Registrator_%s")
         System.setProperty("spark.kryoserializer.buffer.mb", "20")
+        System.setProperty("spark.cache.class", "spark.DiskSpillingCache")
         
     		val sc = new SparkContext(sparkInputArgs(0), "%s")
-        """.format(packName, className, getOptimizations(), packName, className, className))
+        """.format(packName, className, getOptimizations(), parallelism,
+      packName, className, className))
 
     val oldAnalysis = newAnalyzer(y)
 
@@ -403,15 +412,15 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
           val outType = stripGen(g.tp)
           stream.println("val " + quote(sym.head) + " = " + quote(sd) + """.mapPartitions(it => {
         new Iterator[""" + outType + """] {
-          private[this] val buff = new Array[""" + outType + """](1 << 22)
-          private[this] val stopAt = (1 << 22) - (1 << 12);
+          private[this] val buff = new ch.epfl.distributed.datastruct.FastArrayList[""" + outType + """](1 << 10)
   		  private[this] final var start = 0
           private[this] final var end = 0
 
           @inline
           private[this] final def load = {
             var i = 0
-            while (it.hasNext && i < stopAt) {
+          	buff.clear()
+            while (i == 0 && it.hasNext) {
           """)
         case ForeachElem(y) =>
           stream.println("{ val it = " + quote(sd) + ".iterator") // hack for the wrong interface
@@ -437,13 +446,15 @@ trait ScalaGenSparkFat extends ScalaGenLoopsFat {
         case IteratorCollect(g, Block(y)) =>
           stream.println("""
             start = 0
-            end = if (i < buff.length) i else i - 1
+            end = buff.length
           }
 
           override def hasNext(): Boolean = {
             if (start == end) load
             
-            start != end
+            val hasAnElement = start != end
+            if (!hasAnElement) buff.destroy()
+            hasAnElement
           }
 
           override def next = {

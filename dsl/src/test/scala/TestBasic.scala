@@ -48,7 +48,7 @@ trait DListsProg extends DListProgram with ComplexBase {
   def partitioner(x: Rep[Unit]) = {
     val words1 = DList("in").map(x => (x, unit(1)))
     words1
-      .groupByKey { (x, y) => x.length % y }
+      .groupByKey(partitioner = { (x, y) => x.length % y })
       .reduce(_ + _)
       .save("out")
     words1.partitionBy { (x, y) => x.length % y }.save("out2")
@@ -203,7 +203,7 @@ class TestBasic extends CodeGeneratorTestSuite {
       }
       codegen.loopFusion = false
       val pw = setUpPrintWriter
-      codegen.emitSource(dsl.testSoA, "flatMapFusionTest", pw)
+      codegen.emitSource(dsl.testJoin, "flatMapFusionTest", pw)
 
       writeToProject(pw, "spark", "SparkGenerated")
       release(pw)

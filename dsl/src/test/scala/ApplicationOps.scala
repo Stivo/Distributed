@@ -389,11 +389,11 @@ trait OrderOps extends Base with Variables with OverloadHack with ParserOps {
   class Order
 
   object Order {
-    def apply(o_orderkey: Rep[Int], o_custkey: Rep[Int], o_orderstatus: Rep[Char], o_totalprice: Rep[Double], o_orderdate: Rep[Date], o_orderpriority: Rep[String], o_clerk: Rep[String], o_shippriority: Rep[Int], o_comment: Rep[String]) = order_obj_new(o_orderkey, o_custkey, o_orderstatus, o_totalprice, o_orderdate, o_orderpriority, o_clerk, o_shippriority, o_comment)
+    def apply(o_orderkey: Rep[Long], o_custkey: Rep[Long], o_orderstatus: Rep[Char], o_totalprice: Rep[Double], o_orderdate: Rep[Date], o_orderpriority: Rep[String], o_clerk: Rep[String], o_shippriority: Rep[Int], o_comment: Rep[String]) = order_obj_new(o_orderkey, o_custkey, o_orderstatus, o_totalprice, o_orderdate, o_orderpriority, o_clerk, o_shippriority, o_comment)
     def parse(input: Rep[String], sep: Rep[String]): Rep[Order] = fromArray(input.split(sep, 9))
 
     def fromArray(input: Rep[Array[String]]): Rep[Order] = {
-      Order(input(0).toInt, input(1).toInt, input(2).toChar, input(3).toDouble, input(4).toDate, input(5), input(6), input(7).toInt, input(8))
+      Order(input(0).toLong, input(1).toLong, input(2).toChar, input(3).toDouble, input(4).toDate, input(5), input(6), input(7).toInt, input(8))
     }
   }
 
@@ -411,11 +411,11 @@ trait OrderOps extends Base with Variables with OverloadHack with ParserOps {
   }
 
   //object defs
-  def order_obj_new(o_orderkey: Rep[Int], o_custkey: Rep[Int], o_orderstatus: Rep[Char], o_totalprice: Rep[Double], o_orderdate: Rep[Date], o_orderpriority: Rep[String], o_clerk: Rep[String], o_shippriority: Rep[Int], o_comment: Rep[String]): Rep[Order]
+  def order_obj_new(o_orderkey: Rep[Long], o_custkey: Rep[Long], o_orderstatus: Rep[Char], o_totalprice: Rep[Double], o_orderdate: Rep[Date], o_orderpriority: Rep[String], o_clerk: Rep[String], o_shippriority: Rep[Int], o_comment: Rep[String]): Rep[Order]
 
   //class defs
-  def order_o_orderkey(__x: Rep[Order]): Rep[Int]
-  def order_o_custkey(__x: Rep[Order]): Rep[Int]
+  def order_o_orderkey(__x: Rep[Order]): Rep[Long]
+  def order_o_custkey(__x: Rep[Order]): Rep[Long]
   def order_o_orderstatus(__x: Rep[Order]): Rep[Char]
   def order_o_totalprice(__x: Rep[Order]): Rep[Double]
   def order_o_orderdate(__x: Rep[Order]): Rep[Date]
@@ -426,9 +426,9 @@ trait OrderOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait OrderOpsExp extends OrderOps with StructExp with EffectExp with BaseFatExp {
-  def order_obj_new(o_orderkey: Exp[Int], o_custkey: Exp[Int], o_orderstatus: Exp[Char], o_totalprice: Exp[Double], o_orderdate: Exp[Date], o_orderpriority: Exp[String], o_clerk: Exp[String], o_shippriority: Exp[Int], o_comment: Exp[String]) = struct[Order](ClassTag[Order]("Order"), ListMap("o_orderkey" -> o_orderkey, "o_custkey" -> o_custkey, "o_orderstatus" -> o_orderstatus, "o_totalprice" -> o_totalprice, "o_orderdate" -> o_orderdate, "o_orderpriority" -> o_orderpriority, "o_clerk" -> o_clerk, "o_shippriority" -> o_shippriority, "o_comment" -> o_comment))
-  def order_o_orderkey(__x: Rep[Order]) = field[Int](__x, "o_orderkey")
-  def order_o_custkey(__x: Rep[Order]) = field[Int](__x, "o_custkey")
+  def order_obj_new(o_orderkey: Exp[Long], o_custkey: Exp[Long], o_orderstatus: Exp[Char], o_totalprice: Exp[Double], o_orderdate: Exp[Date], o_orderpriority: Exp[String], o_clerk: Exp[String], o_shippriority: Exp[Int], o_comment: Exp[String]) = struct[Order](ClassTag[Order]("Order"), ListMap("o_orderkey" -> o_orderkey, "o_custkey" -> o_custkey, "o_orderstatus" -> o_orderstatus, "o_totalprice" -> o_totalprice, "o_orderdate" -> o_orderdate, "o_orderpriority" -> o_orderpriority, "o_clerk" -> o_clerk, "o_shippriority" -> o_shippriority, "o_comment" -> o_comment))
+  def order_o_orderkey(__x: Rep[Order]) = field[Long](__x, "o_orderkey")
+  def order_o_custkey(__x: Rep[Order]) = field[Long](__x, "o_custkey")
   def order_o_orderstatus(__x: Rep[Order]) = field[Char](__x, "o_orderstatus")
   def order_o_totalprice(__x: Rep[Order]) = field[Double](__x, "o_totalprice")
   def order_o_orderdate(__x: Rep[Order]) = field[Date](__x, "o_orderdate")
@@ -572,11 +572,11 @@ trait LineItemOps extends Base with Variables with OverloadHack with ParserOps {
   class LineItem
 
   object LineItem {
-    def apply(l_orderkey: Rep[Int], l_partkey: Rep[Int], l_suppkey: Rep[Int], l_linenumber: Rep[Int], l_quantity: Rep[Double], l_extendedprice: Rep[Double], l_discount: Rep[Double], l_tax: Rep[Double], l_returnflag: Rep[Char], l_linestatus: Rep[Char], l_shipdate: Rep[Date], l_commitdate: Rep[Date], l_receiptdate: Rep[Date], l_shipinstruct: Rep[String], l_shipmode: Rep[String], l_comment: Rep[String]) = lineitem_obj_new(l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)
+    def apply(l_orderkey: Rep[Long], l_partkey: Rep[Long], l_suppkey: Rep[Long], l_linenumber: Rep[Long], l_quantity: Rep[Double], l_extendedprice: Rep[Double], l_discount: Rep[Double], l_tax: Rep[Double], l_returnflag: Rep[Char], l_linestatus: Rep[Char], l_shipdate: Rep[Date], l_commitdate: Rep[Date], l_receiptdate: Rep[Date], l_shipinstruct: Rep[String], l_shipmode: Rep[String], l_comment: Rep[String]) = lineitem_obj_new(l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)
     def parse(input: Rep[String], sep: Rep[String]): Rep[LineItem] = fromArray(input.split(sep, 16))
 
     def fromArray(input: Rep[Array[String]]): Rep[LineItem] = {
-      LineItem(input(0).toInt, input(1).toInt, input(2).toInt, input(3).toInt, input(4).toDouble, input(5).toDouble, input(6).toDouble, input(7).toDouble, input(8).toChar, input(9).toChar, input(10).toDate, input(11).toDate, input(12).toDate, input(13), input(14), input(15))
+      LineItem(input(0).toLong, input(1).toLong, input(2).toLong, input(3).toLong, input(4).toDouble, input(5).toDouble, input(6).toDouble, input(7).toDouble, input(8).toChar, input(9).toChar, input(10).toDate, input(11).toDate, input(12).toDate, input(13), input(14), input(15))
     }
   }
 
@@ -601,13 +601,13 @@ trait LineItemOps extends Base with Variables with OverloadHack with ParserOps {
   }
 
   //object defs
-  def lineitem_obj_new(l_orderkey: Rep[Int], l_partkey: Rep[Int], l_suppkey: Rep[Int], l_linenumber: Rep[Int], l_quantity: Rep[Double], l_extendedprice: Rep[Double], l_discount: Rep[Double], l_tax: Rep[Double], l_returnflag: Rep[Char], l_linestatus: Rep[Char], l_shipdate: Rep[Date], l_commitdate: Rep[Date], l_receiptdate: Rep[Date], l_shipinstruct: Rep[String], l_shipmode: Rep[String], l_comment: Rep[String]): Rep[LineItem]
+  def lineitem_obj_new(l_orderkey: Rep[Long], l_partkey: Rep[Long], l_suppkey: Rep[Long], l_linenumber: Rep[Long], l_quantity: Rep[Double], l_extendedprice: Rep[Double], l_discount: Rep[Double], l_tax: Rep[Double], l_returnflag: Rep[Char], l_linestatus: Rep[Char], l_shipdate: Rep[Date], l_commitdate: Rep[Date], l_receiptdate: Rep[Date], l_shipinstruct: Rep[String], l_shipmode: Rep[String], l_comment: Rep[String]): Rep[LineItem]
 
   //class defs
-  def lineitem_l_orderkey(__x: Rep[LineItem]): Rep[Int]
-  def lineitem_l_partkey(__x: Rep[LineItem]): Rep[Int]
-  def lineitem_l_suppkey(__x: Rep[LineItem]): Rep[Int]
-  def lineitem_l_linenumber(__x: Rep[LineItem]): Rep[Int]
+  def lineitem_l_orderkey(__x: Rep[LineItem]): Rep[Long]
+  def lineitem_l_partkey(__x: Rep[LineItem]): Rep[Long]
+  def lineitem_l_suppkey(__x: Rep[LineItem]): Rep[Long]
+  def lineitem_l_linenumber(__x: Rep[LineItem]): Rep[Long]
   def lineitem_l_quantity(__x: Rep[LineItem]): Rep[Double]
   def lineitem_l_extendedprice(__x: Rep[LineItem]): Rep[Double]
   def lineitem_l_discount(__x: Rep[LineItem]): Rep[Double]
@@ -623,11 +623,11 @@ trait LineItemOps extends Base with Variables with OverloadHack with ParserOps {
 }
 
 trait LineItemOpsExp extends LineItemOps with StructExp with EffectExp with BaseFatExp {
-  def lineitem_obj_new(l_orderkey: Exp[Int], l_partkey: Exp[Int], l_suppkey: Exp[Int], l_linenumber: Exp[Int], l_quantity: Exp[Double], l_extendedprice: Exp[Double], l_discount: Exp[Double], l_tax: Exp[Double], l_returnflag: Exp[Char], l_linestatus: Exp[Char], l_shipdate: Exp[Date], l_commitdate: Exp[Date], l_receiptdate: Exp[Date], l_shipinstruct: Exp[String], l_shipmode: Exp[String], l_comment: Exp[String]) = struct[LineItem](ClassTag[LineItem]("LineItem"), ListMap("l_orderkey" -> l_orderkey, "l_partkey" -> l_partkey, "l_suppkey" -> l_suppkey, "l_linenumber" -> l_linenumber, "l_quantity" -> l_quantity, "l_extendedprice" -> l_extendedprice, "l_discount" -> l_discount, "l_tax" -> l_tax, "l_returnflag" -> l_returnflag, "l_linestatus" -> l_linestatus, "l_shipdate" -> l_shipdate, "l_commitdate" -> l_commitdate, "l_receiptdate" -> l_receiptdate, "l_shipinstruct" -> l_shipinstruct, "l_shipmode" -> l_shipmode, "l_comment" -> l_comment))
-  def lineitem_l_orderkey(__x: Rep[LineItem]) = field[Int](__x, "l_orderkey")
-  def lineitem_l_partkey(__x: Rep[LineItem]) = field[Int](__x, "l_partkey")
-  def lineitem_l_suppkey(__x: Rep[LineItem]) = field[Int](__x, "l_suppkey")
-  def lineitem_l_linenumber(__x: Rep[LineItem]) = field[Int](__x, "l_linenumber")
+  def lineitem_obj_new(l_orderkey: Exp[Long], l_partkey: Exp[Long], l_suppkey: Exp[Long], l_linenumber: Exp[Long], l_quantity: Exp[Double], l_extendedprice: Exp[Double], l_discount: Exp[Double], l_tax: Exp[Double], l_returnflag: Exp[Char], l_linestatus: Exp[Char], l_shipdate: Exp[Date], l_commitdate: Exp[Date], l_receiptdate: Exp[Date], l_shipinstruct: Exp[String], l_shipmode: Exp[String], l_comment: Exp[String]) = struct[LineItem](ClassTag[LineItem]("LineItem"), ListMap("l_orderkey" -> l_orderkey, "l_partkey" -> l_partkey, "l_suppkey" -> l_suppkey, "l_linenumber" -> l_linenumber, "l_quantity" -> l_quantity, "l_extendedprice" -> l_extendedprice, "l_discount" -> l_discount, "l_tax" -> l_tax, "l_returnflag" -> l_returnflag, "l_linestatus" -> l_linestatus, "l_shipdate" -> l_shipdate, "l_commitdate" -> l_commitdate, "l_receiptdate" -> l_receiptdate, "l_shipinstruct" -> l_shipinstruct, "l_shipmode" -> l_shipmode, "l_comment" -> l_comment))
+  def lineitem_l_orderkey(__x: Rep[LineItem]) = field[Long](__x, "l_orderkey")
+  def lineitem_l_partkey(__x: Rep[LineItem]) = field[Long](__x, "l_partkey")
+  def lineitem_l_suppkey(__x: Rep[LineItem]) = field[Long](__x, "l_suppkey")
+  def lineitem_l_linenumber(__x: Rep[LineItem]) = field[Long](__x, "l_linenumber")
   def lineitem_l_quantity(__x: Rep[LineItem]) = field[Double](__x, "l_quantity")
   def lineitem_l_extendedprice(__x: Rep[LineItem]) = field[Double](__x, "l_extendedprice")
   def lineitem_l_discount(__x: Rep[LineItem]) = field[Double](__x, "l_discount")

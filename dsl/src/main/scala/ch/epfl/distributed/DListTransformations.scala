@@ -95,26 +95,26 @@ trait DListTransformations extends ScalaGenBase with AbstractScalaGenDList with 
     }
     def registerTransformations(analyzer: Analyzer) {
       analyzer.narrowBeforeCandidates.foreach {
-        case gbk @ DListGroupByKey(x, part) =>
+        case gbk @ DListGroupByKey(x, splits, part) =>
           val stm = findDefinition(gbk).get
-          class GroupByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], part: Option[Partitioner[K]]) {
+          class GroupByKeyTransformer[K: Manifest, V: Manifest](in: Exp[DList[(K, V)]], splits: Exp[Int], part: Option[Partitioner[K]]) {
             val mapNew = makeNarrower(in)
-            val gbkNew = toAtom2(new DListGroupByKey(mapNew, part.map(x => wt(x)))(manifest[K], manifest[V]))(mtype(stm.syms.head.tp), FakeSourceContext())
+            val gbkNew = toAtom2(new DListGroupByKey(mapNew, wt(splits), part.map(x => wt(x)))(manifest[K], manifest[V]))(mtype(stm.syms.head.tp), FakeSourceContext())
             //val gbkNew = dlist_groupByKey(mapNew, part.getOrElse(null))
             wt.register(stm.syms.head)(gbkNew)
           }
-          new GroupByKeyTransformer(gbk.dlist, part)(gbk.mKey, gbk.mValue)
+          new GroupByKeyTransformer(gbk.dlist, splits, part)(gbk.mKey, gbk.mValue)
 
-        case j @ DListJoin(l, r) =>
+        case j @ DListJoin(l, r, splits) =>
           val stm = findDefinition(j).get
-          class DListJoinTransformer[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]]) {
+          class DListJoinTransformer[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]], splits: Exp[Int]) {
             val mapNewLeft = makeNarrower(left)
             val mapNewRight = makeNarrower(right)
 
-            val joinNew = dlist_join(mapNewLeft, mapNewRight)
+            val joinNew = dlist_join(mapNewLeft, mapNewRight, splits)
             wt.register(stm.syms.head)(joinNew)
           }
-          new DListJoinTransformer(l, r)(j.mK, j.mV1, j.mV2)
+          new DListJoinTransformer(l, r, splits)(j.mK, j.mV1, j.mV2)
         case _ =>
       }
     }

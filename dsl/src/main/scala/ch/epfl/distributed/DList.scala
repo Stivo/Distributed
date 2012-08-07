@@ -47,10 +47,10 @@ trait DListOps extends Base with Variables {
   implicit def repDListToDListTupleOps[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) = new dlistTupleOpsCls(x)
   implicit def varDListToDListTupleOps[K: Manifest, V: Manifest](x: Var[DList[(K, V)]]) = new dlistTupleOpsCls(readVar(x))
   class dlistTupleOpsCls[K: Manifest, V: Manifest](x: Rep[DList[(K, V)]]) {
-    def groupByKey(partitioner: PartitionerUser[K] = null) = dlist_groupByKey[K, V](x, partitioner)
+    def groupByKey(splits: Rep[Int] = unit(-2), partitioner: PartitionerUser[K] = null) = dlist_groupByKey[K, V](x, splits, partitioner)
     def partitionBy(partitioner: PartitionerUser[K]) = dlist_partitionBy[K, V](x, partitioner)
-    def groupByKey = dlist_groupByKey[K, V](x, null)
-    def join[V2: Manifest](right: Rep[DList[(K, V2)]]) = dlist_join(x, right)
+    def groupByKey = dlist_groupByKey[K, V](x, unit(-2), null)
+    def join[V2: Manifest](right: Rep[DList[(K, V2)]], splits: Rep[Int] = unit(-2)) = dlist_join(x, right, splits)
     def cogroup[V2: Manifest](right: Rep[DList[(K, V2)]]) = dlist_cogroup(x, right)
   }
 
@@ -64,9 +64,9 @@ trait DListOps extends Base with Variables {
   def dlist_save[A: Manifest](dlist: Rep[DList[A]], path: Rep[String]): Rep[Unit]
   def dlist_++[A: Manifest](dlist1: Rep[DList[A]], dlist2: Rep[DList[A]]): Rep[DList[A]]
   def dlist_reduce[K: Manifest, V: Manifest](dlist: Rep[DList[(K, Iterable[V])]], f: (Rep[V], Rep[V]) => Rep[V]): Rep[DList[(K, V)]]
-  def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]]
+  def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]], splits: Rep[Int]): Rep[DList[(K, (V1, V2))]]
   def dlist_cogroup[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (Iterable[V1], Iterable[V2]))]]
-  def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], partitioner: PartitionerUser[K]): Rep[DList[(K, Iterable[V])]]
+  def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], splits: Rep[Int], partitioner: PartitionerUser[K]): Rep[DList[(K, Iterable[V])]]
   def dlist_partitionBy[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], partitioner: PartitionerUser[K]): Rep[DList[(K, V)]]
   def dlist_materialize[A: Manifest](dlist: Rep[DList[A]]): Rep[Iterable[A]]
   def dlist_takeSample[A: Manifest](dlist: Rep[DList[A]], fraction: Rep[Double], seed: Option[Rep[Int]]): Rep[DList[A]]
@@ -183,7 +183,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def getType = manifest[DList[A]]
   }
 
-  case class DListGroupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], partitioner: Option[Partitioner[K]]) extends Def[DList[(K, Iterable[V])]]
+  case class DListGroupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], splits: Exp[Int], partitioner: Option[Partitioner[K]]) extends Def[DList[(K, Iterable[V])]]
       with ComputationNodeTyped[DList[(K, V)], DList[(K, Iterable[V])]] {
     val mKey = manifest[K]
     val mValue = manifest[V]
@@ -201,7 +201,7 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
     def getTypes = (manifest[DList[(K, Iterable[V])]], manifest[DList[(K, V)]])
   }
 
-  case class DListJoin[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]])
+  case class DListJoin[K: Manifest, V1: Manifest, V2: Manifest](left: Exp[DList[(K, V1)]], right: Exp[DList[(K, V2)]], splits: Exp[Int])
       extends Def[DList[(K, (V1, V2))]] with DListNode {
     def mK = manifest[K]
     def mV1 = manifest[V1]
@@ -248,12 +248,12 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
   }
   override def dlist_++[A: Manifest](dlist1: Rep[DList[A]], dlist2: Rep[DList[A]]) = DListFlatten(immutable.List(dlist1, dlist2))
   override def dlist_reduce[K: Manifest, V: Manifest](dlist: Exp[DList[(K, Iterable[V])]], f: (Exp[V], Exp[V]) => Exp[V]) = DListReduce(dlist, doLambda2(f))
-  override def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]): Rep[DList[(K, (V1, V2))]] = DListJoin(left, right)
+  override def dlist_join[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]], splits: Exp[Int]): Rep[DList[(K, (V1, V2))]] = DListJoin(left, right, splits)
   override def dlist_cogroup[K: Manifest, V1: Manifest, V2: Manifest](left: Rep[DList[(K, V1)]], right: Rep[DList[(K, V2)]]) = DListCogroup(left, right)
-  override def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], partitioner: PartitionerUser[K]) =
-    DListGroupByKey(dlist, if (partitioner == null) None else Some(doLambda2(partitioner)))
+  override def dlist_groupByKey[K: Manifest, V: Manifest](dlist: Exp[DList[(K, V)]], splits: Exp[Int], partitioner: PartitionerUser[K]) =
+    DListGroupByKey(dlist, splits, if (partitioner == null) None else Some(doLambda2(partitioner)))
   override def dlist_partitionBy[K: Manifest, V: Manifest](dlist: Rep[DList[(K, V)]], partitioner: PartitionerUser[K]) =
-    DListFlatMap(DListGroupByKey(dlist, Some(doLambda2(partitioner))),
+    DListFlatMap(DListGroupByKey(dlist, unit(-2), Some(doLambda2(partitioner))),
       doLambda({ in: Exp[(K, Iterable[V])] =>
         in._2.toArray.map(x => (in._1, x)).toSeq
       }))
@@ -299,11 +299,11 @@ trait DListOpsExp extends DListOpsExpBase with DListBaseExp with FunctionsExp {
       case d @ DListFilter(dlist, func) => DListFilter(f(dlist), f(func))(d.mA)
       case d @ DListFlatMap(dlist, func) => DListFlatMap(f(dlist), f(func))(d.mA, d.mB)
       case d @ DListSave(dlist, path) => DListSave(f(dlist), f(path))(d.mA)
-      case d @ DListJoin(left, right) => DListJoin(f(left), f(right))(d.mK, d.mV1, d.mV2)
+      case d @ DListJoin(left, right, splits) => DListJoin(f(left), f(right), f(splits))(d.mK, d.mV1, d.mV2)
       case d @ DListCogroup(left, right) => DListCogroup(f(left), f(right))(d.mK, d.mV1, d.mV2)
       case d @ DListReduce(dlist, func) => DListReduce(f(dlist), f(func))(d.mKey, d.mValue)
       case d @ DListFlatten(dlists) => DListFlatten(f(dlists))(d.mA)
-      case d @ DListGroupByKey(dlist, part) => DListGroupByKey(f(dlist), part.map(x => f(x)))(d.mKey, d.mValue)
+      case d @ DListGroupByKey(dlist, splits, part) => DListGroupByKey(f(dlist), f(splits), part.map(x => f(x)))(d.mKey, d.mValue)
       case d @ DListMaterialize(dlist) => DListMaterialize(f(dlist))(d.mA)
       case d @ DListTakeSample(dlist, fraction, seedOption) => DListTakeSample(f(dlist), f(fraction), seedOption.map(x => f(x)))(d.mA)
       case d @ IteratorCollect(g, y) => IteratorCollect(f(g), if (f.hasContext) reifyEffectsHere(f.reflectBlock(y)) else f(y))
@@ -494,6 +494,8 @@ trait AbstractScalaGenDList extends ScalaGenBase with DListBaseCodeGenPkg {
     out
   }
 
+  /** The default parallelism to use, aka number of reducers */
+  var parallelism = 40
 }
 
 trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransformations with DListFieldAnalysis {
@@ -538,8 +540,8 @@ trait ScalaGenDList extends AbstractScalaGenDList with Matchers with DListTransf
     case vf @ DListFilter(dlist, function) => emitValDef(sym, "filtering dlist %s with function %s".format(dlist, function))
     case vm @ DListFlatMap(dlist, function) => emitValDef(sym, "flat mapping dlist %s with function %s".format(dlist, function))
     case vm @ DListFlatten(v1) => emitValDef(sym, "flattening dlists %s".format(v1))
-    case gbk @ DListGroupByKey(dlist, part) => emitValDef(sym, "grouping dlist by key, with partitioner " + part)
-    case gbk @ DListJoin(left, right) => emitValDef(sym, "Joining %s with %s".format(left, right))
+    case gbk @ DListGroupByKey(dlist, splits, part) => emitValDef(sym, "grouping dlist by key (" + quote(splits) + " splits), with partitioner " + part)
+    case gbk @ DListJoin(left, right, _) => emitValDef(sym, "Joining %s with %s".format(left, right))
     case d @ DListCogroup(left, right) => emitValDef(sym, "cogroup %s with %s".format(left, right))
     case red @ DListReduce(dlist, f) => emitValDef(sym, "reducing dlist")
     case GetArgs() => emitValDef(sym, "getting the arguments")

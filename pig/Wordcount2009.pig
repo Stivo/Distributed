@@ -1,4 +1,4 @@
-SET default_parallel 8;
+SET default_parallel 40;
 
 -- ########### script starts ############
 register piggybank.jar;
@@ -19,7 +19,7 @@ plaintext_c1 = FOREACH plaintext GENERATE REPLACE($0, '\\[\\[.*?\\]\\]', ' ');
 plaintext_c2 = FOREACH plaintext_c1 GENERATE REPLACE($0, '(\\\\[ntT]|\\.)\\s*(thumb|left|right)*', ' ');
 
 --      .flatMap(_.split("[^a-zA-Z0-9']+").toSeq)
-words = FOREACH plaintext_c2 GENERATE FLATTEN(dcdsl.udfs.CUSTOMSPLIT2($0)) as word:chararray;
+words = FOREACH plaintext_c2 GENERATE FLATTEN(dcdsl.udfs.CUSTOMSPLIT($0)) as word:chararray;
       
 filtered_words_1 = FILTER words BY org.apache.pig.piggybank.evaluation.string.LENGTH(word) > 0;
 filtered_words = FILTER filtered_words_1 BY NOT $0 matches '(thumb|left|right|\\d+px){2,}';

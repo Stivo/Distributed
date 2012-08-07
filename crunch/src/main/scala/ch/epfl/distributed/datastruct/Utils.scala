@@ -22,6 +22,43 @@ package ch.epfl.distributed.datastruct
 import util.control.Breaks._
 import java.util.regex.Pattern
 
+sealed class FastArrayList[T: Manifest](initialSize: Int = 1 << 10) {
+  final var array = new Array[T](initialSize)
+  final var maxIndex = -1
+
+  @inline
+  final def update(i: Int, t: T) {
+    if (array.length <= i) {
+      growTo(i)
+    }
+    maxIndex = if (maxIndex > i) maxIndex else i
+    array(i) = t
+  }
+
+  @inline
+  final def growTo(i: Int) {
+    val old = array
+    var newSize = old.size * 2
+    while (newSize <= i) {
+      newSize = newSize * 2
+    }
+    array = new Array[T](newSize)
+    System.arraycopy(old, 0, array, 0, old.size)
+  }
+
+  @inline
+  final def apply(i: Int) = array(i)
+
+  @inline
+  final def clear() { maxIndex = -1 }
+
+  @inline
+  final def destroy() { array = null }
+
+  @inline
+  final def length = maxIndex + 1
+}
+
 object RegexFrontend {
   private val javaRegexOnly: Array[String] = Array("&&", "??", "*?", "+?", "}?", "?+", "*+", "++", "}+", "^", "$", "(?")
 

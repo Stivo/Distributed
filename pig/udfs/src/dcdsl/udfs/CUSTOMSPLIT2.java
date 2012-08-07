@@ -35,13 +35,13 @@ public class CUSTOMSPLIT2 extends EvalFunc<DataBag> implements Serializable
             Object o = input.get(0);
             if (o==null)
                 return null;
-            DataBag output = mBagFactory.newDefaultBag();
             if (!(o instanceof String)) {
             	int errCode = 2114;
             	String msg = "Expected input to be chararray, but" +
                 " got " + o.getClass().getName();
                 throw new ExecException(msg, errCode, PigException.BUG);
             }
+            DataBag output = mBagFactory.newDefaultBag();
             String[] split = p.split((String)o);
             for (String x : split) {
             	output.add(mTupleFactory.newTuple(x));

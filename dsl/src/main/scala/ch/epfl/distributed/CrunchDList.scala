@@ -85,6 +85,8 @@ trait CrunchGenDList extends ScalaGenBase
   override def remap[A](x: Manifest[A]) = {
     var out = super.remap(x)
     out = out.replaceAll("Int(?!e)", "java.lang.Integer")
+    out = out.replaceAll("(?<!\\.)Long", "java.lang.Long")
+    //out = out.replaceAll("Long(?!e)", "java.lang.Long")
     out = out.replaceAll("scala.collection.Iterable", "java.lang.Iterable")
     out.replaceAll("scala.Tuple2", "CPair")
   }
@@ -102,6 +104,7 @@ trait CrunchGenDList extends ScalaGenBase
     cleaned match {
       case "java.lang.String" => return "Writables.strings()"
       case "java.lang.Integer" => return "Writables.ints()"
+      case "java.lang.Long" => return "Writables.longs()"
       case _ =>
     }
     if (typeHandler.typeInfos2.contains(cleaned)) {
@@ -133,6 +136,8 @@ trait CrunchGenDList extends ScalaGenBase
   def castPrimitive(s: Exp[_]) = {
     if (remap(s.tp) == "java.lang.Integer")
       quote(s) + ".asInstanceOf[java.lang.Integer]"
+    else if (remap(s.tp) == "java.lang.Long")
+      quote(s) + ".asInstanceOf[java.lang.Long]"
     else
       quote(s)
   }
@@ -164,7 +169,7 @@ trait CrunchGenDList extends ScalaGenBase
         var out = v1.map(quote(_)).mkString("(", ").union(", ")")
         emitValDef(sym, out)
       }
-      case gbk @ DListGroupByKey(dlist, Some(part)) => {
+      case gbk @ DListGroupByKey(dlist, splits, Some(part)) => {
         val keyType = part match {
           case Def(l: Lambda2[_, _, _]) => l.mA1
           case _ => manifest[Any]
@@ -176,8 +181,15 @@ trait CrunchGenDList extends ScalaGenBase
       }""".format(name, remap(keyType), writeClosure(part))
         emitValDef(sym, "%s.groupByKey(makeGroupingOptions[%s])".format(quote(dlist), name))
       }
-      case gbk @ DListGroupByKey(dlist, _) => emitValDef(sym, "%s.groupByKey".format(quote(dlist)))
-      case v @ DListJoin(left, right) => {
+      case gbk @ DListGroupByKey(dlist, Const(-2), _) => emitValDef(sym, "%s.groupByKey()".format(quote(dlist)))
+      case gbk @ DListGroupByKey(dlist, Const(-1), _) => emitValDef(sym, "%s.groupByKey(%s)".format(quote(dlist), parallelism))
+      case gbk @ DListGroupByKey(dlist, splits, _) => emitValDef(sym, "%s.groupByKey(%s)".format(quote(dlist), quote(splits)))
+      case v @ DListJoin(left, right, splits) => {
+        val splitsHere = splits match {
+          case Const(-2) => "" + parallelism
+          case Const(-1) => "" + parallelism
+          case x => quote(x)
+        }
         // create tagged value subclass
         if (typeHandler.remappings.contains(v.mV1) && typeHandler.remappings.contains(v.mV2)) {
           val tv = """class TaggedValue_%1$s_%2$s(left: Boolean, v1: %1$s, v2: %2$s) extends TaggedValue[%1$s, %2$s](left, v1, v2) {
@@ -185,7 +197,8 @@ trait CrunchGenDList extends ScalaGenBase
         }""".format(remap(v.mV1), remap(v.mV2))
           val tvname = "TaggedValue_%1$s_%2$s".format(remap(v.mV1), remap(v.mV2))
           types += tvname -> tv
-          emitValDef(sym, "joinWritables(classOf[%s], %s, %s)".format(tvname, quote(left), quote(right)))
+
+          emitValDef(sym, "joinWritables(classOf[%s], %s, %s, %s)".format(tvname, quote(left), quote(right), splitsHere))
           //emitValDef(sym, "joinNotNull(%s, %s)".format(quote(left), quote(right)))
         } else {
           emitValDef(sym, "join(%s, %s)".format(quote(left), quote(right)))
@@ -341,7 +354,7 @@ trait KryoCrunchGenDList extends CrunchGenDList with CaseClassTypeFactory {
 
   override def emitNode(sym: Sym[Any], rhs: Def[Any]) = {
     val out = rhs match {
-      case v @ DListJoin(left, right) => {
+      case v @ DListJoin(left, right, _) => {
         emitValDef(sym, "joinNotNull(%s, %s)".format(quote(left), quote(right)))
       }
       case _ => super.emitNode(sym, rhs)

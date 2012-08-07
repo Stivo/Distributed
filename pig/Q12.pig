@@ -1,5 +1,5 @@
 
-SET default_parallel 8;
+SET default_parallel 40;
 
 orders = load '$input/orders/' USING PigStorage('|') as (o_orderkey:long, o_custkey:long, o_orderstatus:chararray, o_totalprice:double, o_orderdate:chararray, o_orderpriority:chararray, o_clerk:chararray, o_shippriority:long, o_comment:chararray);
 
@@ -20,6 +20,8 @@ sumResult = FOREACH grpResult{
 sortResult = ORDER sumResult BY group;
 
 store sumResult into '$output' USING PigStorage('|');
+
+
 --store sortResult into '$output/Q12out' USING PigStorage('|');
 
 --store orders into '$output/Q12out' USING PigStorage('|');
